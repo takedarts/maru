@@ -28,7 +28,7 @@ python src/build.py --clean
 
 ## 実行方法
 起動スクリプト`src/run.py`を実行することでMaruを起動できます。
-このとき、実行コマンドの引数としてモデルファイルを指定する必要があります。
+このとき、実行コマンドの引数としてモデルファイルを指定する必要があります（モデルファイルは[こちら](https://github.com/takedarts/maru/releases/tag/v0.0)からダウンロードできます）。
 ```
 python src/run.py <model_file>
 ```
@@ -36,7 +36,7 @@ python src/run.py <model_file>
 Maruの操作はGTPプロトコルを介して行います。
 以下に簡単な操作例を示します。
 ```
-% python src/run.py b5n1c96.model
+% python src/run.py b5n1c96-059f8d56.model
 boardsize 9
 = 
 

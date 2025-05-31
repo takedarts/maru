@@ -28,7 +28,7 @@ python src/build.py --clean
 
 ## How to Run
 You can launch Maru by running the launch script `src/run.py`.
-At runtime, you need to specify the model file as a command-line argument:
+At runtime, you need to specify the model file as a command-line argument (You can download the model file from [here](https://github.com/takedarts/maru/releases/tag/v0.0)):
 ```
 python src/run.py <model_file>
 ```
@@ -37,7 +37,7 @@ python src/run.py <model_file>
 Maru operates via the GTP (Go Text Protocol).
 Here is a simple example of usage:
 ```
-% python src/run.py b5n1c96.model
+% python src/run.py b5n1c96-059f8d56.model
 boardsize 9
 = 
 
