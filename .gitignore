@@ -1,5 +1,7 @@
-# VS Code files for those working on multiple tools
+# Setting files of the local environment
 .vscode/*
+.mypy_cache/*
+.python-version
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
