@@ -1,0 +1,4 @@
+cmake
+cython
+numpy
+torch
