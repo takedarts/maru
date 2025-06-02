@@ -1,0 +1,17 @@
+# Setting files of the local environment
+.vscode/*
+.mypy_cache/*
+.python-version
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# build directories and files
+src/deepgo/native/build/
+src/deepgo/native/CMakeLists.txt
+src/deepgo/native/cpp/Config.h

@@ -1,0 +1,31 @@
+#pragma once
+
+// 盤面の座標に割り当てる値
+#define BLACK (${BLACK})
+#define WHITE (${WHITE})
+#define EMPTY (${EMPTY})
+#define EDGE (${EDGE})
+
+// 計算ルール
+#define RULE_CH (${RULE_CH})
+#define RULE_JP (${RULE_JP})
+#define RULE_COM (${RULE_COM})
+
+// 相手の石の色を取得するマクロ
+#define OPPOSITE(c)  (-c)
+
+// モデルに入力する盤面特徴量の大きさ(盤面の大きさ)
+#define MODEL_SIZE (${MODEL_SIZE})
+// モデルに入力する盤面特徴量の数
+#define MODEL_FEATURES (${MODEL_FEATURES})
+// モデルに入力するゲーム特徴量の数
+#define MODEL_INFOS (${MODEL_INFOS})
+// モデルが出力する盤面予測値の数
+#define MODEL_PREDICTIONS (${MODEL_PREDICTIONS})
+// モデルが出力するゲーム予測値の数
+#define MODEL_VALUES (${MODEL_VALUES})
+
+// 推論モデルに入力するデータの大きさ
+#define MODEL_INPUT_SIZE (${MODEL_INPUT_SIZE})
+// 推論モデルが出力するデータの大きさ
+#define MODEL_OUTPUT_SIZE (${MODEL_OUTPUT_SIZE})

@@ -1,0 +1,49 @@
+# Defines the CMake commands/policies.
+cmake_minimum_required( VERSION 3.12 )
+
+# Set the project name.
+project( DEEPGO_CYTHON )
+
+# Add the cmake directory to the module path.
+set( CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_LIST_DIR}/cmake )
+
+# Find the Python3 package.
+# This is required to specify the version of Python3 to use.
+find_package(
+    Python3 %PYTHON3_VERSION%...%PYTHON3_VERSION%
+    COMPONENTS Interpreter NumPy REQUIRED )
+
+# Include the CMake script UseCython.cmake.
+include( UseCython )
+
+# Find the Torch package from the python3 environment.
+set( Torch_DIR %TORCH_PATH%/share/cmake/Torch )
+set( CAFFE2_USE_CUDNN 1 )
+list( APPEND CMAKE_PREFIX_PATH ${Python3_SITELIB} )
+find_package( Torch REQUIRED )
+
+# Set the include directories.
+include_directories( ${CMAKE_CURRENT_LIST_DIR} )
+include_directories( ${PYTHON_INCLUDE_DIRS} )
+include_directories( ${Python3_NumPy_INCLUDE_DIRS} )
+include_directories( ${TORCH_INCLUDE_DIRS} )
+
+# Set the libraries.
+set( CYTHON_LIBRARIES ${CYTHON_LIBRARIES} ${TORCH_LIBRARIES} )
+
+# Set the compile options.
+set( CMAKE_CXX_STANDARD 17 )
+set( CMAKE_CXX_STANDARD_REQUIRED ON )
+set( CMAKE_CXX_EXTENSIONS OFF )
+
+if(MSVC)
+    set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /O2 /utf-8" )
+else()
+    set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -Wno-enum-constexpr-conversion" )
+endif()
+
+# If the pyx file is a C++ file, we should specify that here.
+set_source_files_properties(modules.pyx PROPERTIES CYTHON_IS_CXX TRUE )
+
+# Multi-file cython modules do not appear to be working at the moment.
+cython_add_module( modules modules.pyx %CPP_FILES%)
