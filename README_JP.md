@@ -9,14 +9,21 @@ Maruはコンピュータ将棋プログラムGokakuの兄弟プログラムで�
 ## ビルド方法
 このプログラムの大部分はCythonとC++によって記述されているため、プログラムを動作させるためにはプログラムコードをコンパイルする必要があります。
 
-最初に、コンパイルするために必要となるモジュールをインストールします。
+まず、コンパイルするために必要となるモジュールをインストールします。
 ```
-pip install -r requirements.txt
+pip install numpy cython cmake
+```
+
+コンパイルするためにPyTorchが必要となりますが、このモジュールはcudaなどの実行環境に応じたものをインストールしてください。
+```
+pip install torch
 ```
 
 次に、`src/build.py`を実行してCythonとC++のコードをコンパイルします。
+Linux環境やMacOS環境では`make`が必要となります。
+Windows環境では`MSBuild`が必要となります（MSBuildはVisual Studioに含まれています）。
 ```
-python src/build.py
+python -X utf8 src/build.py
 ```
 
 コンパイルに成功すると`src/deepgo/native`にコンパイルされたCythonモジュールが生成されます。

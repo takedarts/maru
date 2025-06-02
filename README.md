@@ -14,7 +14,9 @@ First, install the required modules for compilation:
 pip install -r requirements.txt
 ```
 
-Next, run `src/build.py` to compile the Cython and C++ code:
+Next, run `src/build.py` to compile the Cython and C++ code.
+On Linux or macOS environments, `make` is required.
+On Windows environments, `MSBuild` is required (MSBuild is included with Visual Studio).
 ```
 python src/build.py
 ```

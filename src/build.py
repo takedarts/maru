@@ -6,6 +6,8 @@ import subprocess
 from pathlib import Path
 from typing import List
 
+import cmake
+import torch
 from deepgo import config
 
 SRC_PATH = Path(__file__).parent.absolute()
@@ -33,10 +35,13 @@ def make_files(path: str) -> None:
         config_path.write_text(config_text)
 
     # CMakeLists.txtを作成する
-    cpp_files = ' '.join(f'cpp/{p.name}' for p in (work_path / 'cpp').glob('*.cpp'))
+    torch_path = str(Path(torch.__file__).parent).replace('\\', '/')
+    cpp_paths = [p.relative_to(work_path) for p in (work_path / 'cpp').glob('**/*.cpp')]
+    cpp_files = ' '.join(map(str, cpp_paths)).replace('\\', '/')
     cmake_path = work_path / 'CMakeLists.txt'
     cmake_text = (work_path / 'CMakeLists.template').read_text()
     cmake_text = cmake_text.replace('%PYTHON3_VERSION%', platform.python_version())
+    cmake_text = cmake_text.replace('%TORCH_PATH%', torch_path)
     cmake_text = cmake_text.replace('%CPP_FILES%', cpp_files)
 
     if not cmake_path.exists() or cmake_path.read_text() != cmake_text:
@@ -47,8 +52,15 @@ def make_files(path: str) -> None:
     module_path.touch()
 
 
-def cmake(path: str) -> None:
-    '''cmakeを実行したCythonライブラリを作成する'''
+def run_cmake(path: str) -> None:
+    '''cmakeを実行してCythonライブラリを作成する'''
+    # cmakeの実行ファイルのパスを取得する
+    if hasattr(cmake, 'CMAKE_BIN_DIR'):
+        cmake_path = os.path.join(cmake.CMAKE_BIN_DIR, 'cmake')
+    else:
+        cmake_path = 'cmake'
+
+    # buildディレクトリを作成する
     curr_path = Path('.').resolve()
     work_path = Path(__file__).parent / path
     build_path = work_path / 'build'
@@ -56,18 +68,31 @@ def cmake(path: str) -> None:
     if not build_path.is_dir():
         build_path.mkdir()
 
+    # buildディレクトリに移動する
     os.chdir(build_path)
 
-    if subprocess.run(['cmake', '..']).returncode != 0:
+    # cmakeを実行する
+    if subprocess.run([cmake_path, '..']).returncode != 0:
         raise Exception('failed in making module (cmake).')
 
-    if subprocess.run(['make']).returncode != 0:
-        raise Exception('failed in making module.')
+    # makeを実行する（Windowsではmsbuildを使用する）
+    if os.name == 'nt':
+        sln_path = str(build_path / 'DEEPGO_CYTHON.sln')
+        sln_args = ['/t:Clean;Rebuild', '/p:Configuration=Release']
+        if subprocess.run(['msbuild', sln_path] + sln_args).returncode != 0:
+            raise Exception('failed in making module (msbuild).')
+    else:
+        if subprocess.run(['make']).returncode != 0:
+            raise Exception('failed in making module (make).')
 
+    # buildディレクトリから元のディレクトリに戻る
     os.chdir(curr_path)
 
+    # コンパイルしたモジュールファイルをwork_pathに移動する
     if (build_path / 'modules.so').is_file():
         (build_path / 'modules.so').rename(work_path / 'modules.so')
+    elif (build_path / 'Release' / 'modules.pyd').is_file():
+        (build_path / 'Release' / 'modules.pyd').rename(work_path / 'modules.pyd')
     else:
         raise Exception('module file is not found.')
 
@@ -87,10 +112,9 @@ def clean(path: str) -> None:
         work_path / 'build',
         work_path / 'CMakeLists.txt',
         work_path / 'cpp' / 'Config.h',
+        work_path / 'modules.so',
+        work_path / 'modules.pyd',
     ]
-
-    targets.extend(
-        p for p in work_path.iterdir() if p.name.endswith('.so'))
 
     _clean(targets)
 
@@ -103,7 +127,7 @@ def main() -> None:
         clean(path)
     else:
         make_files(path)
-        cmake(path)
+        run_cmake(path)
 
 
 if __name__ == '__main__':
