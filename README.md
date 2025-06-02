@@ -11,14 +11,19 @@ Since most parts of this program are written in Cython and C++, the program code
 
 First, install the required modules for compilation:
 ```
-pip install -r requirements.txt
+pip install numpy cython cmake
+```
+
+PyTorch is required for compilation, so please install the appropriate version of this module according to your execution environment, such as CUDA.
+```
+pip install torch
 ```
 
 Next, run `src/build.py` to compile the Cython and C++ code.
 On Linux or macOS environments, `make` is required.
 On Windows environments, `MSBuild` is required (MSBuild is included with Visual Studio).
 ```
-python src/build.py
+python -X utf8 src/build.py
 ```
 
 If compilation is successful, the compiled Cython module will be generated in `src/deepgo/native`.
