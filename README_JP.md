@@ -6,7 +6,13 @@ Maruはランダム着手の棋譜からの深層強化学習を用いて作成�
 
 Maruはコンピュータ将棋プログラムGokakuの兄弟プログラムです。Maruの深層学習モデル・探索アルゴリズム・強化学習手順はGokakuと同じ手法を用いています。
 
-## ビルド方法
+## 実行方法
+Maruは以下のいずれかの方法で実行できます。
+- [ソースファイルからの実行](#ソースファイルからの実行)
+- [Dockerを使用した実行](#dockerを使用した実行)
+
+## ソースファイルからの実行
+### ビルド方法
 このプログラムの大部分はCythonとC++によって記述されているため、プログラムを動作させるためにはプログラムコードをコンパイルする必要があります。
 
 まず、コンパイルするために必要となるモジュールをインストールします。
@@ -33,9 +39,9 @@ python -X utf8 src/build.py
 python src/build.py --clean
 ```
 
-## 実行方法
+### 実行方法
 起動スクリプト`src/run.py`を実行することでMaruを起動できます。
-このとき、実行コマンドの引数としてモデルファイルを指定する必要があります（モデルファイルは[こちら](https://github.com/takedarts/maru/releases/tag/v0.0)からダウンロードできます）。
+このとき、実行コマンドの引数としてモデルファイルを指定する必要があります（モデルファイルは[こちら](https://github.com/takedarts/maru/releases/tag/v8.0)からダウンロードできます）。
 ```
 python src/run.py <model_file>
 ```
@@ -69,3 +75,29 @@ showboard
 ```
 
 MaruはGTPプロトコルに準拠しているため、[Gogui](https://github.com/Remi-Coulom/gogui)や[Lizzie](https://github.com/featurecat/lizzie)などのGTPプロトコルに対応したGUIを使用することもできます。
+
+起動スクリプトに`--help`オプションを指定すると、指定可能なオプションの一覧が表示されます。
+```
+python src/run.py --help
+```
+
+## Dockerを使用した実行
+Maruを実行できるDockerイメージが用意されており、これを使用することで簡単にMaruを実行できます。
+CUDAがインストールされている環境で以下のコマンドを実行することで、MaruのDockerイメージを取得して実行できます。
+オプション`--gpus`で使用するGPUを指定し、`-v .:/workspace`でカレントディレクトリをコンテナ内の`/workspace`にマウントします。
+モデルファイルをカレントディレクトリ以下に置き、`<model_file>`にそのファイルパスを指定してください。
+```
+docker pull takedarts/maru:cuda
+docker run -it --rm --gpus all -v .:/workspace takedarts/maru:cuda /opt/run.sh <model_file>
+```
+
+実行コマンドに`--help`を指定すると、指定可能なオプションの一覧が表示されます。
+```
+docker run -it --rm --gpus all -v .:/workspace takedarts/maru:cuda /opt/run.sh --help
+```
+
+CPUのみの環境では以下のコマンドを実行してください。
+```
+docker pull takedarts/maru:cpu
+docker run -it --rm -v .:/workspace takedarts/maru:cpu /opt/run.sh <model_file>
+```
