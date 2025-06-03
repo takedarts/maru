@@ -85,13 +85,13 @@ python src/run.py --help
 
 ## Running with Docker
 A Docker image is available for running Maru easily.
-If you have CUDA installed on your system, you can retrieve and run the Maru Docker image using the following commands.
-Use the `--gpus` option to specify the GPUs to use, and mount the current directory to the container's `/workspace` using `-v .:/workspace`.
-Place the model file in the current directory and specify its path as `<model_file>`.
+If you have CUDA installed on your system, you can retrieve and run the Maru Docker image using the following commands  (You can download the model file from [here](https://github.com/takedarts/maru/releases/tag/v8.0)):
 ```
 docker pull takedarts/maru:cuda
 docker run -it --rm --gpus all -v .:/workspace takedarts/maru:cuda /opt/run.sh <model_file>
 ```
+Use the `--gpus` option to specify the GPUs to use, and mount the current directory to the container's `/workspace` using `-v .:/workspace`.
+Place the model file in the current directory and specify its path as `<model_file>`.
 
 To see the available options, use the `--help` flag:
 ```

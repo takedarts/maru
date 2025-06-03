@@ -83,13 +83,13 @@ python src/run.py --help
 
 ## Dockerを使用した実行
 Maruを実行できるDockerイメージが用意されており、これを使用することで簡単にMaruを実行できます。
-CUDAがインストールされている環境で以下のコマンドを実行することで、MaruのDockerイメージを取得して実行できます。
-オプション`--gpus`で使用するGPUを指定し、`-v .:/workspace`でカレントディレクトリをコンテナ内の`/workspace`にマウントします。
-モデルファイルをカレントディレクトリ以下に置き、`<model_file>`にそのファイルパスを指定してください。
+CUDAがインストールされている環境で以下のコマンドを実行することで、MaruのDockerイメージを取得して実行できます（モデルファイルは[こちら](https://github.com/takedarts/maru/releases/tag/v8.0)からダウンロードできます）。
 ```
 docker pull takedarts/maru:cuda
 docker run -it --rm --gpus all -v .:/workspace takedarts/maru:cuda /opt/run.sh <model_file>
 ```
+オプション`--gpus`で使用するGPUを指定し、`-v .:/workspace`でカレントディレクトリをコンテナ内の`/workspace`にマウントします。
+モデルファイルをカレントディレクトリ以下に置き、`<model_file>`にそのファイルパスを指定してください。
 
 実行コマンドに`--help`を指定すると、指定可能なオプションの一覧が表示されます。
 ```
