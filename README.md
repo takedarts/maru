@@ -15,6 +15,8 @@ Maru can be run using one of the following methods:
 - [Running from Source Files](#running-from-source-files)
 - [Running with Docker](#running-with-docker)
 
+For Windows 11 (x64, CUDA 12) environments, you can also use the [executable file for Windows 11](https://drive.usercontent.google.com/download?id=19Tu_pqOS_3_iLnyqE8WMz0Y4H_d76vp9).
+
 ## Running from Source Files
 ### Build Instructions
 Since most parts of this program are written in Cython and C++, the program code must be compiled before it can be run.
