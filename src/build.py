@@ -90,11 +90,16 @@ def run_cmake(path: str) -> None:
 
     # コンパイルしたモジュールファイルをwork_pathに移動する
     if (build_path / 'modules.so').is_file():
-        (build_path / 'modules.so').rename(work_path / 'modules.so')
+        src_path = build_path / 'modules.so'
+        dst_path = work_path / 'modules.so'
     elif (build_path / 'Release' / 'modules.pyd').is_file():
-        (build_path / 'Release' / 'modules.pyd').rename(work_path / 'modules.pyd')
+        src_path = build_path / 'Release' / 'modules.pyd'
+        dst_path = work_path / 'modules.pyd'
     else:
         raise Exception('module file is not found.')
+
+    dst_path.unlink(missing_ok=True)
+    src_path.rename(dst_path)
 
 
 def _clean(paths: List[Path]) -> None:

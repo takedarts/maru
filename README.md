@@ -6,7 +6,19 @@ Maru is a computer Go program developed using deep reinforcement learning from r
 
 Maru is a sibling program of the computer Shogi program Gokaku. Maru shares the same deep learning model architecture, search algorithm, and reinforcement learning methodology as Gokaku.
 
-## Build Instructions
+You can check the improvement of Maru's playing strength through reinforcement learning on [this page](https://takeda-lab.jp/maru/).
+The model files are available for download from [this release page](https://github.com/takedarts/maru/releases/tag/v8.0).
+
+## How to Run
+Maru can be run using one of the following methods:
+
+- [Running from Source Files](#running-from-source-files)
+- [Running with Docker](#running-with-docker)
+
+For Windows 11 (x64, CUDA 12) environments, you can also use the [executable file for Windows 11](https://drive.usercontent.google.com/download?id=19Tu_pqOS_3_iLnyqE8WMz0Y4H_d76vp9).
+
+## Running from Source Files
+### Build Instructions
 Since most parts of this program are written in Cython and C++, the program code must be compiled before it can be run.
 
 First, install the required modules for compilation:
@@ -33,9 +45,9 @@ You can delete the generated files by running the following command:
 python src/build.py --clean
 ```
 
-## How to Run
+### Running the Program
 You can launch Maru by running the launch script `src/run.py`.
-At runtime, you need to specify the model file as a command-line argument (You can download the model file from [here](https://github.com/takedarts/maru/releases/tag/v0.0)):
+At runtime, you need to specify the model file as a command-line argument (You can download the model file from [here](https://github.com/takedarts/maru/releases/tag/v8.0)):
 ```
 python src/run.py <model_file>
 ```
@@ -70,3 +82,29 @@ showboard
 ```
 
 Since Maru supports the GTP protocol, you can also use GUI applications that support GTP, such as [Gogui](https://github.com/Remi-Coulom/gogui) and [Lizzie](https://github.com/featurecat/lizzie).
+
+To see the available options, run the script with the --help flag:
+```
+python src/run.py --help
+```
+
+## Running with Docker
+A Docker image is available for running Maru easily.
+If you have CUDA installed on your system, you can retrieve and run the Maru Docker image using the following commands  (You can download the model file from [here](https://github.com/takedarts/maru/releases/tag/v8.0)):
+```
+docker pull takedarts/maru:cuda
+docker run -it --rm --gpus all -v .:/workspace takedarts/maru:cuda /opt/run.sh <model_file>
+```
+Use the `--gpus` option to specify the GPUs to use, and mount the current directory to the container's `/workspace` using `-v .:/workspace`.
+Place the model file in the current directory and specify its path as `<model_file>`.
+
+To see the available options, use the `--help` flag:
+```
+docker run -it --rm --gpus all -v .:/workspace takedarts/maru:cuda /opt/run.sh --help
+```
+
+For environments without GPU (CPU only), use the following commands:
+```
+docker pull takedarts/maru:cpu
+docker run -it --rm -v .:/workspace takedarts/maru:cpu /opt/run.sh <model_file>
+```
