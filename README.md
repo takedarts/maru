@@ -6,6 +6,9 @@ Maru is a computer Go program developed using deep reinforcement learning from r
 
 Maru is a sibling program of the computer Shogi program Gokaku. Maru shares the same deep learning model architecture, search algorithm, and reinforcement learning methodology as Gokaku.
 
+You can check the improvement of Maru's playing strength through reinforcement learning on [this page](https://takeda-lab.jp/maru/).
+The model files are available for download from [this release page](https://github.com/takedarts/maru/releases/tag/v8.0).
+
 ## How to Run
 Maru can be run using one of the following methods:
 
