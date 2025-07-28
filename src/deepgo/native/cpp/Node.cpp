@@ -76,12 +76,12 @@ NodeResult Node::evaluate(bool equally, int32_t width, bool useUcb1) {
 
   // 最初の訪問ならばこのノードの評価結果を返す
   if (_visits == 1) {
-    return NodeResult(nullptr, _evaluator.getValue());
+    return NodeResult(nullptr, _evaluator.getValue(), 1);
   }
 
   // 候補手がない場合はこのノードの評価値を返す
-  if (_priorityQueue.empty()) {
-    return NodeResult(nullptr, _evaluator.getValue());
+  if (_childPolicies.empty()) {
+    return NodeResult(nullptr, _evaluator.getValue(), 1);
   }
 
   // キューから評価に追加する候補手を取得する
@@ -127,6 +127,7 @@ NodeResult Node::evaluate(bool equally, int32_t width, bool useUcb1) {
 
   // 探索幅が指定されていない場合と子ノードの数が指定された探索幅に達していない場合、
   // 待機リストに候補手が存在する場合は新しい子ノードを作成して次の探索先として返す
+  // 最初の子ノードであり葉ノードのみを評価対象とする場合、このノードの評価値を取り消す結果を返す
   if (_waitingQueue.size() > 0 && (width <= 0 || _children.size() < width)) {
     // 最初に登録された待機中の候補手を取得する
     Policy policy = _waitingQueue.front();
@@ -138,11 +139,16 @@ NodeResult Node::evaluate(bool equally, int32_t width, bool useUcb1) {
     // 未登録の候補手であれば新しい子ノードを作成して次の探索先として返す
     if (_children.find(policy_index) == _children.end()) {
       Node* node = _manager->createNode();
+      bool leaf = _children.empty();
 
       node->_setAsNextNode(this, policy.x, policy.y, policy.policy);
       _children[policy_index] = node;
 
-      return NodeResult(node, 0.0);
+      if (leaf) {
+        return NodeResult(node, _evaluator.getValue(), -1);
+      } else {
+        return NodeResult(node, _evaluator.getValue(), 0);
+      }
     }
   }
 
@@ -186,17 +192,28 @@ NodeResult Node::evaluate(bool equally, int32_t width, bool useUcb1) {
     }
   }
 
-  return NodeResult(max_node, 0.0);
+  // 次の探索先のノードを返す
+  return NodeResult(max_node, _evaluator.getValue(), 0);
 }
 
 /**
- * 探索ノードを更新する。
- * @param value 反映する予想勝率
+ * 探索ノードの評価値を更新する。
+ * @param value 評価値
  */
-void Node::update(float value) {
+void Node::updateValue(float value) {
   std::unique_lock<std::shared_mutex> lock(_valueMutex);
-  _value += value;
   _count += 1;
+  _value += value;
+}
+
+/**
+ * 探索ノードの評価値をキャンセルする。
+ * @param value 評価値
+ */
+void Node::cancelValue(float value) {
+  std::unique_lock<std::shared_mutex> lock(_valueMutex);
+  _count -= 1;
+  _value -= value;
 }
 
 /**
@@ -282,7 +299,7 @@ std::pair<int32_t, int32_t> Node::getPolicyMove() {
  * 着手座標のx座標を取得する。
  * @return x座標
  */
-int32_t Node::getX() {
+int32_t Node::getX() const {
   return _x;
 }
 
@@ -290,7 +307,7 @@ int32_t Node::getX() {
  * 着手座標のy座標を取得する。
  * @return y座標
  */
-int32_t Node::getY() {
+int32_t Node::getY() const {
   return _y;
 }
 
@@ -298,7 +315,7 @@ int32_t Node::getY() {
  * 着手した石の色を取得する。
  * @return 石の色
  */
-int32_t Node::getColor() {
+int32_t Node::getColor() const {
   return _color;
 }
 
@@ -306,7 +323,7 @@ int32_t Node::getColor() {
  * このノードで打ち上げた石の数を取得する。
  * @return 打ち上げた石の数
  */
-int32_t Node::getCaptured() {
+int32_t Node::getCaptured() const {
   return _captured;
 }
 
@@ -314,7 +331,7 @@ int32_t Node::getCaptured() {
  * このノードの予想着手確率を取得する。
  * @return 予想着手確率
  */
-float Node::getPolicy() {
+float Node::getPolicy() const {
   return _policy;
 }
 
@@ -369,6 +386,24 @@ int32_t Node::getVisits() {
 }
 
 /**
+ * プレイアウト数を取得する。
+ * @return プレイアウト数
+ */
+int32_t Node::getPlayouts() {
+  std::unique_lock<std::shared_mutex> lock(_valueMutex);
+  return _playouts;
+}
+
+/**
+ * プレイアウト数を設定する。
+ * @param playouts プレイアウト数
+ */
+void Node::setPlayouts(int32_t playouts) {
+  std::unique_lock<std::shared_mutex> lock(_valueMutex);
+  _playouts = playouts;
+}
+
+/**
  * このノードの評価値を取得する。
  * @return 評価値
  */
@@ -379,6 +414,15 @@ float Node::getValue() {
   } else {
     return _value / _count;
   }
+}
+
+/**
+ * このノードの評価値の加算回数を取得する。
+ * @return 評価値の加算回数
+ */
+int Node::getCount() {
+  std::shared_lock<std::shared_mutex> lock(_valueMutex);
+  return _count;
 }
 
 /**
@@ -487,8 +531,23 @@ void Node::_evaluate() {
   _evaluator.evaluate(&_board, OPPOSITE(_color));
 
   for (Policy policy : _evaluator.getPolicies()) {
-    _priorityQueue.push(policy);
+    _childPolicies.push_back(policy);
   }
+}
+
+/**
+ * ノードの評価情報を初期化する。
+ */
+void Node::_reset() {
+  _evaluator.clear();
+  _children.clear();
+  _childPolicies.clear();
+  _waitingQueue = std::queue<Policy>();
+  _waitingSet.clear();
+  _visits = 0;
+  _playouts = 0;
+  _value = 0.0f;
+  _count = 0;
 }
 
 /**
@@ -506,6 +565,8 @@ void Node::_setAsNextNode(Node* prevNode, int32_t x, int32_t y, float policy) {
 
   _board.copyFrom(&prevNode->_board);
   _captured = _board.play(_x, _y, _color);
+
+  _reset();
 }
 
 }  // namespace deepgo

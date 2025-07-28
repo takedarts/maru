@@ -70,31 +70,31 @@ class Node {
    * 着手座標のx座標を取得する。
    * @return x座標
    */
-  int32_t getX();
+  int32_t getX() const;
 
   /**
    * 着手座標のy座標を取得する。
    * @return y座標
    */
-  int32_t getY();
+  int32_t getY() const;
 
   /**
    * 着手した石の色を取得する。
    * @return 石の色
    */
-  int32_t getColor();
+  int32_t getColor() const;
 
   /**
    * このノードで打ち上げた石の数を取得する。
    * @return 打ち上げた石の数
    */
-  int32_t getCaptured();
+  int32_t getCaptured() const;
 
   /**
    * このノードの予想着手確率を取得する。
    * @return 予想着手確率
    */
-  float getPolicy();
+  float getPolicy() const;
 
   /**
    * 子ノードの一覧を取得する。
@@ -119,10 +119,28 @@ class Node {
   int32_t getVisits();
 
   /**
+   * プレイアウト数を取得する。
+   * @return プレイアウト数
+   */
+  int32_t getPlayouts();
+
+  /**
+   * プレイアウト数を設定する。
+   * @param playouts プレイアウト数
+   */
+  void setPlayouts(int32_t playouts);
+
+  /**
    * このノードの評価値を取得する。
    * @return 評価値
    */
   float getValue();
+
+  /**
+   * このノードの評価値の加算回数を取得する。
+   * @return 評価値の加算回数
+   */
+  int getCount();
 
   /**
    * このノードの評価値の信頼区間の下限を取得する。
@@ -239,12 +257,17 @@ class Node {
   int32_t _visits;
 
   /**
-   * 予想勝率。
+   * プレイアウト数。
+   */
+  int32_t _playouts;
+
+  /**
+   * 評価値。
    */
   float _value;
 
   /**
-   * 予想勝率と予想目数の加算回数。
+   * 評価値の加算回数。
    */
   int32_t _count;
 

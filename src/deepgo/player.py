@@ -87,9 +87,9 @@ class Player(object):
         self.captureds = [0, 0]
         self.histories: Set[Tuple] = set()
 
-    def clear(self) -> None:
+    def initialize(self) -> None:
         '''盤面を初期化する。'''
-        self.native.clear()
+        self.native.initialize()
         self.turn = 0
         self.value = 0.0
         self.moves = [0, 0]
@@ -213,9 +213,8 @@ class Player(object):
         Returns:
             Candidate: 候補手
         '''
-        self.native.start_evaluation(1, False, False, 0)
-        self.native.wait_evaluation(120.0)
-        self.native.stop_evaluation()
+        self.native.start_evaluation(False, False, 0, 1.0, 0.0)
+        self.native.wait_evaluation(1, 0, 120.0, True)
 
         for _ in range(10):
             # ランダムに着手を選択する
@@ -242,6 +241,7 @@ class Player(object):
     def evaluate(
         self,
         visits: int,
+        playouts: int = 0,
         timelimit: float = 120.0,
         equally: bool = False,
         use_ucb1: bool = False,
@@ -250,7 +250,8 @@ class Player(object):
         '''盤面を評価する。
         Args:
             visits (int): 訪問数の目標値
-            timelimit (float): 制限時間
+            playouts (int): プレイアウト数の目標値
+            timelimit (float): 制限時間（秒）
             equally (bool): 探索回数を均等にする場合はTrue、UCB1かPUCBを使う場合はFalse
             use_ucb1 (bool): 探索先の基準としてUCB1を使う場合はTrue、PUCBを使う場合はFalse
             width (int): 探索幅（この探索幅までの候補手について探索を実行する）
@@ -260,9 +261,8 @@ class Player(object):
         width = width if width is not None else 0
 
         # 盤面を評価する
-        self.native.start_evaluation(visits, equally, use_ucb1, width)
-        self.native.wait_evaluation(timelimit)
-        self.native.stop_evaluation()
+        self.native.start_evaluation(equally, use_ucb1, width, temperature, noise)
+        self.native.wait_evaluation(visits, playouts, timelimit, not ponder)
 
         # 候補手の一覧を作成する
         candidates = [Candidate(*c) for c in self.native.get_candidates()]
@@ -287,7 +287,10 @@ class Player(object):
 
         # ログを出力する
         if LOGGER.isEnabledFor(logging.DEBUG):
-            LOGGER.debug('Evaluation: %d visits', sum(c.visits for c in candidates))
+            LOGGER.debug(
+                'Evaluation: %d visits, %d playouts',
+                sum(c.visits for c in candidates),
+                sum(c.playouts for c in candidates))
             for candidate in candidates:
                 LOGGER.debug(candidate)
 

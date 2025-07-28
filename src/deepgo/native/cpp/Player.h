@@ -33,10 +33,12 @@ class Player {
    * @param komi コミの目数
    * @param rule 勝敗の判定ルール
    * @param superko スーパーコウルールを適用するならtrue
+   * @param evalLeafOnly 葉ノードのみを評価対象とするならtrue
    */
   Player(
       Processor* processor, int32_t threads,
-      int32_t width, int32_t height, float komi, int rule, bool superko);
+      int32_t width, int32_t height, float komi, int32_t rule, bool superko,
+      bool evalLeafOnly);
 
   /**
    * プレイヤオブジェクトを破棄する。
@@ -46,7 +48,7 @@ class Player {
   /**
    * プレイヤオブジェクトの状態を初期化する。
    */
-  void clear();
+  void initialize();
 
   /**
    * 盤面に石を置く。
@@ -72,24 +74,23 @@ class Player {
   /**
    * 盤面評価を開始する。
    * 探索処理は別スレッドで実行される。
-   * 最大訪問回数に0以下の値を指定すると停止命令を指示するまで探索を続ける。
-   * @param visits 最大訪問回数
    * @param equally 探索回数を均等にするならばtrue、UCB1かPUCBを使用するならばfalse
    * @param useUcb1 探索先の基準としてUCB1を使用するならばtrue、PUCBを使用するならばfalse
    * @param width 探索幅(0の場合は探索幅を自動で調整する)
+   * @param temperature 探索の温度パラメータ
+   * @param noise 探索のガンベルノイズの強さ
    */
-  void startEvaluation(int32_t visits, bool equally, bool useUcb1, int32_t width);
+  void startEvaluation(
+      bool equally, bool useUcb1, int32_t width, float temperature, float noise);
 
   /**
-   * 盤面評価を停止する。
-   */
-  void stopEvaluation();
-
-  /**
-   * 探索が終了するまで待機する。
+   * 指定された訪問数とプレイアウト数になるまで待機する。
+   * @param visits 訪問数
+   * @param playouts プレイアウト数
    * @param timelimit 時間制限
+   * @param stop 探索を停止するならばtrue
    */
-  void waitEvaluation(float timelimit);
+  void waitEvaluation(int32_t visits, int32_t playouts, float timelimit, bool stop);
 
   /**
    * 候補手の一覧を取得する。
@@ -141,9 +142,19 @@ class Player {
   Node* _root;
 
   /**
-   * 実行する探索数。
+   * 葉ノードのみを評価対象とするならtrue。
+   */
+  bool _evalLeafOnly;
+
+  /**
+   * 実行する訪問数。
    */
   int32_t _searchVisits;
+
+  /**
+   * 実行するプレイアウト数。
+   */
+  int32_t _searchPlayouts;
 
   /**
    * 探索回数を均等にするならtrue。
@@ -161,6 +172,16 @@ class Player {
   int32_t _searchWidth;
 
   /**
+   * 探索の温度パラメータ。
+   */
+  float _searchTemperature;
+
+  /**
+   * 探索のガンベルノイズの強さ。
+   */
+  float _searchNoise;
+
+  /**
    * 実行中のスレッド数。
    */
   int32_t _runnings;
@@ -168,7 +189,12 @@ class Player {
   /**
    * 探索を一時停止しているならtrue。
    */
-  bool _pause;
+  bool _paused;
+
+  /**
+   * 探索を停止しているならtrue。
+   */
+  bool _stopped;
 
   /**
    * 探索を終了しているならtrue。
@@ -182,8 +208,9 @@ class Player {
 
   /**
    * 探索を実行する。
+   * @return 探索のプレイアウト数
    */
-  void _evaluate();
+  int32_t _evaluate();
 
   /**
    * ルートノード以外のノードオブジェクトを返却する。
