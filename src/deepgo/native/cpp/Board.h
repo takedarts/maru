@@ -121,19 +121,17 @@ class Board {
    * @param y Y座標
    * @param color 石の色
    * @param checkSeki セキを判定するならtrue
-   * @param checkShicho シチョウを判定するならtrue
-   * @return 石を置けるならtrue
+     * @return 石を置けるならtrue
    */
-  bool isEnabled(int32_t x, int32_t y, int32_t color, bool checkSeki, bool checkShicho);
+  bool isEnabled(int32_t x, int32_t y, int32_t color, bool checkSeki);
 
   /**
    * 石を置ける場所の一覧を取得する。
    * @param enableds 石を置ける場所の一覧
    * @param color 石の色
    * @param checkSeki セキを判定するならtrue
-   * @param checkShicho シチョウを判定するならtrue
    */
-  void getEnableds(int32_t* enableds, int32_t color, bool checkSeki, bool checkShicho);
+  void getEnableds(int32_t* enableds, int32_t color, bool checkSeki);
 
   /**
    * 確定地のデータを返す。
@@ -307,10 +305,9 @@ class Board {
    * @param index 位置番号
    * @param color 石の色
    * @param checkSeki セキを判定するならtrue
-   * @param checkShicho シチョウを判定するならtrue
    * @return 石を置くことができればtrue
    */
-  bool _isEnabled(int32_t index, int32_t color, bool checkSeki, bool checkShicho);
+  bool _isEnabled(int32_t index, int32_t color, bool checkSeki);
 
   /**
    * 指定された場所がセキの対象となるならTrueを返す。

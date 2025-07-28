@@ -141,10 +141,10 @@ def get_handicap_positions(width: int, height: int, handicap: int) -> List[Tuple
         positions.append((ver_line, height - hor_line - 1))
 
     if handicap >= 3:
-        positions.append((width - ver_line - 1, height - hor_line - 1))
+        positions.append((ver_line, hor_line))
 
     if handicap >= 4:
-        positions.append((ver_line, hor_line))
+        positions.append((width - ver_line - 1, height - hor_line - 1))
 
     if handicap == 5:
         positions.append((width // 2, height // 2))
@@ -290,34 +290,30 @@ class Board(object):
         pos: tuple[int, int],
         color: int,
         check_seki: bool = False,
-        check_shicho: bool = False,
     ) -> bool:
         '''指定された位置に石を置けるかどうかを判定する。
         Args:
             pos (Tuple[int, int]): 位置
             color (int): 石の色
             check_seki (bool): セキを考慮するかどうか
-            check_shicho (bool): シチョウを考慮するかどうか
         Returns:
             bool: 石を置ける場合はTrue
         '''
-        return self.native.is_enabled(pos, color, check_seki, check_shicho)
+        return self.native.is_enabled(pos, color, check_seki)
 
     def get_enableds(
         self,
         color: int,
         check_seki: bool = False,
-        check_shicho: bool = False,
     ) -> np.ndarray:
         '''石を置ける位置を取得する。
         Args:
             color (int): 石の色
             check_seki (bool): セキを考慮するかどうか
-            check_shicho (bool): シチョウを考慮するかどうか
         Returns:
             np.ndarray: 石を置ける位置
         '''
-        return self.native.get_enableds(color, check_seki, check_shicho)
+        return self.native.get_enableds(color, check_seki)
 
     def get_territories(self, color: int = BLACK) -> np.ndarray:
         '''確定地の一覧を取得する。

@@ -24,8 +24,8 @@ cdef extern from "cpp/Board.h" namespace "deepgo":
         int32_t getRenSize(int32_t, int32_t)
         int32_t getRenSpace(int32_t, int32_t)
         bool isShicho(int32_t, int32_t)
-        bool isEnabled(int32_t, int32_t, int32_t, bool, bool)
-        void getEnableds(int32_t*, int32_t, bool, bool)
+        bool isEnabled(int32_t, int32_t, int32_t, bool)
+        void getEnableds(int32_t*, int32_t, bool)
         void getTerritories(int32_t*, int32_t)
         void getOwners(int32_t*, int32_t, int32_t)
         vector[int32_t] getPatterns()
@@ -151,25 +151,22 @@ cdef class NativeBoard:
         pos: Tuple[int, int],
         color: int,
         check_seki: bool,
-        check_shicho: bool,
     ) -> bool:
         '''指定した位置に石を置けるかどうかを取得する。
         Args:
             pos (Tuple[int, int]): 石を置く位置
             color (int): 石の色
             check_seki (bool): セキを確認するかどうか
-            check_shicho (bool): シチョウを確認するかどうか
         Returns:
             bool: 石を置けるならtrue
         '''
-        return self.board.isEnabled(pos[0], pos[1], color, check_seki, check_shicho)
+        return self.board.isEnabled(pos[0], pos[1], color, check_seki)
 
-    def get_enableds(self, color: int, check_seki: bool, check_shicho: bool) -> numpy.ndarray:
+    def get_enableds(self, color: int, check_seki: bool) -> numpy.ndarray:
         '''全体の石を置けるかどうかを取得する。
         Args:
             color (int): 石の色
             check_seki (bool): セキを確認するかどうか
-            check_shicho (bool): シチョウを確認するかどうか
         Returns:
             numpy.ndarray: 全体の石を置けるかどうか
         '''
@@ -178,7 +175,7 @@ cdef class NativeBoard:
         cdef numpy.ndarray[numpy.int32_t, ndim=1, mode="c"] data = numpy.zeros(
             (height * width,), dtype=numpy.int32)
 
-        self.board.getEnableds(<int32_t*> &data[0], color, check_seki, check_shicho)
+        self.board.getEnableds(<int32_t*> &data[0], color, check_seki)
 
         return data.reshape((height, width))
 

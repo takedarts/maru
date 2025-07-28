@@ -56,7 +56,7 @@ void Evaluator::evaluate(Board* board, int32_t color) {
   int32_t offset_x = (MODEL_SIZE - width) / 2;
   int32_t offset_y = (MODEL_SIZE - height) / 2;
 
-  board->getEnableds(enableds.get(), color, true, true);
+  board->getEnableds(enableds.get(), color, true);
   board->getTerritories(territories.get(), color);
 
   for (int32_t y = 0; y < height; y++) {

@@ -149,7 +149,7 @@ int32_t Board::play(int32_t x, int32_t y, int32_t color) {
   int32_t index = _getIndex(x, y);
   int32_t op_color = OPPOSITE(color);
 
-  if (!_isEnabled(index, color, false, false)) {
+  if (!_isEnabled(index, color, false)) {
     return -1;
   }
 
@@ -317,11 +317,10 @@ bool Board::isShicho(int32_t x, int32_t y) {
  * @param y Y座標
  * @param color 石の色
  * @param checkSeki セキを判定するならtrue
- * @param checkShicho シチョウを判定するならtrue
  * @return 石を置けるならtrue
  */
-bool Board::isEnabled(int32_t x, int32_t y, int32_t color, bool checkSeki, bool checkShicho) {
-  return _isEnabled(_getIndex(x, y), color, checkSeki, checkShicho);
+bool Board::isEnabled(int32_t x, int32_t y, int32_t color, bool checkSeki) {
+  return _isEnabled(_getIndex(x, y), color, checkSeki);
 }
 
 /**
@@ -329,12 +328,11 @@ bool Board::isEnabled(int32_t x, int32_t y, int32_t color, bool checkSeki, bool 
  * @param enableds 石を置ける場所の一覧
  * @param color 石の色
  * @param checkSeki セキを判定するならtrue
- * @param checkShicho シチョウを判定するならtrue
  */
-void Board::getEnableds(int32_t* enableds, int32_t color, bool checkSeki, bool checkShicho) {
+void Board::getEnableds(int32_t* enableds, int32_t color, bool checkSeki) {
   for (int32_t y = 0; y < _height - 2; y++) {
     for (int32_t x = 0; x < _width - 2; x++) {
-      if (_isEnabled(_getIndex(x, y), color, checkSeki, checkShicho)) {
+      if (_isEnabled(_getIndex(x, y), color, checkSeki)) {
         enableds[y * (_width - 2) + x] = 1;
       } else {
         enableds[y * (_width - 2) + x] = 0;
@@ -1056,13 +1054,7 @@ void Board::_updateShicho() {
       continue;
     }
 
-    // 連の大きさが1の場合はシチョウ判定をしない
-    if (_renObjs[ren_id].positions.size() < 2) {
-      _renObjs[ren_id].shicho = false;
-      continue;
-    }
-
-    // ダメが1個ではない連はシチョウでない
+    // シチョウを判定する
     _renObjs[ren_id].shicho = _isShichoRen(index);
   }
 
@@ -1128,7 +1120,7 @@ bool Board::_isShichoRen(int32_t index) {
     int32_t curr_pos_y = curr_board._getPosY(curr_pos);
 
     if (curr_board.play(curr_pos_x, curr_pos_y, color) < 0) {
-        return true;
+      return true;
     }
 
     // 逃げた盤面のダメが1個 -> OK（シチョウ）
@@ -1136,7 +1128,7 @@ bool Board::_isShichoRen(int32_t index) {
     int32_t curr_ren_id = curr_board._renIds[index];
 
     if (curr_board._renObjs[curr_ren_id].spaces.size() == 1) {
-        return true;
+      return true;
     } else if (curr_board._renObjs[curr_ren_id].spaces.size() > 2) {
       continue;
     }
@@ -1176,10 +1168,9 @@ int32_t Board::_getColor(int32_t index) {
  * @param index 位置番号
  * @param color 石の色
  * @param checkSeki セキを判定するならtrue
- * @param checkShicho シチョウを判定するならtrue
  * @return 石を置くことができればtrue
  */
-bool Board::_isEnabled(int32_t index, int32_t color, bool checkSeki, bool checkShicho) {
+bool Board::_isEnabled(int32_t index, int32_t color, bool checkSeki) {
   // 既に石がある場合 -> 置けない
   if (_renIds[index] != -1) {
     return false;
@@ -1193,19 +1184,6 @@ bool Board::_isEnabled(int32_t index, int32_t color, bool checkSeki, bool checkS
   // セキの対象 -> 置けない
   if (checkSeki && _isSeki(index, color)) {
     return false;
-  }
-
-  // シチョウの確認
-  if (checkShicho) {
-    _updateShicho();
-
-    for (auto a : AROUNDS) {
-      int32_t ren_id = _renIds[index + a];
-
-      if (ren_id != -1 && _renObjs[ren_id].color == color && _renObjs[ren_id].shicho) {
-        return false;
-      }
-    }
   }
 
   // まわりの判定
