@@ -18,19 +18,6 @@ struct Policy {
   Policy(int32_t x, int32_t y, float policy, int32_t visits);
 
   /**
-   * 優先度を取得する。
-   * @return 優先度
-   */
-  float getPriority() const;
-
-  /**
-   * 予測着手確率の比較を行う。
-   * @param other 比較対象
-   * @return 比較結果
-   */
-  bool operator<(const Policy& other) const;
-
-  /**
    * 着手座標のX座標。
    */
   int32_t x;

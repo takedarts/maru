@@ -22,34 +22,6 @@ NodeManager::NodeManager(
 }
 
 /**
- * 初期ノードとして使用できるノードオブジェクトを作成する。
- * 必ず新しいノードオブジェクトを作成する。
- * @return 初期ノードオブジェクト
- */
-Node* NodeManager::createInitNode() {
-  std::lock_guard<std::mutex> lock(_mutex);
-
-  // ノードオブジェクトを作成する
-  _nodes.emplace_back(std::make_unique<Node>(
-      this,
-      _parameter.getProcessor(),
-      _parameter.getWidth(),
-      _parameter.getHeight(),
-      _parameter.getKomi(),
-      _parameter.getRule(),
-      _parameter.getSuperko()));
-
-  // ノードオブジェクトのポインタを取得する
-  Node* node = _nodes.back().get();
-
-  // 使用中のノードオブジェクトとして登録する
-  _usedNodes.insert(node);
-
-  // ノードオブジェクトを返す
-  return node;
-}
-
-/**
  * ノードオブジェクトを作成する。
  * 未使用のノードオブジェクトがあればそれを返し、なければ新規作成する。
  * @return ノードオブジェクト
@@ -96,7 +68,6 @@ void NodeManager::releaseNode(Node* node) {
   }
 
   // ノードオブジェクトをリセットして未使用状態にする
-  node->reset();
   _usedNodes.erase(node);
   _poolNodes.push_back(node);
 }
@@ -111,4 +82,4 @@ void NodeManager::print(std::ostream& os) {
   os << std::endl;
 }
 
-} // namespace deepgo
+}  // namespace deepgo

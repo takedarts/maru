@@ -16,21 +16,4 @@ Policy::Policy(int32_t x, int32_t y, float policy, int32_t visits)
       visits(visits) {
 }
 
-/**
- * 優先度を取得する。
- * @return 優先度
- */
-float Policy::getPriority() const {
-  return policy / (visits + 1);
-}
-
-/**
- * 予測着手確率の比較を行う。
- * @param other 比較対象
- * @return 比較結果
- */
-bool Policy::operator<(const Policy& other) const {
-  return getPriority() < other.getPriority();
-}
-
 }  // namespace deepgo

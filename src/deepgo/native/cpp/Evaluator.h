@@ -30,6 +30,7 @@ class Evaluator {
    * モデルによる評価を実行する。
    * @param board 評価対象の盤面
    * @param color 評価対象の石の色
+   * @param enableShicho シチョウの手を対象にするならtrue
    */
   void evaluate(Board* board, int32_t color);
 
@@ -46,8 +47,8 @@ class Evaluator {
   std::vector<Policy> getPolicies();
 
   /**
-   * モデルによる推論結果の予想勝率を取得する。
-   * @return モデルによる推論結果の予想勝率
+   * モデルによる推論結果の評価値を取得する。
+   * @return モデルによる推論結果の評価値
    */
   float getValue();
 
@@ -78,7 +79,7 @@ class Evaluator {
   std::vector<Policy> _policies;
 
   /**
-   * モデルによる推論結果の予想勝率。
+   * モデルによる推論結果の評価値。
    */
   float _value;
 

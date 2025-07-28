@@ -13,12 +13,61 @@ from .processor import Processor
 LOGGER = logging.getLogger(__name__)
 
 
+def get_area_color(
+    territories: np.ndarray,
+    position: Tuple[int, int],
+) -> Tuple[int, List[Tuple[int, int]]]:
+    '''領域の色を取得する。
+    Args:
+        territories (np.ndarray): 領域データ
+        position (Tuple[int, int]): 調査する座標
+    Returns:
+        Tuple[int, List[Tuple[int, int]]]: 領域の色と座標のリスト
+    '''
+    if territories[position] != EMPTY:
+        return territories[position], []
+
+    # 領域の色を取得するために深さ優先探索を行う
+    stack = [position]
+    checked: Set[Tuple[int, int]] = set()
+    positions: List[Tuple[int, int]] = []
+    color = EMPTY
+    single = True
+
+    while len(stack) > 0:
+        y, x = stack.pop()
+        positions.append((y, x))
+
+        for pos in ((y - 1, x), (y + 1, x), (y, x - 1), (y, x + 1)):
+            if pos in checked:
+                continue
+
+            checked.add(pos)
+
+            if not is_valid_position(pos, territories.shape[1], territories.shape[0]):
+                continue
+            elif territories[pos] == EMPTY:
+                stack.append(pos)
+            elif color == EMPTY or territories[pos] == color:
+                color = territories[pos]
+            else:
+                single = False
+
+    # 領域の色が単一ならその色と座標のリストを返す
+    if single:
+        return color, positions
+    # 領域の色が単一でない場合は空の色と座標のリストを返す
+    else:
+        return EMPTY, positions
+
+
 class Candidate(object):
     def __init__(
         self,
         pos: Tuple[int, int],
         color: int,
         visits: int,
+        playouts: int,
         policy: float,
         value: float,
         variations: List[Tuple[int, int]],
@@ -28,6 +77,7 @@ class Candidate(object):
             pos (Tuple[int, int]): 石を置く座標
             color (int): 石の色
             visits (int): 訪問回数
+            playouts (int): プレイアウト数
             policy (float): 予想される着手確率
             value (float): 予測される勝率
             variations (List[Tuple[int, int]]): 予測進行
@@ -35,6 +85,7 @@ class Candidate(object):
         self.pos = pos
         self.color = color
         self.visits = visits
+        self.playouts = playouts
         self.policy = policy
         self.value = value
         self.variations = variations
@@ -44,7 +95,8 @@ class Candidate(object):
     def __str__(self) -> str:
         return (
             f'Candidate(pos={self.pos}, color={get_color_name(self.color)},'
-            f' visits={self.visits}, policy={self.policy:.2f}, value={self.value:.2f},'
+            f' visits={self.visits}, playouts={self.playouts},'
+            f' policy={self.policy:.2f}, value={self.value:.2f},'
             f' win_chance={self.win_chance:.2f}, win_chance_lcb={self.win_chance_lcb:.2f}')
 
     def __repr__(self) -> str:
@@ -61,6 +113,7 @@ class Player(object):
         komi: float = DEFAULT_KOMI,
         rule: int = RULE_CH,
         superko: bool = False,
+        eval_leaf_only: bool = False,
     ) -> None:
         '''競技者オブジェクトを初期化する。
         Args:
@@ -71,10 +124,12 @@ class Player(object):
             komi (float): コミの数
             rule (int): 勝敗の判定ルール
             superko (bool): スーパーコウルールを適用するならTrue
+            eval_leaf_only (bool): 葉ノードのみを評価対象とするならTrue
         '''
         self.native = NativePlayer(
             processor=processor.native, threads=threads,
-            width=width, height=height, komi=komi, rule=rule, superko=superko)
+            width=width, height=height, komi=komi, rule=rule, superko=superko,
+            eval_leaf_only=eval_leaf_only)
         self.processor = processor
         self.width = width
         self.height = height
@@ -199,9 +254,8 @@ class Player(object):
         Returns:
             Candidate: パスの候補手
         '''
-        self.native.start_evaluation(1, False, False, 0)
-        self.native.wait_evaluation(120.0)
-        self.native.stop_evaluation()
+        self.native.start_evaluation(False, False, 0, 1.0, 0.0)
+        self.native.wait_evaluation(1, 0, 120.0, True)
 
         return Candidate(*self.native.get_pass())
 
@@ -246,6 +300,10 @@ class Player(object):
         equally: bool = False,
         use_ucb1: bool = False,
         width: int | None = None,
+        temperature: float = 1.0,
+        noise: float = 0.0,
+        criterion: str = 'lcb',
+        ponder: bool = False,
     ) -> List[Candidate]:
         '''盤面を評価する。
         Args:
@@ -254,7 +312,11 @@ class Player(object):
             timelimit (float): 制限時間（秒）
             equally (bool): 探索回数を均等にする場合はTrue、UCB1かPUCBを使う場合はFalse
             use_ucb1 (bool): 探索先の基準としてUCB1を使う場合はTrue、PUCBを使う場合はFalse
-            width (int): 探索幅（この探索幅までの候補手について探索を実行する）
+            width (int): 探索幅（この探索幅までの候補手を探索する（0の場合は自動調整される））
+            temperature (float): 探索の温度パラメータ
+            noise (float): 探索のガンベルノイズの強さ
+            criterion (str): 候補手優先度の基準（'lcb'、'visits'のいずれか）
+            ponder (bool): 探索を継続する場合はTrue
         Returns:
             List[Candidate]: 候補手の一覧
         '''
@@ -282,8 +344,13 @@ class Player(object):
                 if not self.is_valid_position(candidates[i].pos):
                     candidates[i].pos = self.get_cleanup_position(candidates[i].color)
 
-        # 候補手をLCBでソートする
-        candidates.sort(key=lambda cand: cand.win_chance_lcb, reverse=True)
+        # 候補手をソートする
+        if criterion == 'visits':
+            candidates.sort(key=lambda cand: cand.visits, reverse=True)
+        elif criterion == 'lcb':
+            candidates.sort(key=lambda cand: cand.win_chance_lcb, reverse=True)
+        else:
+            raise ValueError(f'Unknown criterion: {criterion}')
 
         # ログを出力する
         if LOGGER.isEnabledFor(logging.DEBUG):
@@ -296,6 +363,10 @@ class Player(object):
 
         # 候補手の一覧を返す
         return candidates
+
+    def stop_evaluation(self) -> None:
+        '''ponderingしている場合は停止する。'''
+        self.native.wait_evaluation(0, 0, 0.0, True)
 
     def get_territories(
         self,
@@ -436,6 +507,20 @@ class Player(object):
 
         # セキを反映する
         territories += (territories == 0).astype(np.int32) * colors
+
+        # 中国ルールの場合は囲まれた空地を周りの色に置き換える
+        if self.rule == RULE_CH:
+            checked_positions = np.zeros_like(territories, dtype=np.bool_)
+
+            for y, x in np.ndindex(territories.shape):
+                if checked_positions[y, x] or territories[y, x] != EMPTY:
+                    continue
+
+                color, positions = get_area_color(territories, (y, x))
+
+                for pos in positions:
+                    territories[pos] = color
+                    checked_positions[pos] = True
 
         # 目数を計算する
         result = float(territories.sum()) - self.komi

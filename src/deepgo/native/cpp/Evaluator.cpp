@@ -9,7 +9,8 @@ namespace deepgo {
  * @param rule 勝敗判定ルール
  * @param superko スーパーコウルールを適用するならtrue
  */
-Evaluator::Evaluator(Processor* processor, float komi, int32_t rule, bool superko)
+Evaluator::Evaluator(
+  Processor* processor, float komi, int32_t rule, bool superko)
     : _processor(processor),
       _komi(komi),
       _rule(rule),
@@ -70,7 +71,7 @@ void Evaluator::evaluate(Board* board, int32_t color) {
     }
   }
 
-  // 予測勝率を取得する。
+  // 評価値を取得する。
   _value = outputs[MODEL_PREDICTIONS * MODEL_SIZE * MODEL_SIZE + 0] * 2 - 1;
 
   // 白番の場合は黒白の評価値を反転する。
@@ -99,8 +100,8 @@ std::vector<Policy> Evaluator::getPolicies() {
 }
 
 /**
- * モデルによる推論結果の予想勝率を取得する。
- * @return モデルによる推論結果の予想勝率
+ * モデルによる推論結果の評価値を取得する。
+ * @return モデルによる推論結果の評価値
  */
 float Evaluator::getValue() {
   return _value;

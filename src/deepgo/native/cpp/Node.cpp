@@ -22,8 +22,8 @@ static std::default_random_engine random_engine(random_seed_gen());
  * @param superko スーパーコウルールを適用するならtrue
  */
 Node::Node(
-    NodeManager* manager, Processor* processor,
-    int32_t width, int32_t height, float komi, int32_t rule, bool superko)
+    NodeManager* manager, Processor* processor, int32_t width, int32_t height,
+    float komi, int32_t rule, bool superko)
     : _evalMutex(),
       _valueMutex(),
       _manager(manager),
@@ -35,26 +35,27 @@ Node::Node(
       _policy(0.0f),
       _evaluator(processor, komi, rule, superko),
       _children(),
-      _priorityQueue(),
+      _childPolicies(),
       _waitingQueue(),
       _waitingSet(),
       _visits(0),
+      _playouts(0),
       _value(0.0f),
       _count(0) {
 }
 
 /**
- * ノードの評価情報を初期化する。
+ * 初期盤面ノードとして設定する。
  */
-void Node::reset() {
-  _evaluator.clear();
-  _children.clear();
-  _priorityQueue = std::priority_queue<Policy>();
-  _waitingQueue = std::queue<Policy>();
-  _waitingSet.clear();
-  _visits = 0;
-  _value = 0.0f;
-  _count = 0;
+void Node::initialize() {
+  std::unique_lock<std::shared_mutex> lock(_evalMutex);
+
+  _board.clear();
+  _x = -1;
+  _y = -1;
+  _color = WHITE;
+  _captured = 0;
+  _reset();
 }
 
 /**
@@ -63,9 +64,12 @@ void Node::reset() {
  * @param equally 探索回数を均等にする場合はtrue
  * @param width 探索幅(0の場合は探索幅を自動で調整する)
  * @param useUcb1 UCB1を使用する場合はtrue・PUCBを使用する場合はfalse
+ * @param temperature 探索の温度パラメータ
+ * @param noise ガンベルノイズの強さ
  * @return 次に評価するノードオブジェクト
  */
-NodeResult Node::evaluate(bool equally, int32_t width, bool useUcb1) {
+NodeResult Node::evaluate(
+    bool equally, int32_t width, bool useUcb1, float temperature, float noise) {
   std::unique_lock<std::shared_mutex> lock(_evalMutex);
 
   // ノードの評価を実行する
@@ -84,45 +88,69 @@ NodeResult Node::evaluate(bool equally, int32_t width, bool useUcb1) {
     return NodeResult(nullptr, _evaluator.getValue(), 1);
   }
 
-  // キューから評価に追加する候補手を取得する
-  if (!_priorityQueue.empty()) {
-    Policy policy = _priorityQueue.top();
-    int32_t policy_index = policy.y * _board.getWidth() + policy.x;
+  // 評価に追加する候補手を取得する
+  int32_t children_size = _children.size() + _waitingSet.size();
 
-    _priorityQueue.pop();
+  if (children_size < _childPolicies.size() && (width < 1 || children_size < width)) {
+    int32_t max_index = 0;
+    int32_t max_priority_type = 0;
+    float max_priority = 0.0f;
 
-    // 探索幅が指定されていて、子ノードと待機リストの合計が探索幅より少ない場合は
-    // 新しい候補手が取得されるまでキューから候補手を取り出す
-    if (width > 0 && _children.size() + _waitingSet.size() < width) {
-      std::vector<Policy> temp_policies;
+    // 温度パラメータを計算する
+    float win_chance = getValue() * OPPOSITE(_color) * 0.5 + 0.5;
+    float temperature_power = win_chance + (1.0 / temperature) * (1 - win_chance);
 
-      while (!_priorityQueue.empty() &&
-             (_children.find(policy_index) != _children.end() ||
-              _waitingSet.find(policy_index) != _waitingSet.end())) {
-        // 一時的に取り出した候補手を保存しておく
-        temp_policies.push_back(policy);
+    // ガンベルノイズの生成オブジェクトを作成する
+    // 子ノードの数が4以下の場合はノイズを加えない
+    float noise_scale = (children_size <= 4) ? 0.0f : noise;
+    std::extreme_value_distribution<float> noise_dist(0.0f, noise_scale);
 
-        // 探索対象とする新しい候補手を取得する
-        policy = _priorityQueue.top();
-        policy_index = policy.y * _board.getWidth() + policy.x;
-        _priorityQueue.pop();
+    // 優先度が最も高い候補手を探す
+    for (int i = 0; i < _childPolicies.size(); i++) {
+      Policy& policy = _childPolicies[i];
+      float probability = policy.policy;
+
+      // 温度パラメータを反映させる
+      probability = std::pow(probability, temperature_power);
+
+      // ガンベルノイズを加える
+      // ノイズを加算する対象はロジットとなるため、確率に対してはe^noiseを乗算する
+      probability *= std::exp(noise_dist(random_engine));
+
+      // 優先度を計算する
+      int32_t priority_type = 1;
+      float priority = probability / (policy.visits + 1);
+
+      // 探索回数を均等にする設定となっている場合は登録済みの候補手の優先度を下げる
+      if (equally) {
+        int32_t policy_index = policy.y * _board.getWidth() + policy.x;
+
+        if (_children.find(policy_index) != _children.end() ||
+            _waitingSet.find(policy_index) != _waitingSet.end()) {
+          priority_type = 0;
+        }
       }
 
-      // 一時的に取り出した候補手をキューに戻す
-      for (Policy temp_policy : temp_policies) {
-        _priorityQueue.push(temp_policy);
+      if (priority_type > max_priority_type ||
+          (priority_type == max_priority_type && priority > max_priority)) {
+        max_index = i;
+        max_priority_type = priority_type;
+        max_priority = priority;
       }
     }
-
-    // 探索対象とした候補手の訪問数を増やしてキューに再度追加する
-    _priorityQueue.emplace(policy.x, policy.y, policy.policy, policy.visits + 1);
 
     // 評価に追加する候補手が未登録状態であれば新たに待機リストに登録する
-    if (_children.find(policy_index) == _children.end() &&
-        _waitingSet.find(policy_index) == _waitingSet.end()) {
-      _waitingQueue.push(policy);
-      _waitingSet.insert(policy_index);
+    Policy& max_policy = _childPolicies[max_index];
+    int32_t max_policy_index = max_policy.y * _board.getWidth() + max_policy.x;
+
+    if (_children.find(max_policy_index) == _children.end() &&
+        _waitingSet.find(max_policy_index) == _waitingSet.end()) {
+      _waitingQueue.push(max_policy);
+      _waitingSet.insert(max_policy_index);
     }
+
+    // 訪問数を増やす
+    _childPolicies[max_index].visits += 1;
   }
 
   // 探索幅が指定されていない場合と子ノードの数が指定された探索幅に達していない場合、

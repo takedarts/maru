@@ -30,28 +30,37 @@ class Node {
    * @param superko スーパーコウルールを適用するならtrue
    */
   Node(
-      NodeManager* manager, Processor* processor,
-      int32_t width, int32_t height, float komi, int32_t rule, bool superko);
+      NodeManager* manager, Processor* processor, int32_t width, int32_t height,
+      float komi, int32_t rule, bool superko);
 
   /**
-   * ノードの評価情報を初期化する。
+   * 初期盤面ノードとして設定する。
    */
-  void reset();
+  void initialize();
 
   /**
    * 探索ノードを評価する。
    * @param equally 探索回数を均等にする場合はtrue
    * @param width 探索幅(0の場合は探索幅を自動で調整する)
    * @param useUcb1 UCB1を使用する場合はtrue・PUCBを使用する場合はfalse
+   * @param temperature 探索の温度パラメータ
+   * @param noise ガンベルノイズの強さ
    * @return 評価結果
    */
-  NodeResult evaluate(bool equally, int32_t width, bool useUcb1);
+  NodeResult evaluate(
+      bool equally, int32_t width, bool useUcb1, float temperature, float noise);
 
   /**
-   * 探索ノードを更新する。
-   * @param value 反映する予想勝率
+   * 探索ノードの評価値を更新する。
+   * @param value 評価値
    */
-  void update(float value);
+  void updateValue(float value);
+
+  /**
+   * 探索ノードの評価値をキャンセルする。
+   * @param value 評価値
+   */
+  void cancelValue(float value);
 
   /**
    * PolicyNetworkの評価値をもとに候補手をランダムに取得する。
@@ -237,9 +246,9 @@ class Node {
   std::unordered_map<int32_t, Node*> _children;
 
   /**
-   * 次の着手確率の優先度付きキュー。
+   * 次の着手確率の一覧。
    */
-  std::priority_queue<Policy> _priorityQueue;
+  std::vector<Policy> _childPolicies;
 
   /**
    * 子ノードへの登録を待機している候補手の一覧。
@@ -275,6 +284,11 @@ class Node {
    * このノードの評価を実行する。
    */
   void _evaluate();
+
+  /**
+   * ノードの評価情報を初期化する。
+   */
+  void _reset();
 
   /**
    * 指定されたノードの継続ノードとしての値を設定する。

@@ -27,14 +27,6 @@ class NodeManager {
       float komi, int32_t rule, bool superko);
 
   /**
-   * 初期ノードとして使用できるノードオブジェクトを作成する。
-   * 必ず新しいノードオブジェクトを作成する。
-   * @return 初期ノードオブジェクト
-   */
-  Node* createInitNode();
-
-
-  /**
    * ノードオブジェクトを作成する。
    * 未使用のノードオブジェクトがあればそれを返し、なければ新規作成する。
    * @return ノードオブジェクト
