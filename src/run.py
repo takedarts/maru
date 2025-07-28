@@ -17,8 +17,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         '--visits', type=int, default=50, help='Number of visits')
     parser.add_argument(
+        '--playouts', type=int, default=0, help='Number of playouts')
+    parser.add_argument(
         '--search', type=str, default='pucb', choices=['ucb1', 'pucb'],
         help='Calculation method of search (default: pucb)')
+    parser.add_argument(
+        '--temperature', type=float, default=1.0, help='Temperature for exploration (default: 1.0)')
+    parser.add_argument(
+        '--randomness', type=float, default=0.0, help='Randomness for number of exploration (default: 0.0)')
+    parser.add_argument(
+        '--criterion', type=str, default='lcb', choices=['lcb', 'visits'],
+        help='Criterion for candidate prioritization')
     parser.add_argument(
         '--rule', type=str, default='ch', choices=['ch', 'jp', 'com'], help='Rule')
     parser.add_argument(
@@ -27,6 +36,8 @@ def parse_args() -> argparse.Namespace:
         '--komi', type=float, default=DEFAULT_KOMI, help=f'Komi (default: {DEFAULT_KOMI})')
     parser.add_argument(
         '--superko', default=False, action='store_true', help='Use superko rule')
+    parser.add_argument(
+        '--eval-leaf-only', default=False, action='store_true', help='Evaluate leaf nodes only')
     parser.add_argument(
         '--timelimit', type=float, default=10, help='Timelimit (sec) (default: 10 sec)')
     parser.add_argument(
@@ -38,7 +49,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         '--min-turn', type=int, default=100, help='Minimum number of resign turns (default: 100)')
     parser.add_argument(
-        '--initial-turn', type=int, default=0, help='Number of turns to move randomly (default: 0)')
+        '--initial-turn', type=int, default=4, help='Number of turns to move randomly (default: 4)')
     parser.add_argument(
         '--client-name', type=str, default=NAME, help='Client name (default: {NAME})')
     parser.add_argument(
@@ -95,11 +106,16 @@ def main() -> None:
         processor=processor,
         threads=args.threads,
         visits=args.visits,
+        playouts=args.playouts,
         use_ucb1=(args.search == 'ucb1'),
+        temperature=args.temperature,
+        randomness=args.randomness,
+        criterion=args.criterion,
         rule=rule,
         boardsize=args.boardsize,
         komi=args.komi,
         superko=args.superko,
+        eval_leaf_only=args.eval_leaf_only,
         timelimit=args.timelimit,
         ponder=args.ponder,
         resign_threshold=args.resign,

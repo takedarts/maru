@@ -369,11 +369,16 @@ class GTPEngine(object):
         processor: Processor,
         threads: int,
         visits: int,
-        use_ucb1: bool,
+        playouts: int = 0,
+        use_ucb1: bool = False,
+        temperature: float = 1.0,
+        randomness: float = 0.0,
+        criterion: str = 'lcb',
         rule: int = RULE_CH,
         boardsize: int = DEFAULT_SIZE,
         komi: float = DEFAULT_KOMI,
         superko: bool = False,
+        eval_leaf_only: bool = False,
         timelimit: float = 10,
         ponder: bool = False,
         resign_threshold: float = 0.0,
@@ -391,10 +396,15 @@ class GTPEngine(object):
             processor (Processor): 推論実行オブジェクト
             threads (int): 使用するスレッドの数
             visits (int): 訪問数の目標値
+            playouts (int): プレイアウト数の目標値
             use_ucb1 (bool): UCB1を使用するならTrue、PUCBを使用するならFalse
+            criterion (str): 候補手優先度の基準（'lcb'、'visits'のいずれか）
+            temperature (float): 探索の温度パラメータ
+            randomness (float): 探索の訪問数のランダム性
             rule (int): ゲームルール
             komi: float: コミの値
             superko (bool): スーパーコウルールを適用するならTrue
+            eval_leaf_only (bool): 葉ノードのみを評価対象とするならTrue
             timelimit (float): 思考時間の上限
             ponder (bool): 相手の思考中に解析を継続するならTrue
             resign_threshold (float): 投了するときの勝率
@@ -413,12 +423,17 @@ class GTPEngine(object):
         self.moves: List[Tuple[Tuple[int, int], int]] = []
 
         self.visits = visits
+        self.playouts = playouts
         self.use_ucb1 = use_ucb1
+        self.temperature = temperature
+        self.randomness = randomness
+        self.criterion = criterion
 
+        self.rule = rule
         self.size = boardsize
         self.komi = komi
-        self.rule = rule
         self.superko = superko
+        self.eval_leaf_only = eval_leaf_only
         self.timelimit = timelimit
         self.ponder = ponder
         self.remain_times = [-1, -1]
@@ -528,8 +543,9 @@ class GTPEngine(object):
             Player: プレイヤオブジェクト
         '''
         LOGGER.debug(
-            'Create player: width=%d, height=%d, komi=%.1f, rule=%d, superko=%s',
-            self.size, self.size, self.komi, self.rule, self.superko)
+            'Create player: '
+            'width=%d, height=%d, komi=%.1f, rule=%d, superko=%s, eval_leaf_only=%s',
+            self.size, self.size, self.komi, self.rule, self.superko, self.eval_leaf_only)
 
         return Player(
             processor=self.processor,
@@ -538,7 +554,9 @@ class GTPEngine(object):
             height=self.size,
             komi=self.komi,
             rule=self.rule,
-            superko=self.superko)
+            superko=self.superko,
+            eval_leaf_only=self.eval_leaf_only
+        )
 
     def _random_move(self, color: int) -> Candidate:
         '''Policyに基づいてランダムに着手する。
@@ -566,6 +584,7 @@ class GTPEngine(object):
         self,
         color: int,
         visits: int | None = None,
+        playouts: int | None = None,
         timelimit: float | None = None,
     ) -> List[Candidate]:
         '''盤面の評価を実行する。
@@ -584,22 +603,33 @@ class GTPEngine(object):
         if self.player.get_color() != color:
             self.player.play(PASS)
 
-        # 訪問数と思考時間を設定する
+        # 訪問数を設定する
         if visits is None:
-            visits = self.visits
+            rand = (1 - self.randomness / 2) + (np.random.rand() * self.randomness)
+            visits = max(int(self.visits * rand), 1)
 
+        # プレイアウト数を設定する
+        if playouts is None:
+            rand = (1 - self.randomness / 2) + (np.random.rand() * self.randomness)
+            playouts = max(int(self.playouts * rand), 0)
+
+        # 訪問数を設定する
         if timelimit is None:
             timelimit = self._get_timelimit(color)
 
         # 盤面を評価する
         LOGGER.debug(
-            'Evaluate: color=%s, visits=%d, timelimit=%.1f',
-            gtp_color_to_string(color), visits, timelimit)
+            'Evaluate: color=%s, visits=%d, playouts=%d, timelimit=%.1f',
+            gtp_color_to_string(color), visits, playouts, timelimit)
 
         candidates = self.player.evaluate(
             visits=visits,
+            playouts=playouts,
             use_ucb1=self.use_ucb1,
-            timelimit=timelimit)
+            timelimit=timelimit,
+            temperature=self.temperature,
+            criterion=self.criterion,
+            ponder=self.ponder)
 
         # 候補手の一覧を返す
         return candidates
@@ -656,7 +686,7 @@ class GTPEngine(object):
                         break
 
             # すべての境界領域が確定している場合はパスした場合の予測目数差を確認する
-            # 予測目数差が閾値(0.8)未満の場合はパスする
+            # 予測目数差が閾値(0.8)未満の場合はパスする（ponderingしている場合は探索を停止する）
             if boundary_fixed:
                 pass_territories = self.player.get_territories(
                     pos=PASS, color=candidate.color, raw=True)
@@ -668,6 +698,7 @@ class GTPEngine(object):
                 score_diff = score_diff if candidate.color == BLACK else -score_diff
 
                 if score_diff < 0.8:
+                    self.player.stop_evaluation()
                     return PASS, pass_score, pass_territories
 
         # 指定ターン未満なら投了しない
@@ -678,8 +709,9 @@ class GTPEngine(object):
         if abs(score) < self.resign_score:
             return candidate.pos, score, territories
 
-        # 勝率が閾値未満なら投了する
+        # 勝率が閾値未満なら投了する（ponderingしている場合は探索を停止する）
         if candidate.win_chance < self.resign_threshold:
+            self.player.stop_evaluation()
             return None, score, territories
 
         # 投了しない場合は着手座標を返す
@@ -781,6 +813,9 @@ class GTPEngine(object):
         return (True, '', False)
 
     def _perform_command_clear_board(self, args: List[str]) -> Tuple[bool, str, bool]:
+        if self.player is not None:
+            self.player.stop_evaluation()
+
         self.player = None
         self.moves.clear()
 
@@ -796,11 +831,41 @@ class GTPEngine(object):
             return (True, '', False)
 
         if self.player is not None:
-            return (False, 'can not change komi after the game starts', False)
+            self.player.komi = new_komi
 
         self.komi = new_komi
 
         return (True, '', False)
+
+    def _perform_command_fixed_handicap(self, args: List[str]) -> Tuple[bool, str, bool]:
+        '''fixed_handicapコマンドを実行する。
+        Args:
+            args (List[str]): 引数リスト
+        Returns:
+            Tuple[bool, str, bool]: (成功ならTrue, メッセージ, 継続するならTrue)
+        '''
+        # 引数を確認する
+        if len(args) < 1:
+            return (False, 'syntax error', False)
+
+        handicap = int(args[0])
+
+        if handicap < 2 or handicap > 9:
+            return (False, 'handicap must be between 2 and 9', False)
+
+        # プレイヤオブジェクトがない場合は作成する
+        if self.player is None:
+            self.player = self._create_player()
+
+        # 置き石を設定する
+        self.player.set_handicap(handicap)
+
+        # 置き石を置いた座標を返す
+        positions = [
+            gtp_position_to_string(p, self.size, self.size)
+            for p in get_handicap_positions(self.size, self.size, handicap)]
+
+        return (True, ' '.join(positions), False)
 
     def _perform_command_play(self, args: List[str]) -> Tuple[bool, str, bool]:
         '''playコマンドを実行する。
@@ -861,7 +926,7 @@ class GTPEngine(object):
             return (False, 'cannot undo', False)
 
         self.moves = self.moves[:-1]
-        self.player.clear()
+        self.player.initialize()
 
         for pos, color in self.moves:
             self.player.play(pos, color)
@@ -897,7 +962,7 @@ class GTPEngine(object):
         # 着手座標を取得する
         pos, score, territories = self._get_move(candidate)
 
-        # 投了の場合と盤面を進めない場合は着手座標を返す
+        # 投了の場合と盤面を進めない場合は応答を返す
         if pos is None or not play:
             return (True, gtp_position_to_string(pos, self.size, self.size), False)
 
