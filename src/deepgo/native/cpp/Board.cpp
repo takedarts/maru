@@ -1128,11 +1128,7 @@ bool Board::_isShichoRen(int32_t index) {
     int32_t curr_pos_y = curr_board._getPosY(curr_pos);
 
     if (curr_board.play(curr_pos_x, curr_pos_y, color) < 0) {
-      if (_isNakade(board._renObjs[ren_id].positions)) {
-        continue;
-      } else {
         return true;
-      }
     }
 
     // 逃げた盤面のダメが1個 -> OK（シチョウ）
@@ -1140,11 +1136,7 @@ bool Board::_isShichoRen(int32_t index) {
     int32_t curr_ren_id = curr_board._renIds[index];
 
     if (curr_board._renObjs[curr_ren_id].spaces.size() == 1) {
-      if (_isNakade(curr_board._renObjs[curr_ren_id].positions)) {
-        continue;
-      } else {
         return true;
-      }
     } else if (curr_board._renObjs[curr_ren_id].spaces.size() > 2) {
       continue;
     }
