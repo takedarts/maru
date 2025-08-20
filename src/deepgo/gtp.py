@@ -515,7 +515,7 @@ class GTPEngine(object):
                 # 終了命令ならループを抜ける
                 if command.lower().startswith('quit'):
                     self.thread = None
-                    self.writer.write(f'={number}\n')
+                    self.writer.write(f'={number}\n\n')
                     break
 
                 # 別スレッドでコマンドを実行する
