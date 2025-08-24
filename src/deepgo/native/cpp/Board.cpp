@@ -1388,10 +1388,11 @@ bool Board::_isSekiArea(
   std::vector<int32_t> stack;
 
   positions.insert(index);
+  stack.push_back(index);
 
   for (int32_t space_index : spacesIndices) {
-    stack.push_back(space_index);
     positions.insert(space_index);
+    stack.push_back(space_index);
   }
 
   while (!stack.empty()) {
