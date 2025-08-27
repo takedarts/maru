@@ -23,10 +23,10 @@ def parse_args() -> argparse.Namespace:
 
 
 def make_files(path: str) -> None:
-    '''Config.hを作成する'''
+    '''Create Config.h'''
     work_path = Path(__file__).parent / path
 
-    # Config.hを作成する
+    # Create Config.h
     config_path = work_path / 'cpp' / 'Config.h'
     config_text = (work_path / 'cpp' / 'Config.template').read_text()
     config_text = string.Template(config_text).substitute(config.__dict__)
@@ -34,7 +34,7 @@ def make_files(path: str) -> None:
     if not config_path.exists() or config_path.read_text() != config_text:
         config_path.write_text(config_text)
 
-    # CMakeLists.txtを作成する
+    # Create CMakeLists.txt
     torch_path = str(Path(torch.__file__).parent).replace('\\', '/')
     cpp_paths = [p.relative_to(work_path) for p in (work_path / 'cpp').glob('**/*.cpp')]
     cpp_files = ' '.join(map(str, cpp_paths)).replace('\\', '/')
@@ -47,20 +47,20 @@ def make_files(path: str) -> None:
     if not cmake_path.exists() or cmake_path.read_text() != cmake_text:
         cmake_path.write_text(cmake_text)
 
-    # modules.pyxのタイムスタンプを更新する
+    # Update the timestamp of modules.pyx
     module_path = work_path / 'modules.pyx'
     module_path.touch()
 
 
 def run_cmake(path: str) -> None:
-    '''cmakeを実行してCythonライブラリを作成する'''
-    # cmakeの実行ファイルのパスを取得する
+    '''Run cmake to create the Cython library'''
+    # Get the path to the cmake executable
     if hasattr(cmake, 'CMAKE_BIN_DIR'):
         cmake_path = os.path.join(cmake.CMAKE_BIN_DIR, 'cmake')
     else:
         cmake_path = 'cmake'
 
-    # buildディレクトリを作成する
+    # Create the build directory
     curr_path = Path('.').resolve()
     work_path = Path(__file__).parent / path
     build_path = work_path / 'build'
@@ -68,14 +68,14 @@ def run_cmake(path: str) -> None:
     if not build_path.is_dir():
         build_path.mkdir()
 
-    # buildディレクトリに移動する
+    # Move to the build directory
     os.chdir(build_path)
 
-    # cmakeを実行する
+    # Run cmake
     if subprocess.run([cmake_path, '..']).returncode != 0:
         raise Exception('failed in making module (cmake).')
 
-    # makeを実行する（Windowsではmsbuildを使用する）
+    # Run make (use msbuild on Windows)
     if os.name == 'nt':
         sln_path = str(build_path / 'DEEPGO_CYTHON.sln')
         sln_args = ['/t:Clean;Rebuild', '/p:Configuration=Release']
@@ -85,10 +85,10 @@ def run_cmake(path: str) -> None:
         if subprocess.run(['make']).returncode != 0:
             raise Exception('failed in making module (make).')
 
-    # buildディレクトリから元のディレクトリに戻る
+    # Return to the original directory from the build directory
     os.chdir(curr_path)
 
-    # コンパイルしたモジュールファイルをwork_pathに移動する
+    # Move the compiled module file to work_path
     if (build_path / 'modules.so').is_file():
         src_path = build_path / 'modules.so'
         dst_path = work_path / 'modules.so'

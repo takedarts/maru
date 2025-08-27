@@ -16,14 +16,14 @@ class Processor(object):
         deterministic: bool = False,
         threads_par_gpu: int = 1,
     ) -> None:
-        '''計算管理オブジェクトを初期化する。
+        '''Initialize computation management object.
         Args:
-            model (str | Path): モデルファイルのパス
-            gpus (List[int]): 使用するGPUの番号のリスト
-            batch_size (int): 最大バッチサイズ
-            fp16 (bool): FP16を使用するかどうか
-            deterministic (bool): 結果を再現可能にするならTrue
-            threads_par_gpu (int): 1GPUあたりのスレッド数
+            model (str | Path): Path to model file
+            gpus (List[int]): List of GPU numbers to use
+            batch_size (int): Maximum batch size
+            fp16 (bool): True to use FP16
+            deterministic (bool): True to make results reproducible
+            threads_par_gpu (int): Number of threads per GPU
         '''
         if not Path(model).exists():
             raise FileNotFoundError(f'File not found: {model}')
@@ -32,8 +32,8 @@ class Processor(object):
             str(model), gpus, batch_size, fp16, deterministic, threads_par_gpu)
 
     def execute(self, inputs: np.ndarray) -> np.ndarray:
-        '''推論を実行する。
+        '''Execute inference.
         Args:
-            inputs (np.ndarray): 入力データ
+            inputs (np.ndarray): Input data
         '''
         return self.native.execute(inputs)

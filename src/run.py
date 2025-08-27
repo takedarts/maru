@@ -79,16 +79,16 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
 
-    # ログ出力を設定する
+    # Set up log output
     start_logging(debug=args.verbose, console=sys.stderr)
 
-    # GPUに関する設定を行う
+    # Configure GPU settings
     if torch.cuda.device_count() != 0:
         torch.backends.cudnn.enabled = True
         torch.backends.cudnn.benchmark = True
         torch.backends.cudnn.deterministic = False
 
-    # ゲームルールを確認する
+    # Check game rules
     if args.rule == 'ch':
         rule = RULE_CH
     elif args.rule == 'jp':
@@ -98,10 +98,10 @@ def main() -> None:
     else:
         raise ValueError(f'Invalid rule: {args.rule}')
 
-    # 推論オブジェクトを作成する
+    # Create inference object
     processor = Processor(args.model, args.gpus, args.batch_size, args.fp16)
 
-    # GPTオブジェクトを作成する
+    # Create GPT object
     engine = GTPEngine(
         processor=processor,
         threads=args.threads,
@@ -127,11 +127,11 @@ def main() -> None:
         display=args.display,
     )
 
-    # sgfファイルが指定されていれば読み込む
+    # Load sgf file if specified
     if args.sgf is not None:
         engine.load(args.sgf)
 
-    # ゲームを実行する
+    # Run the game
     engine.run()
 
 
