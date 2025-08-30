@@ -108,3 +108,75 @@ For environments without GPU (CPU only), use the following commands:
 docker pull takedarts/maru:cpu
 docker run -it --rm -v .:/workspace takedarts/maru:cpu /opt/run.sh <model_file>
 ```
+
+## Execution Options
+When running the startup script `src/run.py`, you can specify the following options:
+
+| Option                 | Description                                                    | Default Value       |
+|------------------------|----------------------------------------------------------------|---------------------|
+| `--help`               | Display a list of available options                            |                     |
+| `--visits <N>`         | Number of searches (number of nodes in the search tree)        | 50                  |
+| `--playouts <N>`       | Number of playouts (number of leaves in the search tree)       | 0                   |
+| `--search <S>`         | Search method (`ucb1` or `pucb`)                               | `pucb`              |
+| `--temperature <R>`    | Temperature parameter for search                               | 1.0                 |
+| `--randomness <R>`     | Variation in search count during exploration (0.0–1.0)         | 0.0                 |
+| `--criterion <S>`      | Criterion for selecting a move (`lcb` or `visits`)             | `lcb`               |
+| `--rule <R>`           | Rule set for determining the winner (`ch`, `jp`, or `com`)     | `ch`                |
+| `--boardsize <N>`      | Board size (e.g., 9, 13, 19)                                   | 19                  |
+| `--komi <K>`           | Komi value                                                     | 7.5                 |
+| `--superko`            | Enable superko                                                 | False               |
+| `--eval-leaf-only`     | Evaluate only leaf nodes during search                         | False               |
+| `--timelimit <N>`      | Maximum thinking time (in seconds)                             | 10                  |
+| `--ponder`             | Enable pondering                                               | False               |
+| `--resign <R>`         | Predicted win rate threshold for resignation                   | 0.02                |
+| `--min-score <R>`      | Minimum predicted score difference for resignation             | 0.0                 |
+| `--min-turn <N>`       | Minimum number of turns before resignation is allowed          | 100                 |
+| `--initial-turn <N>`   | Number of opening turns with random moves                      | 4                   |
+| `--client-name <S>`    | Client name to display                                         | `Maru`              |
+| `--client-version <S>` | Version information to display                                 | `8.1`               |
+| `--threads <N>`        | Number of threads to use for search                            | 16                  |
+| `--display <S>`        | Command to display the board                                   | None                |
+| `--sgf <S>`            | SGF file to load as the initial position                       | None                |
+| `--batch-size <N>`     | Maximum batch size for board evaluation                        | 1                   |
+| `--gpu <N>`            | GPU ID(s) to use (comma-separated for multiple GPUs)           | 0                   |
+| `--fp16`               | Use half-precision floating point (FP16)                       | False               |
+| `--verbose`            | Enable log output to standard error                            | False               |
+
+#### Relationship between Number of Visits, Number of Playouts, and Thinking Time
+The termination condition of the search is determined by the values specified with the `--visits`, `--playouts`, and `--timelimit` options. The search ends either when both the number of visits and the number of playouts exceed their specified values, or when the elapsed thinking time exceeds the specified number of seconds.
+
+#### Temperature Parameter
+The `--temperature` option specifies the temperature parameter used to adjust the probability distribution output by the Policy Network. Increasing the temperature broadens the range of exploration, while decreasing it narrows the range.
+
+#### Rules for Determining the Winner
+The `--rule` option can be set to `ch`, `jp`, or `com`. When `ch` is specified, the moves follow Chinese rules. When `jp` is specified, the moves assume Japanese rules. When `com` is specified, the moves basically follow Chinese rules but differ in that play continues until dead stones are removed; this setting is intended for games between computers, such as those on CGOS.
+
+#### Command to Display the Board
+By specifying a program such as gogui-display with the `--display` option, the board can be displayed. The display program receives the play command of the GTP protocol.
+
+## Execution Examples
+To start Maru using the model file `b4c128-250.model`, run the following command:
+```
+python src/run.py b4c128-250.model
+```
+
+To start Maru with the number of visits set to 1000 and the maximum thinking time set to 5 seconds, run the following command:
+```
+python src/run.py b4c128-250.model --visits 1000 --timelimit 5
+```
+
+To start Maru assuming a game under Japanese rules, run the following command:
+```
+python src/run.py b4c128-250.model --rule jp
+```
+
+To play on a [CGOS server](http://yss-aya.com/cgos/), configure the client (e.g., [CGOS-Client](https://github.com/zakki/cgos)) with the following command:
+```
+python src/run.py b4c128-250.model --rule com
+```
+
+When using Maru with [Lizzie](https://github.com/featurecat/lizzie), set the following command as the GTP engine executed from Lizzie.
+By setting the client name to `KataGo`, you can enable Lizzie’s evaluation display feature.
+```
+python src/run.py b4c128-250.model --client-name KataGo
+```
