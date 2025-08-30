@@ -328,7 +328,7 @@ class Display(object):
         pos_str = gtp_position_to_string(pos, 19, 19)
         color_str = 'b' if color == BLACK else 'w'
 
-        self.send(f'play {pos_str} {color_str}')
+        self.send(f'play {color_str} {pos_str}')
 
     def send(self, message: str) -> None:
         '''Send display command.
