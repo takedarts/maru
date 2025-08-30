@@ -15,9 +15,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         'model', type=str, help='Path to the model file')
     parser.add_argument(
-        '--visits', type=int, default=50, help='Number of visits')
+        '--visits', type=int, default=50, help='Number of visits (default: 50)')
     parser.add_argument(
-        '--playouts', type=int, default=0, help='Number of playouts')
+        '--playouts', type=int, default=0, help='Number of playouts (default: 0)')
     parser.add_argument(
         '--search', type=str, default='pucb', choices=['ucb1', 'pucb'],
         help='Calculation method of search (default: pucb)')
@@ -27,9 +27,9 @@ def parse_args() -> argparse.Namespace:
         '--randomness', type=float, default=0.0, help='Randomness for number of exploration (default: 0.0)')
     parser.add_argument(
         '--criterion', type=str, default='lcb', choices=['lcb', 'visits'],
-        help='Criterion for candidate prioritization')
+        help='Criterion for candidate prioritization (default: lcb)')
     parser.add_argument(
-        '--rule', type=str, default='ch', choices=['ch', 'jp', 'com'], help='Rule')
+        '--rule', type=str, default='ch', choices=['ch', 'jp', 'com'], help='Rule (default: ch)')
     parser.add_argument(
         '--boardsize', type=int, default=DEFAULT_SIZE, help=f'Board size (default: {DEFAULT_SIZE})')
     parser.add_argument(
@@ -55,13 +55,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         '--client-version', type=str, default=VERSION, help=f'Client version (default: {VERSION})')
     parser.add_argument(
-        '--threads', type=int, default=16, help='Number of threads')
+        '--threads', type=int, default=16, help='Number of threads (default: 16)')
     parser.add_argument(
-        '--display', type=str, default=None, help='Command to display board')
+        '--display', type=str, default=None, help='Command to display board (default: None)')
     parser.add_argument(
-        '--sgf', type=str, default=None, help='SGF file to load')
+        '--sgf', type=str, default=None, help='SGF file to load (default: None)')
     parser.add_argument(
-        '--batch-size', type=int, default=2048, help='Batch size')
+        '--batch-size', type=int, default=2048, help='Batch size (default: 2048)')
     parser.add_argument(
         '--gpus', type=lambda x: list(map(int, x.split(','))), default=None,
         help='GPU IDs (comma-separated) (default: all available GPUs)')
