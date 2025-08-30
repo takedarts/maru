@@ -7,12 +7,12 @@
 namespace deepgo {
 
 /**
- * 推論実行オブジェクトを生成する。
- * @param model モデルファイル
- * @param gpu GPU番号
- * @param batchSize バッチサイズの最大値
- * @param fp16 16bit精度で計算するならTrue
- * @param deterministic 計算結果を再現可能にするならTrue
+ * Creates an inference execution object.
+ * @param model Model file
+ * @param gpu GPU number
+ * @param batchSize Maximum batch size
+ * @param fp16 True to compute with 16-bit precision
+ * @param deterministic True to make computation results reproducible
  */
 Executor::Executor(
     std::string model, int32_t gpu, int32_t batchSize, bool fp16, bool deterministic)
@@ -29,31 +29,31 @@ Executor::Executor(
 }
 
 /**
- * デストラクタ。
+ * Delete the object.
  */
 Executor::~Executor() {
-  // 終了フラグを立てる。
+  // Set the termination flag.
   {  // synchronize
     std::unique_lock<std::mutex> lock(_mutex);
     _terminated = true;
     _condition.notify_all();
   }
 
-  // スレッドの停止を待機する。
+  // Wait for the thread to stop.
   _thread->join();
 }
 
 /**
- * 推論を実行する。
- * @param inputs 入力データ
- * @param outputs 出力データ
- * @param size 入出力データの数
+ * Executes inference.
+ * @param inputs Input data
+ * @param outputs Output data
+ * @param size Number of input/output data
  */
 void Executor::execute(float* inputs, float* outputs, int32_t size) {
-  // 計算オブジェクトを生成する。
+  // Create a computation object.
   std::unique_ptr<ExecutorJob> job(new ExecutorJob(inputs, outputs, size));
 
-  // キューに追加する。
+  // Add to the queue.
   {  // synchronize
     std::unique_lock<std::mutex> lock(_mutex);
     _queue.push(job.get());
@@ -62,13 +62,13 @@ void Executor::execute(float* inputs, float* outputs, int32_t size) {
     _condition.notify_all();
   }
 
-  // 計算が完了するまで待機する。
+  // Wait until computation is complete.
   job->wait();
 }
 
 /**
- * 待機中の計算処理の数を返す。
- * @return 待機中の計算処理の数
+ * Returns the number of pending computation tasks.
+ * @return Number of pending computation tasks
  */
 int32_t Executor::getWaitingCount() {
   std::unique_lock<std::mutex> lock(_mutex);
@@ -76,8 +76,8 @@ int32_t Executor::getWaitingCount() {
 }
 
 /**
- * 計算処理の予約数を増やす。
- * @param reservedCount 予約数
+ * Increases the number of reserved computation tasks.
+ * @param reservedCount Number of reservations
  */
 void Executor::addReservedCount(int32_t reservedCount) {
   std::unique_lock<std::mutex> lock(_mutex);
@@ -85,22 +85,22 @@ void Executor::addReservedCount(int32_t reservedCount) {
 }
 
 /**
- * スレッドで実行されるメソッド。
+ * Method executed by the thread.
  */
 void Executor::_run() {
   try {
     while (true) {
       std::vector<ExecutorJob*> jobs;
 
-      // キューの状態と実行状態を確認する
+      // Check the state of the queue and execution
       {  // synchronize
-        // キューが空の場合は待機する。
+         // Wait if the queue is empty.
         std::unique_lock<std::mutex> lock(_mutex);
         _condition.wait(lock, [this] { return !_queue.empty() || _terminated; });
 
-        // 終了フラグが立っている場合は終了する。
+        // Exit if the termination flag is set.
         if (_terminated) {
-          // キューに残っている計算オブジェクトを全て取り出して終了を通知する。
+          // Take out all remaining computation objects in the queue and notify termination.
           while (!_queue.empty()) {
             ExecutorJob* job = _queue.front();
             _queue.pop();
@@ -110,7 +110,7 @@ void Executor::_run() {
           break;
         }
 
-        // キューから計算オブジェクトを取り出す。
+        // Take computation objects from the queue.
         int32_t jobs_size = 0;
 
         while (!_queue.empty() && jobs_size < _batchSize) {
@@ -122,10 +122,10 @@ void Executor::_run() {
         }
       }
 
-      // 計算を実行する。
+      // Execute computation.
       _forward(jobs);
 
-      // 計算が完了したことを通知する。
+      // Notify that computation is complete.
       for (auto job : jobs) {
         job->notify();
       }
@@ -138,22 +138,22 @@ void Executor::_run() {
 }
 
 /**
- * 計算を実行する。
- * @param jobs 計算タスクのリスト
+ * Executes computation.
+ * @param jobs List of computation tasks
  */
 void Executor::_forward(std::vector<ExecutorJob*>& jobs) {
-  // 入力データの大きさを計算する
+  // Calculate the size of input data
   int32_t jobs_size = 0;
 
   for (auto job : jobs) {
     jobs_size += job->getSize();
   }
 
-  // 入力データと出力データの領域を確保する。
+  // Allocate areas for input and output data
   std::unique_ptr<float[]> all_inputs(new float[jobs_size * MODEL_INPUT_SIZE]);
   std::unique_ptr<float[]> all_outputs(new float[jobs_size * MODEL_OUTPUT_SIZE]);
 
-  // 入力データを作成する。
+  // Create input data
   int32_t input_offset = 0;
 
   for (auto job : jobs) {
@@ -168,10 +168,10 @@ void Executor::_forward(std::vector<ExecutorJob*>& jobs) {
     input_offset += size;
   }
 
-  // 計算を実行する。
+  // Execute computation
   _model->forward(all_inputs.get(), all_outputs.get(), jobs_size);
 
-  // 出力データを反映する。
+  // Reflect output data
   int32_t out_offset = 0;
 
   for (auto job : jobs) {

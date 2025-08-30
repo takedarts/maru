@@ -6,52 +6,52 @@
 namespace deepgo {
 
 /**
- * 連の情報を保持する構造体。
+ * Struct that holds group information.
  */
 struct Ren {
   /**
-   * 連のオブジェクトを生成する。
+   * Creates a group object.
    */
   Ren();
 
   /**
-   * コピーした連のオブジェクトを生成する。
+   * Creates a copied group object.
    */
   Ren(const Ren& ren);
 
   /**
-   * 連のオブジェクトを破棄する。
+   * Destroys the group object.
    */
   virtual ~Ren() = default;
 
   /**
-   * 石の色。
+   * Stone color.
    */
   int32_t color;
 
   /**
-   * 石の座標一覧。
+   * List of stone coordinates.
    */
   std::set<int32_t> positions;
 
   /**
-   * ダメの座標一覧。
+   * List of liberty coordinates.
    */
   std::set<int32_t> spaces;
 
   /**
-   * 隣接している空き領域の一覧。
+   * List of adjacent empty areas.
    */
   std::set<int32_t> areas;
 
   /**
-   * シチョウであればtrue。
+   * True if in atari.
    */
   bool shicho;
 
   /**
-   * 生きが確定していればtrue。
-   * この連に隣接する2つ以上の領域が地となっていれば生きと確定する。
+   * True if life is confirmed.
+   * Life is confirmed if two or more areas adjacent to this group become territory.
    */
   bool fixed;
 };

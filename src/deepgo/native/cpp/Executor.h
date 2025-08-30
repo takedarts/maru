@@ -17,95 +17,95 @@ namespace deepgo {
 class Executor {
  public:
   /**
-   * 推論実行オブジェクトを生成する。
-   * @param model モデルファイル
-   * @param gpu GPU番号
-   * @param batchSize バッチサイズの最大値
-   * @param fp16 16bit精度で計算するならTrue
-   * @param deterministic 計算結果を再現可能にするならTrue
+   * Creates an inference execution object.
+   * @param model Model file
+   * @param gpu GPU number
+   * @param batchSize Maximum batch size
+   * @param fp16 True to compute with 16-bit precision
+   * @param deterministic True to make computation results reproducible
    */
   Executor(
       std::string model, int32_t gpu, int32_t batchSize, bool fp16, bool deterministic);
 
   /**
-   * デストラクタ。
+   * Delete the object.
    */
   virtual ~Executor();
 
   /**
-   * 推論を実行する。
-   * @param inputs 入力データ
-   * @param outputs 出力データ
-   * @param size 入出力データの数
+   * Executes inference.
+   * @param inputs Input data
+   * @param outputs Output data
+   * @param size Number of input/output data
    */
   void execute(float* inputs, float* outputs, int32_t size);
 
   /**
-   * 待機中の計算処理の数を返す。
-   * @return 待機中の計算処理の数
+   * Returns the number of pending computation tasks.
+   * @return Number of pending computation tasks
    */
   int32_t getWaitingCount();
 
   /**
-   * 計算処理の予約数を増やす。
-   * @param reservedCount 予約数
+   * Increases the number of reserved computation tasks.
+   * @param reservedCount Number of reservations
    */
   void addReservedCount(int32_t reservedCount);
 
  private:
   /**
-   * 同期用のミューテックス。
+   * Mutex for synchronization.
    */
   std::mutex _mutex;
 
   /**
-   * 同期用の条件変数。
+   * Condition variable for synchronization.
    */
   std::condition_variable _condition;
 
   /**
-   * 推論オブジェクト。
+   * Inference object.
    */
   std::unique_ptr<Model> _model;
 
   /**
-   * スレッドオブジェクト。
+   * Thread object.
    */
   std::unique_ptr<std::thread> _thread;
 
   /**
-   * 終了フラグ。
+   * Termination flag.
    */
   bool _terminated;
 
   /**
-   * 計算処理のキュー。
+   * Queue of computation tasks.
    */
   std::queue<ExecutorJob*> _queue;
 
   /**
-   * 待機中の計算処理の数。
+   * Number of pending computation tasks.
    */
   int32_t _waitingCount;
 
   /**
-   * 予約された計算処理の数。
+   * Number of reserved computation tasks.
    */
   int32_t _reservedCount;
 
   /**
-   * バッチサイズの最大値。
+   * Maximum batch size.
    */
   int32_t _batchSize;
 
   /**
-   * スレッドで実行されるメソッド。
+   * Method executed by the thread.
    */
   void _run();
 
   /**
-   * 計算を実行する。
-   * @param jobs 計算タスクのリスト
+   * Executes computation.
+   * @param jobs List of computation tasks
    */
   void _forward(std::vector<ExecutorJob*>& jobs);
 };

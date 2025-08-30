@@ -15,287 +15,287 @@ namespace deepgo {
 class NodeManager;
 
 /**
- * 探索ノードクラス。
+ * Search node class.
  */
 class Node {
  public:
   /**
-   * 探索ノードオブジェクトを作成する。
-   * @param manager ノード管理オブジェクト
-   * @param processor 推論を実行するオブジェクト
-   * @param width 盤面の幅
-   * @param height 盤面の高さ
-   * @param komi コミの目数
-   * @param rule 勝敗判定ルール
-   * @param superko スーパーコウルールを適用するならtrue
+   * Create a search node object.
+   * @param manager Node manager object
+   * @param processor Object to execute inference
+   * @param width Board width
+   * @param height Board height
+   * @param komi Komi points
+   * @param rule Rule for determining the winner
+   * @param superko True to apply superko rule
    */
   Node(
       NodeManager* manager, Processor* processor, int32_t width, int32_t height,
       float komi, int32_t rule, bool superko);
 
   /**
-   * 初期盤面ノードとして設定する。
+   * Set as the initial board node.
    */
   void initialize();
 
   /**
-   * 探索ノードを評価する。
-   * @param equally 探索回数を均等にする場合はtrue
-   * @param width 探索幅(0の場合は探索幅を自動で調整する)
-   * @param useUcb1 UCB1を使用する場合はtrue・PUCBを使用する場合はfalse
-   * @param temperature 探索の温度パラメータ
-   * @param noise ガンベルノイズの強さ
-   * @return 評価結果
+   * Evaluate the search node.
+   * @param equally True to equalize the number of searches
+   * @param width Search width (if 0, width is automatically adjusted)
+   * @param useUcb1 True to use UCB1, false to use PUCB
+   * @param temperature Temperature parameter for search
+   * @param noise Strength of Gumbel noise
+   * @return Evaluation result
    */
   NodeResult evaluate(
       bool equally, int32_t width, bool useUcb1, float temperature, float noise);
 
   /**
-   * 探索ノードの評価値を更新する。
-   * @param value 評価値
+   * Update the evaluation value of the search node.
+   * @param value Evaluation value
    */
   void updateValue(float value);
 
   /**
-   * 探索ノードの評価値をキャンセルする。
-   * @param value 評価値
+   * Cancel the evaluation value of the search node.
+   * @param value Evaluation value
    */
   void cancelValue(float value);
 
   /**
-   * PolicyNetworkの評価値をもとに候補手をランダムに取得する。
-   * @param temperature 温度
-   * @return 候補手
+   * Get a candidate move randomly based on the PolicyNetwork evaluation value.
+   * @param temperature Temperature
+   * @return Candidate move
    */
   std::pair<int32_t, int32_t> getRandomMove(float temperature);
 
   /**
-   * PolicyNetworkの評価値が最も高い候補手を取得する。
-   * @return 候補手
+   * Get the candidate move with the highest PolicyNetwork evaluation value.
+   * @return Candidate move
    */
   std::pair<int32_t, int32_t> getPolicyMove();
 
   /**
-   * 着手座標のx座標を取得する。
-   * @return x座標
+   * Get the x-coordinate of the move.
+   * @return x-coordinate
    */
   int32_t getX() const;
 
   /**
-   * 着手座標のy座標を取得する。
-   * @return y座標
+   * Get the y-coordinate of the move.
+   * @return y-coordinate
    */
   int32_t getY() const;
 
   /**
-   * 着手した石の色を取得する。
-   * @return 石の色
+   * Get the color of the placed stone.
+   * @return Stone color
    */
   int32_t getColor() const;
 
   /**
-   * このノードで打ち上げた石の数を取得する。
-   * @return 打ち上げた石の数
+   * Get the number of captured stones in this node.
+   * @return Number of captured stones
    */
   int32_t getCaptured() const;
 
   /**
-   * このノードの予想着手確率を取得する。
-   * @return 予想着手確率
+   * Get the predicted move probability of this node.
+   * @return Predicted move probability
    */
   float getPolicy() const;
 
   /**
-   * 子ノードの一覧を取得する。
-   * @return ノードオブジェクトの一覧
+   * Get the list of child nodes.
+   * @return List of node objects
    */
   std::vector<Node*> getChildren();
 
   /**
-   * 指定した座標に着手したときのノードオブジェクトを取得する。
-   * ノードオブジェクトが存在しない場合は新しく作成したオブジェクトを返す。
-   * 作成したノードオブジェクトはこのノードオブジェクトの子ノードとしては登録されない。
-   * @param x 着手するX座標
-   * @param y 着手するY座標
-   * @return ノードオブジェクトへのポインタ
+   * Get the node object when a move is made at the specified coordinates.
+   * If the node object does not exist, a new object is returned.
+   * The created node object is not registered as a child node of this node object.
+   * @param x X-coordinate of the move
+   * @param y Y-coordinate of the move
+   * @return Pointer to the node object
    */
   Node* getChild(int32_t x, int32_t y);
 
   /**
-   * このノードの探索回数を取得する。
-   * @return 探索回数
+   * Get the number of searches for this node.
+   * @return Number of searches
    */
   int32_t getVisits();
 
   /**
-   * プレイアウト数を取得する。
-   * @return プレイアウト数
+   * Get the number of playouts.
+   * @return Number of playouts
    */
   int32_t getPlayouts();
 
   /**
-   * プレイアウト数を設定する。
-   * @param playouts プレイアウト数
+   * Set the number of playouts.
+   * @param playouts Number of playouts
    */
   void setPlayouts(int32_t playouts);
 
   /**
-   * このノードの評価値を取得する。
-   * @return 評価値
+   * Get the evaluation value of this node.
+   * @return Evaluation value
    */
   float getValue();
 
   /**
-   * このノードの評価値の加算回数を取得する。
-   * @return 評価値の加算回数
+   * Get the number of times the evaluation value has been added for this node.
+   * @return Number of additions to evaluation value
    */
   int getCount();
 
   /**
-   * このノードの評価値の信頼区間の下限を取得する。
-   * @return 信頼区間の下限
+   * Get the lower bound of the confidence interval for the evaluation value of this node.
+   * @return Lower bound of confidence interval
    */
   float getValueLCB();
 
   /**
-   * PUCBに基づいてこのノードの優先度を取得する。
-   * @param totalVisits 探索回数の合計
-   * @return 優先度
+   * Get the priority of this node based on PUCB.
+   * @param totalVisits Total number of searches
+   * @return Priority
    */
   float getPriorityByPUCB(int32_t totalVisits);
 
   /**
-   * UCB1に基づいてこのノードの優先度を取得する。
-   * @param totalVisits 探索回数の合計
-   * @return 優先度
+   * Get the priority of this node based on UCB1.
+   * @param totalVisits Total number of searches
+   * @return Priority
    */
   float getPriorityByUCB1(int32_t totalVisits);
 
   /**
-   * このノードの予想進行を取得する。
-   * @return 予想進行
+   * Get the predicted sequence for this node.
+   * @return Predicted sequence
    */
   std::vector<std::pair<int32_t, int32_t>> getVariations();
 
   /**
-   * 盤面の状態を取得する。
-   * @return 盤面の状態
+   * Get the board state.
+   * @return Board state
    */
   std::vector<int32_t> getBoardState();
 
   /**
-   * このノードの情報を出力する。
-   * @param os 出力先
+   * Output the information of this node.
+   * @param os Output destination
    */
   void print(std::ostream& os = std::cout);
 
  private:
   /**
-   * 評価同期用のミューテックス。
+   * Mutex for evaluation synchronization.
    */
   std::shared_mutex _evalMutex;
 
   /**
-   * 値同期用のミューテックス。
+   * Mutex for value synchronization.
    */
   std::shared_mutex _valueMutex;
 
   /**
-   * ノード管理オブジェクト。
+   * Node manager object.
    */
   NodeManager* _manager;
 
   /**
-   * このノードで評価する盤面。
+   * Board to be evaluated in this node.
    */
   Board _board;
 
   /**
-   * 着手座標のx座標。
+   * X-coordinate of the move.
    */
   int32_t _x;
 
   /**
-   * 着手座標のy座標。
+   * Y-coordinate of the move.
    */
   int32_t _y;
 
   /**
-   * 着手した石の色。
+   * Color of the placed stone.
    */
   int32_t _color;
 
   /**
-   * 打ち上げた石の数。
+   * Number of captured stones.
    */
   int32_t _captured;
 
   /**
-   * 予想着手確率。
+   * Predicted move probability.
    */
   float _policy;
 
   /**
-   * 盤面を評価するオブジェクト。
+   * Object to evaluate the board.
    */
   Evaluator _evaluator;
 
   /**
-   * 子ノードの一覧。
+   * List of child nodes.
    */
   std::unordered_map<int32_t, Node*> _children;
 
   /**
-   * 次の着手確率の一覧。
+   * List of next move probabilities.
    */
   std::vector<Policy> _childPolicies;
 
   /**
-   * 子ノードへの登録を待機している候補手の一覧。
+   * List of candidate moves waiting to be registered as child nodes.
    */
   std::queue<Policy> _waitingQueue;
 
   /**
-   * 子ノードへの登録を待機している候補手のセット。
+   * Set of candidate moves waiting to be registered as child nodes.
    */
   std::set<int32_t> _waitingSet;
 
   /**
-   * 探索回数。
+   * Number of searches.
    */
   int32_t _visits;
 
   /**
-   * プレイアウト数。
+   * Number of playouts.
    */
   int32_t _playouts;
 
   /**
-   * 評価値。
+   * Evaluation value.
    */
   float _value;
 
   /**
-   * 評価値の加算回数。
+   * Number of additions to evaluation value.
    */
   int32_t _count;
 
   /**
-   * このノードの評価を実行する。
+   * Execute the evaluation of this node.
    */
   void _evaluate();
 
   /**
-   * ノードの評価情報を初期化する。
+   * Initialize the evaluation information of the node.
    */
   void _reset();
 
   /**
-   * 指定されたノードの継続ノードとしての値を設定する。
-   * @param prevNode 前のノード
-   * @param x 着手するX座標
-   * @param y 着手するY座標
-   * @param policy 予想着手確率
+   * Set the value as a continuation node of the specified node.
+   * @param prevNode Previous node
+   * @param x X-coordinate of the move
+   * @param y Y-coordinate of the move
+   * @param policy Predicted move probability
    */
   void _setAsNextNode(Node* prevNode, int32_t x, int32_t y, float policy);
 };

@@ -19,12 +19,12 @@ cdef class NativeModel:
     cdef Model *model
 
     def __cinit__(self, model: str, gpu: int, fp16: bool, deterministic: bool) -> None:
-        '''モデルオブジェクトを作成する。
+        '''Create a model object.
         Args:
-            model (str): モデルファイルのパス
-            gpu (int): 使用するGPUのID
-            fp16 (bool): FP16で計算を行うならTrue
-            deterministic (bool): 計算結果を再現可能にするならTrue
+            model (str): Path to the model file
+            gpu (int): GPU ID to use
+            fp16 (bool): True to compute with FP16
+            deterministic (bool): True to make computation results reproducible
         '''
         self.model = new Model(model.encode('utf-8'), gpu, fp16, deterministic)
 
@@ -32,11 +32,11 @@ cdef class NativeModel:
         del self.model
 
     def forward(self, inputs: numpy.ndarray) -> numpy.ndarray:
-        '''推論を実行する。
+        '''Run inference.
         Args:
-            inputs (numpy.ndarray): 入力データ
+            inputs (numpy.ndarray): Input data
         Returns:
-            numpy.ndarray: 出力データ
+            numpy.ndarray: Output data
         '''
         cdef numpy.ndarray[numpy.float32_t, ndim=2, mode="c"] outputs = numpy.zeros(
             (inputs.shape[0], MODEL_OUTPUT_SIZE), dtype=numpy.float32)
@@ -50,8 +50,8 @@ cdef class NativeModel:
         return outputs
 
     def is_cuda(self) -> bool:
-        '''CUDAを使用しているかどうかを取得する。
+        '''Check if CUDA is being used.
         Returns:
-            bool: CUDAを使用しているならTrue
+            bool: True if using CUDA
         '''
         return self.model.isCuda() != 0

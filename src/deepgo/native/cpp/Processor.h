@@ -12,34 +12,34 @@ namespace deepgo {
 class Processor {
  public:
   /**
-   * 計算管理オブジェクトを生成する。
-   * @param model モデルファイル
-   * @param gpus GPU番号のリスト
-   * @param batchSize バッチサイズの最大値
-   * @param fp16 16bit精度で計算するならTrue
-   * @param deterministic 計算結果を再現可能にするならTrue
-   * @param threadsParGpu GPUごとのスレッド数
+   * Creates a computation management object.
+   * @param model Model file
+   * @param gpus List of GPU numbers
+   * @param batchSize Maximum batch size
+   * @param fp16 True to compute with 16-bit precision
+   * @param deterministic True to make computation results reproducible
+   * @param threadsParGpu Number of threads per GPU
    */
   Processor(
       std::string model, std::vector<int32_t> gpus, int32_t batchSize,
       bool fp16, bool deterministic, int32_t threadsParGpu);
 
   /**
-   * 推論を実行する。
-   * @param inputs 入力データ
-   * @param outputs 出力データ
-   * @param size 入出力データの数
+   * Executes inference.
+   * @param inputs Input data
+   * @param outputs Output data
+   * @param size Number of input/output data
    */
   void execute(float* inputs, float* outputs, int32_t size);
 
  private:
   /**
-   * 同期用のミューテックス。
+   * Mutex for synchronization.
    */
   std::mutex _mutex;
 
   /**
-   * 計算実行オブジェクト。
+   * Computation executor objects.
    */
   std::vector<std::unique_ptr<Executor>> _executors;
 };

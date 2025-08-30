@@ -5,7 +5,7 @@
 namespace deepgo {
 
 /**
- * 連のオブジェクトを生成する。
+ * Creates a group object.
  */
 Ren::Ren()
     : color(EMPTY),
@@ -17,7 +17,7 @@ Ren::Ren()
 }
 
 /**
- * コピーした連のオブジェクトを生成する。
+ * Creates a copied group object.
  */
 Ren::Ren(const Ren& ren)
     : color(ren.color),

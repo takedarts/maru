@@ -7,79 +7,79 @@
 namespace deepgo {
 
 /**
- * 盤面のパターンの情報を保持するクラス。
+ * Class that holds information about board patterns.
  */
 class Pattern {
  public:
   /**
-   * 盤面パターンのオブジェクトを作成する。
-   * @param width 盤面の幅
-   * @param height 盤面の高さ
+   * Create a board pattern object.
+   * @param width Board width
+   * @param height Board height
    */
   Pattern(int width, int height);
 
   /**
-   * コピーした盤面パターンのオブジェクトを作成する。
-   * @param pattern コピー元の盤面パターンのオブジェクト
+   * Create a copied board pattern object.
+   * @param pattern Source board pattern object to copy from
    */
   Pattern(const Pattern& pattern);
 
   /**
-   * 盤面パターンのオブジェクトを破棄する。
+   * Destroy the board pattern object.
    */
   virtual ~Pattern() = default;
 
   /**
-   * 石の並びの表現値を初期化する。
+   * Initialize the representation value of the stone arrangement.
    */
   void clear();
 
   /**
-   * 指定された座標に石を置いた状態に更新する。
-   * @param x X座標
-   * @param y Y座標
-   * @param color 石の色
+   * Update the state to place a stone at the specified coordinates.
+   * @param x X-coordinate
+   * @param y Y-coordinate
+   * @param color Stone color
    */
   void put(int32_t x, int32_t y, int32_t color);
 
   /**
-   * 指定された座標の石を取り除いた状態に更新する。
-   * @param x X座標
-   * @param y Y座標
-   * @param color 石の色
+   * Update the state to remove a stone at the specified coordinates.
+   * @param x X-coordinate
+   * @param y Y-coordinate
+   * @param color Stone color
    */
   void remove(int32_t x, int32_t y, int32_t color);
 
   /**
-   * パターンを表現する値を取得する。
-   * @return パターンを表現する値
+   * Get the value representing the pattern.
+   * @return Value representing the pattern
    */
   std::vector<int32_t> values();
 
   /**
-   * パターンを表現する値をコピーする。
-   * @param pattern コピー元のパターン
+   * Copy the value representing the pattern.
+   * @param pattern Source pattern to copy from
    */
   void copyFrom(const Pattern& pattern);
 
  private:
   /**
-   * 盤面の幅。
+   * Board width.
    */
   int32_t _width;
 
   /**
-   * 盤面の高さ。
+   * Board height.
    */
   int32_t _height;
 
   /**
-   * データの長さ。
+   * Data length.
    */
   int32_t _length;
 
   /**
-   * 盤面のデータ。
+   * Board data.
    */
   std::unique_ptr<int32_t[]> _values;
 };

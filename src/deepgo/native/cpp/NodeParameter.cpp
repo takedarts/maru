@@ -3,13 +3,13 @@
 namespace deepgo {
 
 /**
- * パラメータオブジェクトを作成する。
- * @param processor 推論を実行するオブジェクト
- * @param width 盤面の幅
- * @param height 盤面の高さ
- * @param komi コミの目数
- * @param rule 勝敗判定ルール
- * @param superko スーパーコウルールを適用するならtrue
+ * Create a parameter object.
+ * @param processor Object to execute inference
+ * @param width Board width
+ * @param height Board height
+ * @param komi Komi points
+ * @param rule Rule for determining the winner
+ * @param superko True to apply superko rule
  */
 NodeParameter::NodeParameter(
     Processor* processor, int32_t width, int32_t height,
@@ -23,48 +23,48 @@ NodeParameter::NodeParameter(
 }
 
 /**
- * 推論を実行するオブジェクトを返す。
- * @return 推論を実行するオブジェクト
+ * Return the object to execute inference.
+ * @return Object to execute inference
  */
 Processor* NodeParameter::getProcessor() {
   return _processor;
 }
 
 /**
- * 盤面の幅を返す。
- * @return 盤面の幅
+ * Return the board width.
+ * @return Board width
  */
 int32_t NodeParameter::getWidth() {
   return _width;
 }
 
 /**
- * 盤面の高さを返す。
- * @return 盤面の高さ
+ * Return the board height.
+ * @return Board height
  */
 int32_t NodeParameter::getHeight() {
   return _height;
 }
 
 /**
- * コミの目数を返す。
- * @return コミの目数
+ * Return the komi points.
+ * @return Komi points
  */
 float NodeParameter::getKomi() {
   return _komi;
 }
 
 /**
- * 勝敗判定ルールを返す。
- * @return 勝敗判定ルール
+ * Return the rule for determining the winner.
+ * @return Rule for determining the winner
  */
 int32_t NodeParameter::getRule() {
   return _rule;
 }
 
 /**
- * スーパーコウルールを適用するならtrueを返す。
- * @return スーパーコウルールを適用するならtrue
+ * Return true if applying the superko rule.
+ * @return True if applying the superko rule
  */
 bool NodeParameter::getSuperko() {
   return _superko;

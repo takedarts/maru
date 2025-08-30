@@ -12,47 +12,47 @@ namespace deepgo {
 class Model {
  public:
   /**
-   * コンストラクタ。
-   * CPUを使って計算するオブジェクトを生成する。
-   * @param filename モデルファル
-   * @param gpu GPU番号
-   * @param fp16 16bit精度で計算するならTrue
-   * @param deterministic 計算結果を再現可能にするならTrue
+   * Constructor.
+   * Creates an object that computes using CPU.
+   * @param filename Model file
+   * @param gpu GPU number
+   * @param fp16 True to compute with 16-bit precision
+   * @param deterministic True to make computation results reproducible
    */
   Model(std::string filename, int32_t gpu, bool fp16, bool deterministic);
 
   /**
-   * デストラクタ。
+   * Destructor.
    */
   virtual ~Model() = default;
 
   /**
-   * 推論を実行する。
-   * @param inputs 入力データ
-   * @param outputs 出力データ
-   * @param size 評価データの数
+   * Execute inference.
+   * @param inputs Input data
+   * @param outputs Output data
+   * @param size Number of evaluation data
    */
   virtual void forward(float* inputs, float* outputs, uint32_t size);
 
   /**
-   * GPUを使うならTrueを返す。
-   * @return GPUを使うなら1, 使わないなら0
+   * Returns True if using GPU.
+   * @return 1 if using GPU, 0 otherwise
    */
   virtual int32_t isCuda();
 
  private:
   /**
-   * 推論モデル。
+   * Inference model.
    */
   torch::jit::script::Module _model;
 
   /**
-   * 実行デバイス。
+   * Execution device.
    */
   at::Device _device;
 
   /**
-   * 計算で使用するデータ型。
+   * Data type used for computation.
    */
   at::ScalarType _dtype;
 };

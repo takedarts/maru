@@ -11,15 +11,15 @@
 namespace deepgo {
 
 /**
- * プレイヤオブジェクトを生成する。
- * @param processor 盤面を評価するオブジェクト
- * @param threads 盤面探索のスレッド数
- * @param width 盤面の幅
- * @param height 盤面の高さ
- * @param komi コミの目数
- * @param rule ゲームルール
- * @param superko スーパーコウルールを適用するならtrue
- * @param evalLeafOnly 葉ノードのみを評価対象とするならtrue
+ * Creates a player object.
+ * @param processor Object to evaluate the board
+ * @param threads Number of board search threads
+ * @param width Board width
+ * @param height Board height
+ * @param komi Komi points
+ * @param rule Game rule
+ * @param superko True to apply the superko rule
+ * @param evalLeafOnly True to evaluate only leaf nodes
  */
 Player::Player(
     Processor* processor, int32_t threads,
@@ -48,7 +48,7 @@ Player::Player(
 }
 
 /**
- * プレイヤオブジェクトを破棄する。
+ * Destroys the player object.
  */
 Player::~Player() {
   {
@@ -61,71 +61,71 @@ Player::~Player() {
 }
 
 /**
- * プレイヤオブジェクトの状態を初期化する。
+ * Initializes the state of the player object.
  */
 void Player::initialize() {
   std::unique_lock<std::mutex> lock(_mutex);
 
-  // スレッドを一時停止する
+  // Pause the thread
   _paused = true;
   _condition.wait(lock, [this]() { return _runnings == 0; });
 
-  // 現在のルートノードを保存する
+  // Save the current root node
   Node* old_root = _root;
 
-  // 初期ノードをルートノードに設定する
+  // Set the initial node as the root node
   _root = _nodeManager.createNode();
   _root->initialize();
 
-  // ルートノード以外のノードを解放する
+  // Release nodes other than the root node
   _releaseNode(old_root);
 
-  // スレッドを再開する
+  // Resume the thread
   _paused = false;
   _condition.notify_all();
 }
 
 /**
- * 盤面に石を置く。
- * @param x 石を置く位置のx座標
- * @param y 石を置く位置のy座標
+ * Places a stone on the board.
+ * @param x x coordinate of the position to place the stone
+ * @param y y coordinate of the position to place the stone
  */
 int32_t Player::play(int32_t x, int32_t y) {
   std::unique_lock<std::mutex> lock(_mutex);
 
-  // スレッドを一時停止する
+  // Pause the thread
   _paused = true;
   _condition.wait(lock, [this]() { return _runnings == 0; });
 
-  // 現在のルートノードを保存する
+  // Save the current root node
   Node* old_root = _root;
 
-  // 新しいルートノードを設定する
+  // Set the new root node
   _root = old_root->getChild(x, y);
 
-  // ルートノード以外のノードを解放する
+  // Release nodes other than the root node
   _releaseNode(old_root);
 
-  // スレッドを再開する
+  // Resume the thread
   _paused = false;
   _condition.notify_all();
 
-  // 打ち上げた石の数を返す
+  // Return the number of captured stones
   return _root->getCaptured();
 }
 
 /**
- * パスの候補手を取得する。
- * @return パスの候補手
+ * Gets candidate moves for pass.
+ * @return Candidate moves for pass
  */
 std::vector<Candidate> Player::getPass() {
   std::unique_lock<std::mutex> lock(_mutex);
 
-  // スレッドを一時停止する
+  // Pause the thread
   _paused = true;
   _condition.wait(lock, [this]() { return _runnings == 0; });
 
-  // 候補手を作成する
+  // Create candidate moves
   std::vector<Candidate> candidates;
 
   candidates.emplace_back(
@@ -133,7 +133,7 @@ std::vector<Candidate> Player::getPass() {
       0, 0, 1.0f, _root->getValue(),
       std::vector<std::pair<int32_t, int32_t>>());
 
-  // スレッドを再開する
+  // Resume the thread
   _paused = false;
   _condition.notify_all();
 
@@ -141,18 +141,18 @@ std::vector<Candidate> Player::getPass() {
 }
 
 /**
- * ランダムに次の候補手を選ぶ。
- * @param temperature 温度（大きいほどランダム性が高くなる）
- * @return ランダムに選ばれた候補手
+ * Selects the next candidate move randomly.
+ * @param temperature Temperature (higher value increases randomness)
+ * @return Randomly selected candidate move
  */
 std::vector<Candidate> Player::getRandom(float temperature) {
   std::unique_lock<std::mutex> lock(_mutex);
 
-  // スレッドを一時停止する
+  // Pause the thread
   _paused = true;
   _condition.wait(lock, [this]() { return _runnings == 0; });
 
-  // 候補手を作成する
+  // Create candidate moves
   std::pair<int32_t, int32_t> move = _root->getRandomMove(temperature);
   std::vector<Candidate> candidates;
 
@@ -161,7 +161,7 @@ std::vector<Candidate> Player::getRandom(float temperature) {
       1, 1, 1.0f, _root->getValue(),
       std::vector<std::pair<int32_t, int32_t>>());
 
-  // スレッドを再開する
+  // Resume the thread
   _paused = false;
   _condition.notify_all();
 
@@ -169,23 +169,23 @@ std::vector<Candidate> Player::getRandom(float temperature) {
 }
 
 /**
- * 盤面評価を開始する。
- * 探索処理は別スレッドで実行される。
- * @param equally 探索回数を均等にするならばtrue、UCB1かPUCBを使用するならばfalse
- * @param useUcb1 探索先の基準としてUCB1を使用するならばtrue、PUCBを使用するならばfalse
- * @param width 探索幅(0の場合は探索幅を自動で調整する)
- * @param temperature 探索の温度パラメータ
- * @param noise 探索のガンベルノイズの強さ
+ * Starts board evaluation.
+ * Search processing is executed in a separate thread.
+ * @param equally True to make the number of searches equal; false to use UCB1 or PUCB
+ * @param useUcb1 True to use UCB1 as the search criterion; false to use PUCB
+ * @param width Search width (if 0, search width is automatically adjusted)
+ * @param temperature Temperature parameter for search
+ * @param noise Strength of Gumbel noise for search
  */
 void Player::startEvaluation(
     bool equally, bool useUcb1, int32_t width, float temperature, float noise) {
   std::unique_lock<std::mutex> lock(_mutex);
 
-  // スレッドを一時停止する
+  // Pause the thread
   _paused = true;
   _condition.wait(lock, [this]() { return _runnings == 0; });
 
-  // 探索の設定を変更する
+  // Change search settings
   _searchVisits = _root->getVisits();
   _searchPlayouts = _root->getPlayouts();
   _searchEqually = equally;
@@ -194,46 +194,46 @@ void Player::startEvaluation(
   _searchTemperature = temperature;
   _searchNoise = noise;
 
-  // 実行状態に設定する
+  // Set to running state
   _stopped = false;
 
-  // スレッドを再開する
+  // Resume the thread
   _paused = false;
   _condition.notify_all();
 }
 
 /**
- * 指定された訪問数とプレイアウト数になるまで待機する。
- * @param visits 訪問数
- * @param playouts プレイアウト数
- * @param timelimit 時間制限
- * @param stop 探索を停止するならばtrue
+ * Waits until the specified number of visits and playouts is reached.
+ * @param visits Number of visits
+ * @param playouts Number of playouts
+ * @param timelimit Time limit
+ * @param stop True to stop search
  */
 void Player::waitEvaluation(int32_t visits, int32_t playouts, float timelimit, bool stop) {
   std::unique_lock<std::mutex> lock(_mutex);
 
-  // 指定された訪問数とプレイアウト数になるまで待機する
+  // Wait until the specified number of visits and playouts is reached
   std::chrono::milliseconds timeout(static_cast<int32_t>(timelimit * 1000.0f));
   _condition.wait_for(lock, timeout, [this, visits, playouts]() {
     return _searchVisits >= visits && _searchPlayouts >= playouts;
   });
 
-  // 探索を停止する
+  // Stop search
   _stopped = _stopped || stop;
 }
 
 /**
- * 候補手の一覧を取得する。
- * @return 候補手の一覧
+ * Gets the list of candidate moves.
+ * @return List of candidate moves
  */
 std::vector<Candidate> Player::getCandidates() {
   std::unique_lock<std::mutex> lock(_mutex);
 
-  // スレッドを一時停止する
+  // Pause the thread
   _paused = true;
   _condition.wait(lock, [this]() { return _runnings == 0; });
 
-  // ルートノードの子ノードを候補手として設定する
+  // Set child nodes of the root node as candidate moves
   std::vector<Candidate> candidates;
 
   for (Node* node : _root->getChildren()) {
@@ -243,7 +243,7 @@ std::vector<Candidate> Player::getCandidates() {
         node->getPolicy(), node->getValue(), node->getVariations());
   }
 
-  // 候補手がない場合はPolicyNetworkによる着手を追加する
+  // If there are no candidate moves, add a move by PolicyNetwork
   if (candidates.empty()) {
     std::pair<int32_t, int32_t> move = _root->getPolicyMove();
 
@@ -253,7 +253,7 @@ std::vector<Candidate> Player::getCandidates() {
         std::vector<std::pair<int32_t, int32_t>>());
   }
 
-  // スレッドを再開する
+  // Resume the thread
   _paused = false;
   _condition.notify_all();
 
@@ -261,23 +261,23 @@ std::vector<Candidate> Player::getCandidates() {
 }
 
 /**
- * 次の石の色を取得する。
- * @return 石の色
+ * Gets the color of the next stone.
+ * @return Stone color
  */
 int32_t Player::getColor() {
   return OPPOSITE(_root->getColor());
 }
 
 /**
- * 盤面の状態を取得する。
- * @return 盤面の状態
+ * Gets the state of the board.
+ * @return State of the board
  */
 std::vector<int32_t> Player::getBoardState() {
   return _root->getBoardState();
 }
 
 /**
- * 探索処理を起動する。
+ * Starts the search process.
  */
 void Player::_run() {
   while (true) {
@@ -313,8 +313,8 @@ void Player::_run() {
 }
 
 /**
- * 探索を実行する。
- * @return 探索のプレイアウト数
+ * Executes search.
+ * @return Number of search playouts
  */
 int32_t Player::_evaluate() {
   std::vector<Node*> nodes = {_root};
@@ -329,7 +329,7 @@ int32_t Player::_evaluate() {
     NodeResult result = nodes.back()->evaluate(
         search_equally, search_width, search_use_ucb1, search_temperature, search_noise);
 
-    // ノードの評価値を更新する
+    // Update the evaluation value of the node
     if (result.getPlayouts() == 1) {
       for (Node* node : nodes) {
         node->updateValue(result.getValue());
@@ -340,22 +340,22 @@ int32_t Player::_evaluate() {
       }
     }
 
-    // ノードのプレイアウト数を更新する
+    // Update the number of playouts for the node
     for (Node* node : nodes) {
       node->setPlayouts(node->getPlayouts() + result.getPlayouts());
     }
 
-    // この探索のプレイアウト数を更新する
+    // Update the number of playouts for this search
     playouts += result.getPlayouts();
 
-    // 子ノードが存在する場合は次のノードとして設定する
+    // If a child node exists, set it as the next node
     if (result.getNode() != nullptr) {
       nodes.push_back(result.getNode());
     } else {
       break;
     }
 
-    // ルートノードだけに適用する設定項目をリセットする
+    // Reset settings that apply only to the root node
     search_equally = 0;
     search_use_ucb1 = false;
     search_width = 0;
@@ -363,13 +363,13 @@ int32_t Player::_evaluate() {
     search_noise = 0.0f;
   }
 
-  // プレイアウト数を返す
+  // Return the number of playouts
   return playouts;
 }
 
 /**
- * ルートノード以外のノードオブジェクトを返却する。
- * @param node 返却するノードオブジェクト
+ * Releases node objects other than the root node.
+ * @param node Node object to release
  */
 void Player::_releaseNode(Node* node) {
   std::vector<Node*> stack = {node};

@@ -46,16 +46,16 @@ cdef class NativePlayer:
         superko: bool,
         eval_leaf_only: bool
     )->None:
-        '''プレイヤオブジェクトを初期化する。
+        '''Initialize player object.
         Args:
-            processor (NativeProcessor): プロセッサオブジェクト
-            threads (int): スレッド数
-            width (int): 盤面の幅
-            height (int): 盤面の高さ
-            komi (float): コミの目数
-            rule (int): 勝敗の判定ルール
-            superko (bool): スーパーコウルールを適用するならTrue
-            eval_leaf_only (bool): 葉ノードのみを評価対象とするならTrue
+            processor (NativeProcessor): Processor object
+            threads (int): Number of threads
+            width (int): Board width
+            height (int): Board height
+            komi (float): Komi value
+            rule (int): Rule for determining winner
+            superko (bool): True to apply superko rule
+            eval_leaf_only (bool): True to evaluate only leaf nodes
         '''
         self.player = new Player(
             processor.processor, threads,
@@ -65,25 +65,24 @@ cdef class NativePlayer:
         del self.player
 
     def initialize(self) -> None:
-        '''対戦の状態を初期状態に戻す。
-        '''
+        '''Reset the game state to the initial state.'''
         self.player.initialize()
 
     def play(self, pos: Tuple[int, int]) -> int:
-        '''指定された座標に石を打つ。
+        '''Place a stone at the specified coordinates.
         Args:
-            pos (Tuple[int, int]): 石を打つ座標
+            pos (Tuple[int, int]): Coordinates to place the stone
         Returns:
-            int: 打ち上げた石の数
+            int: Number of captured stones
         '''
         return self.player.play(pos[0], pos[1])
 
     def get_pass(
         self,
     ) -> Tuple[Tuple[int, int], int, int, int, float, float, List[Tuple[int, int]]]:
-        '''パスの候補手を取得する。
+        '''Get a candidate for pass.
         Returns:
-            Tuple[Tuple[int, int], int, int, int, float, float, List[Tuple[int, int]]]: 候補手
+            Tuple[Tuple[int, int], int, int, int, float, float, List[Tuple[int, int]]]: Candidate
         '''
         cdef vector[Candidate] candidates
 
@@ -100,11 +99,11 @@ cdef class NativePlayer:
         self,
         temperature: float,
     ) -> Tuple[Tuple[int, int], int, float, float, float, List[Tuple[int, int]]]:
-        '''ランダムに候補手を選択する。
+        '''Select a candidate move randomly.
         Args:
-            temperature (float): 温度
+            temperature (float): Temperature
         Returns:
-            Tuple[Tuple[int, int], int, float, float, float, List[Tuple[int, int]]]: 候補手
+            Tuple[Tuple[int, int], int, float, float, float, List[Tuple[int, int]]]: Candidate
         '''
         cdef vector[Candidate] candidates
 
@@ -125,23 +124,23 @@ cdef class NativePlayer:
         temperature: float,
         noise: float,
     ) -> None:
-        '''評価を開始する。
+        '''Start evaluation.
         Args:
-            equality (int): 探索回数を均等にするならTrue、UCB1かPUCBを使用するならFalse
-            use_ucb1 (int): 探索先の基準としてUCB1を使用するならTrue、PUCBを使用するならFalse
-            width (int): 探索幅(0ならば探索幅を制限しない)
-            temperature (float): 探索の温度パラメータ
-            noise (float): 探索のガンベルノイズの強さ
+            equality (int): True to make the number of searches equal, False to use UCB1 or PUCB
+            use_ucb1 (int): True to use UCB1 as the search criterion, False to use PUCB
+            width (int): Search width (0 means no restriction)
+            temperature (float): Temperature parameter for search
+            noise (float): Strength of Gumbel noise for search
         '''
         self.player.startEvaluation(equally, use_ucb1, width, temperature, noise)
 
     def wait_evaluation(self, visits: int, playouts: int, timelimit: float, stop: bool) -> None:
-        '''指定された訪問数とプレイアウト数になるまで待機する。
+        '''Wait until the specified number of visits and playouts is reached.
         Args:
-            visits (int): 訪問数
-            playouts (int): プレイアウト数
-            timelimit (float): 時間制限（秒）
-            stop (bool): 探索を停止するならばTrue
+            visits (int): Number of visits
+            playouts (int): Number of playouts
+            timelimit (float): Time limit (seconds)
+            stop (bool): True to stop search
         '''
         cdef int32_t visits_int = visits
         cdef int32_t playouts_int = playouts
@@ -154,9 +153,9 @@ cdef class NativePlayer:
     def get_candidates(
         self,
     ) -> List[Tuple[Tuple[int, int], int, float, float, List[Tuple[int, int]]]]:
-        '''候補手の一覧を取得する。
+        '''Get the list of candidate moves.
         Returns:
-            List[Tuple[Tuple[int, int], int, float, float, float, List[Tuple[int, int]]]]: 候補手の一覧
+            List[Tuple[Tuple[int, int], int, float, float, float, List[Tuple[int, int]]]]: List of candidates
         '''
         cdef vector[Candidate] candidates
 
@@ -171,15 +170,15 @@ cdef class NativePlayer:
         return results
 
     def get_color(self) -> int:
-        '''次に打つ石の色を取得する。
+        '''Get the color of the next stone to play.
         Returns:
-            int: 石の色
+            int: Stone color
         '''
         return self.player.getColor()
 
     def get_board_state(self) -> List[int]:
-        '''盤面の状態を取得する。
+        '''Get the board state.
         Returns:
-            List[int]: 盤面の状態
+            List[int]: Board state
         '''
         return self.player.getBoardState()

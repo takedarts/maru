@@ -3,11 +3,11 @@
 namespace deepgo {
 
 /**
- * 予測着手確率のオブジェクトを作成する。
- * @param x X座標
- * @param y Y座標
- * @param policy 予測着手確率
- * @param visits 探索回数
+ * Creates an object for predicted move probability.
+ * @param x X coordinate
+ * @param y Y coordinate
+ * @param policy Predicted move probability
+ * @param visits Number of searches
  */
 Policy::Policy(int32_t x, int32_t y, float policy, int32_t visits)
     : x(x),

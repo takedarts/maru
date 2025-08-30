@@ -5,10 +5,10 @@
 namespace deepgo {
 
 /**
- * ノードの評価結果オブジェクトを作成する。
- * @param node 次に評価するノードオブジェクト
- * @param value 評価値
- * @param playouts プレイアウト数
+ * Create a node evaluation result object.
+ * @param node Node object to be evaluated next
+ * @param value Evaluation value
+ * @param playouts Number of playouts
  */
 NodeResult::NodeResult(Node* node, float value, int32_t playouts)
     : _node(node),
@@ -17,24 +17,24 @@ NodeResult::NodeResult(Node* node, float value, int32_t playouts)
 }
 
 /**
- * 次に評価するノードオブジェクトを取得する。
- * @return 次に評価するノードオブジェクト
+ * Get the node object to be evaluated next.
+ * @return Node object to be evaluated next
  */
 Node* NodeResult::getNode() {
   return _node;
 }
 
 /**
- * 評価値を取得する。
- * @return 評価値
+ * Get the evaluation value.
+ * @return Evaluation value
  */
 float NodeResult::getValue() {
   return _value;
 }
 
 /**
- * プレイアウト数を取得する。
- * @return プレイアウト数
+ * Get the number of playouts.
+ * @return Number of playouts
  */
 int32_t NodeResult::getPlayouts() {
   return _playouts;

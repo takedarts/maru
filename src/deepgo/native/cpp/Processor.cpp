@@ -6,13 +6,13 @@
 namespace deepgo {
 
 /**
- * 計算管理オブジェクトを生成する。
- * @param model モデルファイル
- * @param gpus GPU番号のリスト
- * @param batchSize バッチサイズの最大値
- * @param fp16 16bit精度で計算するならTrue
- * @param deterministic 計算結果を再現可能にするならTrue
- * @param threadsParGpu GPUごとのスレッド数
+ * Creates a computation management object.
+ * @param model Model file
+ * @param gpus List of GPU numbers
+ * @param batchSize Maximum batch size
+ * @param fp16 True to compute with 16-bit precision
+ * @param deterministic True to make computation results reproducible
+ * @param threadsParGpu Number of threads per GPU
  */
 Processor::Processor(
     std::string model, std::vector<int32_t> gpus, int32_t batchSize,
@@ -28,17 +28,17 @@ Processor::Processor(
 }
 
 /**
- * 推論を実行する。
- * @param inputs 入力データ
- * @param outputs 出力データ
- * @param size 入出力データの数
+ * Executes inference.
+ * @param inputs Input data
+ * @param outputs Output data
+ * @param size Number of input/output data
  */
 void Processor::execute(float* inputs, float* outputs, int32_t size) {
-  // 次に計算を実行する計算実行オブジェクトを選択する
+  // Select the computation executor to run next
   int32_t min_index = 0;
 
   {  // synchronize
-    // 最も待機数が少ない計算実行オブジェクトを探す
+    // Find the computation executor with the fewest waiting tasks
     std::unique_lock<std::mutex> lock(_mutex);
     int32_t min_count = _executors[0]->getWaitingCount();
 
@@ -51,11 +51,11 @@ void Processor::execute(float* inputs, float* outputs, int32_t size) {
       }
     }
 
-    // 予約数を増やす
+    // Increase the reserved count
     _executors[min_index]->addReservedCount(size);
   }
 
-  // 計算を実行する。
+  // Execute the computation
   _executors[min_index]->execute(inputs, outputs, size);
 }
 

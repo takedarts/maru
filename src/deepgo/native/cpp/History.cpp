@@ -3,7 +3,7 @@
 namespace deepgo {
 
 /**
- * 着手履歴を保持するオブジェクトを生成する。
+ * Create an object to hold move history.
  */
 History::History()
     : _index(0),
@@ -14,8 +14,8 @@ History::History()
 }
 
 /**
- * コピーした着手履歴を保持するオブジェクトを生成する。
- * @param history コピー元の着手履歴
+ * Create an object to hold copied move history.
+ * @param history Source move history to copy from
  */
 History::History(const History& history)
     : _index(history._index),
@@ -26,7 +26,7 @@ History::History(const History& history)
 }
 
 /**
- * 履歴を初期化する。
+ * Initialize the history.
  */
 void History::clear() {
   for (int32_t i = 0; i < 3; i++) {
@@ -35,8 +35,8 @@ void History::clear() {
 }
 
 /**
- * 着手座標を追加する。
- * @param move 着手座標
+ * Add a move coordinate.
+ * @param move Move coordinate
  */
 void History::add(int32_t move) {
   _moves[_index] = move;
@@ -44,8 +44,8 @@ void History::add(int32_t move) {
 }
 
 /**
- * 着手履歴を取得する。
- * @return 着手履歴
+ * Get the move history.
+ * @return Move history
  */
 std::vector<int32_t> History::get() {
   std::vector<int32_t> moves;

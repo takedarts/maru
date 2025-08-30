@@ -3,14 +3,14 @@
 namespace deepgo {
 
 /**
- * 評価結果オブジェクトを作成する。
- * @param processor 推論を実行するオブジェクト
- * @param komi コミの目数
- * @param rule 勝敗判定ルール
- * @param superko スーパーコウルールを適用するならtrue
+ * Creates an evaluation result object.
+ * @param processor Object to execute inference
+ * @param komi Komi points
+ * @param rule Rule for determining the winner
+ * @param superko True to apply the superko rule
  */
 Evaluator::Evaluator(
-  Processor* processor, float komi, int32_t rule, bool superko)
+    Processor* processor, float komi, int32_t rule, bool superko)
     : _processor(processor),
       _komi(komi),
       _rule(rule),
@@ -21,7 +21,7 @@ Evaluator::Evaluator(
 }
 
 /**
- * モデルによる評価結果をクリアする。
+ * Clears the evaluation results by the model.
  */
 void Evaluator::clear() {
   _policies.clear();
@@ -30,28 +30,28 @@ void Evaluator::clear() {
 }
 
 /**
- * モデルによる評価を実行する。
- * @param board 評価対象の盤面
- * @param color 評価対象の石の色
+ * Executes evaluation by the model.
+ * @param board Board to be evaluated
+ * @param color Color of the stone to be evaluated
  */
 void Evaluator::evaluate(Board* board, int32_t color) {
-  // 評価済みなら何もしない。
+  // Do nothing if already evaluated.
   if (_evaluated) {
     return;
   }
 
-  // 盤面の幅と高さを取得する。
+  // Get the width and height of the board.
   int32_t width = board->getWidth();
   int32_t height = board->getHeight();
 
-  // 現在の盤面の評価を実行する。
+  // Execute evaluation of the current board.
   float inputs[MODEL_INPUT_SIZE];
   float outputs[MODEL_OUTPUT_SIZE];
 
   board->getInputs(inputs, color, _komi, _rule, _superko);
   _processor->execute(inputs, outputs, 1);
 
-  // 候補手の一覧を作成する
+  // Create a list of candidate moves
   std::unique_ptr<int32_t[]> enableds(new int32_t[width * height]);
   std::unique_ptr<int32_t[]> territories(new int32_t[width * height]);
   int32_t offset_x = (MODEL_SIZE - width) / 2;
@@ -71,37 +71,37 @@ void Evaluator::evaluate(Board* board, int32_t color) {
     }
   }
 
-  // 評価値を取得する。
+  // Get the evaluation value.
   _value = outputs[MODEL_PREDICTIONS * MODEL_SIZE * MODEL_SIZE + 0] * 2 - 1;
 
-  // 白番の場合は黒白の評価値を反転する。
+  // If it is White's turn, invert the evaluation value for Black and White.
   if (color == WHITE) {
     _value = -_value;
   }
 
-  // 評価済みのフラグを立てる。
+  // Set the evaluated flag.
   _evaluated = true;
 }
 
 /**
- * モデルによる評価結果が設定されていればtrueを返す。
- * @return モデルによる評価結果が設定されていればtrue
+ * Returns true if the evaluation result by the model is set.
+ * @return True if the evaluation result by the model is set
  */
 bool Evaluator::isEvaluated() {
   return _evaluated;
 }
 
 /**
- * モデルによる推論結果の予測候補手の一覧を取得する。
- * @return 予測候補手の一覧
+ * Gets the list of predicted candidate moves from the model's inference results.
+ * @return List of predicted candidate moves
  */
 std::vector<Policy> Evaluator::getPolicies() {
   return _policies;
 }
 
 /**
- * モデルによる推論結果の評価値を取得する。
- * @return モデルによる推論結果の評価値
+ * Gets the evaluation value from the model's inference results.
+ * @return Evaluation value from the model's inference results
  */
 float Evaluator::getValue() {
   return _value;

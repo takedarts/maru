@@ -9,65 +9,65 @@
 namespace deepgo {
 
 /**
- * ノードオブジェクトを管理するためのクラス。
+ * Class for managing node objects.
  */
 class NodeManager {
  public:
   /**
-   * ノードオブジェクトの管理クラスを作成する。
-   * @param processor 推論を実行するオブジェクト
-   * @param width 盤面の幅
-   * @param height 盤面の高さ
-   * @param komi コミの目数
-   * @param rule 勝敗判定ルール
-   * @param superko スーパーコウルールを適用するならtrue
+   * Create a class to manage node objects.
+   * @param processor Object to execute inference
+   * @param width Board width
+   * @param height Board height
+   * @param komi Komi points
+   * @param rule Rule for determining the winner
+   * @param superko True to apply superko rule
    */
   NodeManager(
       Processor* processor, int32_t width, int32_t height,
       float komi, int32_t rule, bool superko);
 
   /**
-   * ノードオブジェクトを作成する。
-   * 未使用のノードオブジェクトがあればそれを返し、なければ新規作成する。
-   * @return ノードオブジェクト
+   * Create a node object.
+   * If there is an unused node object, return it; otherwise, create a new one.
+   * @return Node object
    */
   Node* createNode();
 
   /**
-   * ノードオブジェクトを未使用状態にする。
-   * @param node ノードオブジェクト
+   * Set the node object to unused state.
+   * @param node Node object
    */
   void releaseNode(Node* node);
 
   /**
-   * このノード管理オブジェクトのの情報を出力する。
-   * @param os 出力先
+   * Output the information of this node manager object.
+   * @param os Output destination
    */
   void print(std::ostream& os = std::cout);
 
  private:
   /**
-   * 同期オブジェクト。
+   * Synchronization object.
    */
   std::mutex _mutex;
 
   /**
-   * ノードオブジェクトを作成するときに使用するパラメータ。
+   * Parameters used when creating node objects.
    */
   NodeParameter _parameter;
 
   /**
-   * ノードオブジェクトの一覧。
+   * List of node objects.
    */
   std::vector<std::unique_ptr<Node>> _nodes;
 
   /**
-   * 未使用のノードオブジェクトの一覧。
+   * List of unused node objects.
    */
   std::vector<Node*> _poolNodes;
 
   /**
-   * 使用中のノードオブジェクトの一覧。
+   * List of node objects in use.
    */
   std::set<Node*> _usedNodes;
 };

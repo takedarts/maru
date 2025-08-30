@@ -6,20 +6,20 @@
 namespace deepgo {
 
 /**
- * 候補手クラス。
+ * Candidate move class.
  */
 class Candidate {
  public:
   /**
-   * 候補手データを作成する。
-   * @param x x座標
-   * @param y y座標
-   * @param color 石の色
-   * @param visits 訪問回数
-   * @param playouts プレイアウト数
-   * @param policy 予想着手確率
-   * @param value 評価値
-   * @param variations 予想進行
+   * Creates candidate move data.
+   * @param x x coordinate
+   * @param y y coordinate
+   * @param color Stone color
+   * @param visits Number of visits
+   * @param playouts Number of playouts
+   * @param policy Predicted move probability
+   * @param value Evaluation value
+   * @param variations Predicted sequence
    */
   Candidate(
       int32_t x, int32_t y, int32_t color,
@@ -27,95 +27,95 @@ class Candidate {
       std::vector<std::pair<int32_t, int32_t>> variations);
 
   /**
-   * インスタンスを破棄する。
+   * Destroys the instance.
    */
   virtual ~Candidate() = default;
 
   /**
-   * x座標を取得する。
-   * @return x座標
+   * Gets the x coordinate.
+   * @return x coordinate
    */
   int32_t getX() const;
 
   /**
-   * y座標を取得する。
-   * @return y座標
+   * Gets the y coordinate.
+   * @return y coordinate
    */
   int32_t getY() const;
 
   /**
-   * 石の色を取得する。
-   * @return 石の色
+   * Gets the stone color.
+   * @return Stone color
    */
   int32_t getColor() const;
 
   /**
-   * 訪問回数を取得する。
-   * @return 訪問回数
+   * Gets the number of visits.
+   * @return Number of visits
    */
   int32_t getVisits() const;
 
   /**
-   * プレイアウト数を取得する。
-   * @return プレイアウト数
+   * Gets the number of playouts.
+   * @return Number of playouts
    */
   int32_t getPlayouts() const;
 
   /**
-   * 予想着手確率を取得する。
-   * @return 予想着手確率
+   * Gets the predicted move probability.
+   * @return Predicted move probability
    */
   float getPolicy() const;
 
   /**
-   * 評価値を取得する。
-   * @return 評価値
+   * Gets the evaluation value.
+   * @return Evaluation value
    */
   float getValue() const;
 
   /**
-   * 予想進行を取得する。
-   * @return 予想進行
+   * Gets the predicted sequence.
+   * @return Predicted sequence
    */
   std::vector<std::pair<int32_t, int32_t>> getVariations() const;
 
  private:
   /**
-   * x座標。
+   * x coordinate.
    */
   int32_t _x;
   /**
-   * y座標。
+   * y coordinate.
    */
   int32_t _y;
 
   /**
-   * 石の色。
+   * Stone color.
    */
   int32_t _color;
 
   /**
-   * 訪問回数。
+   * Number of visits.
    */
   int32_t _visits;
 
   /**
-   * プレイアウト数。
+   * Number of playouts.
    */
   int32_t _playouts;
 
   /**
-   * 予想着手確率。
+   * Predicted move probability.
    */
   float _policy;
 
   /**
-   * 評価値。
+   * Evaluation value.
    */
   float _value;
 
   /**
-   * 予想進行。
+   * Predicted sequence.
    */
   std::vector<std::pair<int32_t, int32_t>> _variations;
 };
