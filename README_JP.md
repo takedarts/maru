@@ -7,14 +7,16 @@ Maruはランダム着手の棋譜からの深層強化学習を用いて作成�
 Maruはコンピュータ将棋プログラムGokakuの兄弟プログラムです。Maruの深層学習モデル・探索アルゴリズム・強化学習手順はGokakuと同じ手法を用いています。
 
 強化学習によるMaruの棋力向上を[こちらのページ](https://takeda-lab.jp/maru/)で確認できます。
-また、モデルファイルは[こちらのリリースページ](https://github.com/takedarts/maru/releases/tag/v8.0)からダウンロードできます。
+また、モデルファイルは[こちらのリリースページ](https://github.com/takedarts/maru/releases/tag/v8.1)からダウンロードできます。
+
+Maru version 8.1は最終版となります。今後はモデルファイル追加とバグ修正のみを予定しています。
 
 ## 実行方法
 Maruは以下のいずれかの方法で実行できます。
 - [ソースファイルからの実行](#ソースファイルからの実行)
 - [Dockerを使用した実行](#dockerを使用した実行)
 
-Windows11（x64, Cuda12）環境の場合は[Windows11用の実行ファイル](https://drive.usercontent.google.com/download?id=19Tu_pqOS_3_iLnyqE8WMz0Y4H_d76vp9)を使用することもできます。
+Windows11（x64, Cuda12）環境の場合は[Windows11用の実行ファイル](https://drive.usercontent.google.com/download?id=1lMcRwy05qFr-MWkiOMvw1e4bHbWTtAWb)を使用することもできます。
 
 ## ソースファイルからの実行
 ### ビルド方法
@@ -34,7 +36,7 @@ pip install torch
 Linux環境やMacOS環境では`make`が必要となります。
 Windows環境では`MSBuild`が必要となります（MSBuildはVisual Studioに含まれています）。
 ```
-python -X utf8 src/build.py
+python src/build.py
 ```
 
 コンパイルに成功すると`src/deepgo/native`にコンパイルされたCythonモジュールが生成されます。
@@ -46,7 +48,7 @@ python src/build.py --clean
 
 ### 実行方法
 起動スクリプト`src/run.py`を実行することでMaruを起動できます。
-このとき、実行コマンドの引数としてモデルファイルを指定する必要があります（モデルファイルは[こちら](https://github.com/takedarts/maru/releases/tag/v8.0)からダウンロードできます）。
+このとき、実行コマンドの引数としてモデルファイルを指定する必要があります（モデルファイルは[こちら](https://github.com/takedarts/maru/releases/tag/v8.1)からダウンロードできます）。
 ```
 python src/run.py <model_file>
 ```
@@ -88,23 +90,23 @@ python src/run.py --help
 
 ## Dockerを使用した実行
 Maruを実行できるDockerイメージが用意されており、これを使用することで簡単にMaruを実行できます。
-CUDAがインストールされている環境で以下のコマンドを実行することで、MaruのDockerイメージを取得して実行できます（モデルファイルは[こちら](https://github.com/takedarts/maru/releases/tag/v8.0)からダウンロードできます）。
+CUDAがインストールされている環境で以下のコマンドを実行することで、MaruのDockerイメージを取得して実行できます（モデルファイルは[こちら](https://github.com/takedarts/maru/releases/tag/v8.1)からダウンロードできます）。
 ```
-docker pull takedarts/maru:cuda
-docker run -it --rm --gpus all -v .:/workspace takedarts/maru:cuda /opt/run.sh <model_file>
+docker pull takedarts/maru:v8.1-cuda12.6
+docker run -it --rm --gpus all -v .:/workspace takedarts/maru:v8.1-cuda12.6 /opt/run.sh <model_file>
 ```
 オプション`--gpus`で使用するGPUを指定し、`-v .:/workspace`でカレントディレクトリをコンテナ内の`/workspace`にマウントします。
 モデルファイルをカレントディレクトリ以下に置き、`<model_file>`にそのファイルパスを指定してください。
 
 実行コマンドに`--help`を指定すると、指定可能なオプションの一覧が表示されます。
 ```
-docker run -it --rm --gpus all -v .:/workspace takedarts/maru:cuda /opt/run.sh --help
+docker run -it --rm --gpus all -v .:/workspace takedarts/maru:v8.1-cuda12.6 /opt/run.sh --help
 ```
 
 CPUのみの環境では以下のコマンドを実行してください。
 ```
-docker pull takedarts/maru:cpu
-docker run -it --rm -v .:/workspace takedarts/maru:cpu /opt/run.sh <model_file>
+docker pull takedarts/maru:v8.1-cpu
+docker run -it --rm -v .:/workspace takedarts/maru:v8.1-cpu /opt/run.sh <model_file>
 ```
 
 ## 実行オプション
@@ -178,3 +180,6 @@ python src/run.py b4c128-250.model --rule com
 ```
 python src/run.py b4c128-250.model --client-name KataGo
 ```
+
+## Maru version 8.0との互換性
+Maru version 8.1とversion 8.0のモデルファイルは同じ入出力構造を持っていますが、シチョウの扱いが異なるため、version 8.0のモデルファイルをversion 8.1で使用すると正しく動作しません。version 8.0のモデルファイルを使用する場合はMaru version 8.0を使用してください。
