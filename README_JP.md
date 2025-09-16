@@ -2,9 +2,9 @@
 [English](./README.md) | [Japanese](./README_JP.md)
 
 ## 概要
-Maruはランダム着手の棋譜からの深層強化学習を用いて作成されたコンピュータ囲碁プログラムです。Maruの深層学習モデルは大きいカーネルのDepthwise ConvolutionやMulti-Head Attentionを含んでおり、盤面全体の状況を効率よく把握できる構造となっています。また、Gokakuの強化学習手順はKatagoやGumbel AlphaZeroを参考にして設計されており、効率よく多くのパターンを学習できるように設計されています。
+Maruはランダム着手の棋譜からの深層強化学習を用いて作成されたコンピュータ囲碁プログラムです。Maruの深層学習モデルはNested-Bottleneck構造のConvolutionやMulti-Head Attentionを含んでおり、盤面全体の状況を効率よく把握できる構造となっています。また、Gokakuの強化学習手順はKatagoやGumbel AlphaZeroを参考にして設計されており、効率よく多くのパターンを学習できるように設計されています。
 
-Maruはコンピュータ将棋プログラムGokakuの兄弟プログラムです。Maruの深層学習モデル・探索アルゴリズム・強化学習手順はGokakuと同じ手法を用いています。
+Maruはコンピュータ将棋プログラム[Gokaku](https://github.com/takedarts/gokaku)の兄弟プログラムです。Maruの深層学習モデル・探索アルゴリズム・強化学習手順はGokakuと同じ手法を用いています。
 
 強化学習によるMaruの棋力向上を[こちらのページ](https://takeda-lab.jp/maru/)で確認できます。
 また、モデルファイルは[こちらのリリースページ](https://github.com/takedarts/maru/releases/tag/v8.1)からダウンロードできます。
