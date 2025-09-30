@@ -20,7 +20,7 @@ def parse_args() -> argparse.Namespace:
         '--playouts', type=int, default=0, help='Number of playouts (default: 0)')
     parser.add_argument(
         '--search', type=str, default='pucb', choices=['ucb1', 'pucb'],
-        help='Calculation method of search (default: pucb)')
+        help='Criterion for selecting search nodes (default: pucb)')
     parser.add_argument(
         '--temperature', type=float, default=1.0, help='Temperature for exploration (default: 1.0)')
     parser.add_argument(
@@ -39,7 +39,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         '--eval-leaf-only', default=False, action='store_true', help='Evaluate leaf nodes only')
     parser.add_argument(
-        '--timelimit', type=float, default=10, help='Timelimit (sec) (default: 10 sec)')
+        '--timelimit', type=float, default=120, help='Timelimit (sec) (default: 120 sec)')
     parser.add_argument(
         '--ponder', default=False, action='store_true', help='Use pondering')
     parser.add_argument(
@@ -51,7 +51,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         '--initial-turn', type=int, default=4, help='Number of turns to move randomly (default: 4)')
     parser.add_argument(
-        '--client-name', type=str, default=NAME, help='Client name (default: {NAME})')
+        '--client-name', type=str, default=NAME, help=f'Client name (default: {NAME})')
     parser.add_argument(
         '--client-version', type=str, default=VERSION, help=f'Client version (default: {VERSION})')
     parser.add_argument(
