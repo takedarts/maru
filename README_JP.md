@@ -56,7 +56,7 @@ python src/run.py <model_file>
 Maruの操作はGTPプロトコルを介して行います。
 以下に簡単な操作例を示します。
 ```
-% python src/run.py b5n1c96-059f8d56.model
+% python src/run.py b4c128-256.model
 boardsize 9
 = 
 
@@ -126,7 +126,7 @@ docker run -it --rm -v .:/workspace takedarts/maru:v8.1-cpu /opt/run.sh <model_f
 | `--komi <K>`           | コミの値                                          | 7.5                 |
 | `--superko`            | スーパーコウを有効にする                          | False               |
 | `--eval-leaf-only`     | 探索時のリーフノードのみを評価対象とする          | False               |
-| `--timelimit <N>`      | 思考時間の上限を指定（秒）                       | 10                  |
+| `--timelimit <N>`      | 思考時間の上限を指定（秒）                        | 120                 |
 | `--ponder`             | 先読みを有効にする                                | False               |
 | `--resign <R>`         | 投了するときの予想勝率                            | 0.02                |
 | `--min-score <R>`      | 投了するときの最小予想目数差                      | 0.0                 |
@@ -135,10 +135,10 @@ docker run -it --rm -v .:/workspace takedarts/maru:v8.1-cpu /opt/run.sh <model_f
 | `--client-name <S>`    | 表示するクライアント名                            | `Maru`              |
 | `--client-version <S>` | 表示するバージョン情報                            | `8.1`               |
 | `--threads <N>`        | 探索に使用するスレッド数                          | 16                  |
-| `--display <S>`        | 盤面を表示するコマンド                            | None                |
-| `--sgf <S>`            | 初期局面として読み込むSGFファイル                 | None                |
-| `--batch-size <N>`     | 盤面評価のバッチサイズの最大値                    | 1                   |
-| `--gpu <N>`            | 使用するGPUのID（複数指定する場合はコンマ区切り） | 0                   |
+| `--display <S>`        | 盤面を表示するコマンド                            |                     |
+| `--sgf <S>`            | 初期局面として読み込むSGFファイル                 |                     |
+| `--batch-size <N>`     | 盤面評価のバッチサイズの最大値                    | 2048                |
+| `--gpu <N>`            | 使用するGPUのID（複数指定する場合はコンマ区切り） |                     |
 | `--fp16`               | 半精度浮動小数点数（FP16）を使用する              | False               |
 | `--verbose`            | 標準エラー出力へのログ出力を有効にする            | False               |
 
@@ -155,30 +155,30 @@ docker run -it --rm -v .:/workspace takedarts/maru:v8.1-cpu /opt/run.sh <model_f
 `--display`オプションにgogui-displayなどの盤面を表示するプログラムを指定することで盤面を表示できます。表示用のプログラムにはGTPプロトコルの`play`コマンドが送信されます。
 
 ## 実行例
-モデルファイル`b4c128-250.model`を使用してMaruを起動する場合、以下のコマンドを実行します。
+モデルファイル`b4c128-256.model`を使用してMaruを起動する場合、以下のコマンドを実行します。
 ```
-python src/run.py b4c128-250.model
+python src/run.py b4c128-256.model
 ```
 
 訪問回数を1000回に設定し、思考時間の上限を5秒に設定してMaruを起動する場合、以下のコマンドを実行します。
 ```
-python src/run.py b4c128-250.model --visits 1000 --timelimit 5
+python src/run.py b4c128-256.model --visits 1000 --timelimit 5
 ```
 
 日本ルールでの対局を想定してMaruを起動する場合、以下のコマンドを実行します。
 ```
-python src/run.py b4c128-250.model --rule jp
+python src/run.py b4c128-256.model --rule jp
 ```
 
 [CGOSサーバ](http://yss-aya.com/cgos/)で対局する場合、[CGOS-Client](https://github.com/zakki/cgos)などのクライアントに対して以下のコマンドを設定します。
 ```
-python src/run.py b4c128-250.model --rule com
+python src/run.py b4c128-256.model --rule com
 ```
 
 [Lizzie](https://github.com/featurecat/lizzie)でMaruを使用する場合、Lizzieから実行されるGTPエンジンとして以下のコマンドを設定します。
 クライアント名を`KataGo`に設定することでLizzieの評価表示機能を使用できます。
 ```
-python src/run.py b4c128-250.model --client-name KataGo
+python src/run.py b4c128-256.model --client-name KataGo
 ```
 
 ## Maru version 8.0との互換性

@@ -58,7 +58,7 @@ python src/run.py <model_file>
 Maru operates via the GTP (Go Text Protocol).
 Here is a simple example of usage:
 ```
-% python src/run.py b5n1c96-059f8d56.model
+% python src/run.py b4c128-250.model
 boardsize 9
 = 
 
@@ -119,7 +119,7 @@ When running the startup script `src/run.py`, you can specify the following opti
 | `--help`               | Display a list of available options                            |                     |
 | `--visits <N>`         | Number of searches (number of nodes in the search tree)        | 50                  |
 | `--playouts <N>`       | Number of playouts (number of leaves in the search tree)       | 0                   |
-| `--search <S>`         | Search method (`ucb1` or `pucb`)                               | `pucb`              |
+| `--search <S>`         | Criterion for selecting search nodes (`ucb1` or `pucb`)        | `pucb`              |
 | `--temperature <R>`    | Temperature parameter for search                               | 1.0                 |
 | `--randomness <R>`     | Variation in search count during exploration (0.0–1.0)         | 0.0                 |
 | `--criterion <S>`      | Criterion for selecting a move (`lcb` or `visits`)             | `lcb`               |
@@ -128,7 +128,7 @@ When running the startup script `src/run.py`, you can specify the following opti
 | `--komi <K>`           | Komi value                                                     | 7.5                 |
 | `--superko`            | Enable superko                                                 | False               |
 | `--eval-leaf-only`     | Evaluate only leaf nodes during search                         | False               |
-| `--timelimit <N>`      | Maximum thinking time (in seconds)                             | 10                  |
+| `--timelimit <N>`      | Maximum thinking time (in seconds)                             | 120                 |
 | `--ponder`             | Enable pondering                                               | False               |
 | `--resign <R>`         | Predicted win rate threshold for resignation                   | 0.02                |
 | `--min-score <R>`      | Minimum predicted score difference for resignation             | 0.0                 |
@@ -137,10 +137,10 @@ When running the startup script `src/run.py`, you can specify the following opti
 | `--client-name <S>`    | Client name to display                                         | `Maru`              |
 | `--client-version <S>` | Version information to display                                 | `8.1`               |
 | `--threads <N>`        | Number of threads to use for search                            | 16                  |
-| `--display <S>`        | Command to display the board                                   | None                |
-| `--sgf <S>`            | SGF file to load as the initial position                       | None                |
-| `--batch-size <N>`     | Maximum batch size for board evaluation                        | 1                   |
-| `--gpu <N>`            | GPU ID(s) to use (comma-separated for multiple GPUs)           | 0                   |
+| `--display <S>`        | Command to display the board                                   |                     |
+| `--sgf <S>`            | SGF file to load as the initial position                       |                     |
+| `--batch-size <N>`     | Maximum batch size for board evaluation                        | 2048                |
+| `--gpu <N>`            | GPU ID(s) to use (comma-separated for multiple GPUs)           |                     |
 | `--fp16`               | Use half-precision floating point (FP16)                       | False               |
 | `--verbose`            | Enable log output to standard error                            | False               |
 
