@@ -8,82 +8,83 @@
 namespace deepgo {
 
 /**
- * 評価結果を格納するクラス。
+ * Class to store evaluation results.
  */
 class Evaluator {
  public:
   /**
-   * 評価結果オブジェクトを作成する。
-   * @param processor 推論を実行するオブジェクト
-   * @param komi コミの目数
-   * @param rule 勝敗判定ルール
-   * @param superko スーパーコウルールを適用するならtrue
+   * Creates an evaluation result object.
+   * @param processor Object to execute inference
+   * @param komi Komi points
+   * @param rule Rule for determining the winner
+   * @param superko True to apply the superko rule
    */
   Evaluator(Processor* processor, float komi, int32_t rule, bool superko);
 
   /**
-   * モデルによる評価結果をクリアする。
+   * Clears the evaluation results by the model.
    */
   void clear();
 
   /**
-   * モデルによる評価を実行する。
-   * @param board 評価対象の盤面
-   * @param color 評価対象の石の色
+   * Executes evaluation by the model.
+   * @param board Board to be evaluated
+   * @param color Color of the stone to be evaluated
+   * @param enableShicho True to target atari moves
    */
   void evaluate(Board* board, int32_t color);
 
   /**
-   * モデルによる評価結果が設定されていればtrueを返す。
-   * @return モデルによる評価結果が設定されていればtrue
+   * Returns true if the evaluation result by the model is set.
+   * @return True if the evaluation result by the model is set
    */
   bool isEvaluated();
 
   /**
-   * モデルによる推論結果の予測候補手の一覧を取得する。
-   * @return 予測候補手の一覧
+   * Gets the list of predicted candidate moves from the model's inference results.
+   * @return List of predicted candidate moves
    */
   std::vector<Policy> getPolicies();
 
   /**
-   * モデルによる推論結果の予想勝率を取得する。
-   * @return モデルによる推論結果の予想勝率
+   * Gets the evaluation value from the model's inference results.
+   * @return Evaluation value from the model's inference results
    */
   float getValue();
 
  private:
   /**
-   * 推論を実行するオブジェクト。
+   * Object to execute inference.
    */
   Processor* _processor;
 
   /**
-   * コミの目数。
+   * Komi points.
    */
   float _komi;
 
   /**
-   * 勝敗判定ルール。
+   * Rule for determining the winner.
    */
   int32_t _rule;
 
   /**
-   * スーパーコウルールを適用するならtrue。
+   * True to apply the superko rule.
    */
   bool _superko;
 
   /**
-   * モデルによる推論結果の候補手の一覧
+   * List of candidate moves from the model's inference results.
    */
   std::vector<Policy> _policies;
 
   /**
-   * モデルによる推論結果の予想勝率。
+   * Evaluation value from the model's inference results.
    */
   float _value;
 
   /**
-   * モデルによる評価結果が設定されていればtrue。
+   * True if the evaluation result by the model is set.
    */
   bool _evaluated;
 };

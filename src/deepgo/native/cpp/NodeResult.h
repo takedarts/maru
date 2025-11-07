@@ -1,42 +1,56 @@
 #pragma once
 
+#include <cstdint>
+
 namespace deepgo {
 class Node;
 
 /**
- * ノードの評価結果を表すクラス
+ * Class representing the evaluation result of a node
  */
 class NodeResult {
  public:
   /**
-   * ノードの評価結果オブジェクトを作成する。
-   * @param node 次に評価するノードオブジェクト
-   * @param value 予想勝率
+   * Create a node evaluation result object.
+   * @param node Node object to be evaluated next
+   * @param value Evaluation value
+   * @param playouts Number of playouts
    */
-  NodeResult(Node* node, float value);
+  NodeResult(Node* node, float value, int32_t playouts);
 
   /**
-   * 次に評価するノードオブジェクトを取得する。
-   * @return 次に評価するノードオブジェクト
+   * Get the node object to be evaluated next.
+   * @return Node object to be evaluated next
    */
   Node* getNode();
 
   /**
-   * 予想勝率を取得する。
-   * @return 予想勝率
+   * Get the evaluation value.
+   * @return Evaluation value
    */
   float getValue();
 
+  /**
+   * Get the number of playouts.
+   * @return Number of playouts
+   */
+  int32_t getPlayouts();
+
  private:
   /**
-   * 次に評価するノードオブジェクト。
+   * Node object to be evaluated next.
    */
   Node* _node;
 
   /**
-   * 予想勝率。
+   * Evaluation value to be added.
    */
   float _value;
+
+  /**
+   * Number of playouts.
+   */
+  int32_t _playouts;
 };
 
 }  // namespace deepgo

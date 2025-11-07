@@ -8,46 +8,46 @@ namespace deepgo {
 class History {
  public:
   /**
-   * 着手履歴を保持するオブジェクトを生成する。
+   * Create an object to hold move history.
    */
   History();
 
   /**
-   * コピーした着手履歴を保持するオブジェクトを生成する。
-   * @param history コピー元の着手履歴
+   * Create an object to hold copied move history.
+   * @param history Source move history to copy from
    */
   History(const History& moves);
 
   /**
-   * オブジェクトを破棄する。
+   * Destroy the object.
    */
   virtual ~History() = default;
 
   /**
-   * 履歴を初期化する。
+   * Initialize the history.
    */
   void clear();
 
   /**
-   * 着手座標を追加する。
-   * @param move 着手座標
+   * Add a move coordinate.
+   * @param move Move coordinate
    */
   void add(int32_t move);
 
   /**
-   * 着手履歴を取得する。
-   * @return 着手履歴
+   * Get the move history.
+   * @return Move history
    */
   std::vector<int32_t> get();
 
  private:
   /**
-   * 値を追加する位置。
+   * Position to add the value.
    */
   int32_t _index;
 
   /**
-   * 着手座標の一覧
+   * List of move coordinates.
    */
   int32_t _moves[3];
 };

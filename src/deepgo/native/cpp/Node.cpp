@@ -7,23 +7,23 @@
 
 namespace deepgo {
 
-// 乱数生成器
+// Random number generator
 static std::random_device random_seed_gen;
 static std::default_random_engine random_engine(random_seed_gen());
 
 /**
- * 探索ノードオブジェクトを作成する。
- * @param manager ノード管理オブジェクト
- * @param processor 推論を実行するオブジェクト
- * @param width 盤面の幅
- * @param height 盤面の高さ
- * @param komi コミの目数
- * @param rule 勝敗判定ルール
- * @param superko スーパーコウルールを適用するならtrue
+ * Creates a search node object.
+ * @param manager Node management object
+ * @param processor Object to execute inference
+ * @param width Board width
+ * @param height Board height
+ * @param komi Komi points
+ * @param rule Rule for determining the winner
+ * @param superko True to apply the superko rule
  */
 Node::Node(
-    NodeManager* manager, Processor* processor,
-    int32_t width, int32_t height, float komi, int32_t rule, bool superko)
+    NodeManager* manager, Processor* processor, int32_t width, int32_t height,
+    float komi, int32_t rule, bool superko)
     : _evalMutex(),
       _valueMutex(),
       _manager(manager),
@@ -35,118 +35,152 @@ Node::Node(
       _policy(0.0f),
       _evaluator(processor, komi, rule, superko),
       _children(),
-      _priorityQueue(),
+      _childPolicies(),
       _waitingQueue(),
       _waitingSet(),
       _visits(0),
+      _playouts(0),
       _value(0.0f),
       _count(0) {
 }
 
 /**
- * ノードの評価情報を初期化する。
+ * Sets as the initial board node.
  */
-void Node::reset() {
-  _evaluator.clear();
-  _children.clear();
-  _priorityQueue = std::priority_queue<Policy>();
-  _waitingQueue = std::queue<Policy>();
-  _waitingSet.clear();
-  _visits = 0;
-  _value = 0.0f;
-  _count = 0;
+void Node::initialize() {
+  std::unique_lock<std::shared_mutex> lock(_evalMutex);
+
+  _board.clear();
+  _x = -1;
+  _y = -1;
+  _color = WHITE;
+  _captured = 0;
+  _reset();
 }
 
 /**
- * 探索ノードを評価して、次に評価するノードオブジェクトを取得する。
- * 次に評価するノードオブジェクトが存在しない場合はnullptrを返す。
- * @param equally 探索回数を均等にする場合はtrue
- * @param width 探索幅(0の場合は探索幅を自動で調整する)
- * @param useUcb1 UCB1を使用する場合はtrue・PUCBを使用する場合はfalse
- * @return 次に評価するノードオブジェクト
+ * Evaluates the search node and obtains the next node object to evaluate.
+ * Returns nullptr if there is no next node object to evaluate.
+ * @param equally True to make the number of searches equal
+ * @param width Search width (if 0, search width is automatically adjusted)
+ * @param useUcb1 True to use UCB1; false to use PUCB
+ * @param temperature Temperature parameter for search
+ * @param noise Strength of Gumbel noise
+ * @return Next node object to evaluate
  */
-NodeResult Node::evaluate(bool equally, int32_t width, bool useUcb1) {
+NodeResult Node::evaluate(
+    bool equally, int32_t width, bool useUcb1, float temperature, float noise) {
   std::unique_lock<std::shared_mutex> lock(_evalMutex);
 
-  // ノードの評価を実行する
+  // Execute node evaluation
   _evaluate();
 
-  // 訪問数を増やす
+  // Increase the number of visits
   _visits += 1;
 
-  // 最初の訪問ならばこのノードの評価結果を返す
+  // If this is the first visit, return the evaluation result of this node
   if (_visits == 1) {
-    return NodeResult(nullptr, _evaluator.getValue());
+    return NodeResult(nullptr, _evaluator.getValue(), 1);
   }
 
-  // 候補手がない場合はこのノードの評価値を返す
-  if (_priorityQueue.empty()) {
-    return NodeResult(nullptr, _evaluator.getValue());
+  // If there are no candidate moves, return the evaluation value of this node
+  if (_childPolicies.empty()) {
+    return NodeResult(nullptr, _evaluator.getValue(), 1);
   }
 
-  // キューから評価に追加する候補手を取得する
-  if (!_priorityQueue.empty()) {
-    Policy policy = _priorityQueue.top();
-    int32_t policy_index = policy.y * _board.getWidth() + policy.x;
+  // Get candidate moves to add to evaluation
+  int32_t children_size = _children.size() + _waitingSet.size();
 
-    _priorityQueue.pop();
+  if (children_size < _childPolicies.size() && (width < 1 || children_size < width)) {
+    int32_t max_index = 0;
+    int32_t max_priority_type = 0;
+    float max_priority = 0.0f;
 
-    // 探索幅が指定されていて、子ノードと待機リストの合計が探索幅より少ない場合は
-    // 新しい候補手が取得されるまでキューから候補手を取り出す
-    if (width > 0 && _children.size() + _waitingSet.size() < width) {
-      std::vector<Policy> temp_policies;
+    // Calculate the temperature parameter
+    float win_chance = getValue() * OPPOSITE(_color) * 0.5 + 0.5;
+    float temperature_power = win_chance + (1.0 / temperature) * (1 - win_chance);
 
-      while (!_priorityQueue.empty() &&
-             (_children.find(policy_index) != _children.end() ||
-              _waitingSet.find(policy_index) != _waitingSet.end())) {
-        // 一時的に取り出した候補手を保存しておく
-        temp_policies.push_back(policy);
+    // Create an object for generating Gumbel noise
+    // Do not add noise if the number of child nodes is 4 or less
+    float noise_scale = (children_size <= 4) ? 0.0f : noise;
+    std::extreme_value_distribution<float> noise_dist(0.0f, noise_scale);
 
-        // 探索対象とする新しい候補手を取得する
-        policy = _priorityQueue.top();
-        policy_index = policy.y * _board.getWidth() + policy.x;
-        _priorityQueue.pop();
+    // Find the candidate move with the highest priority
+    for (int i = 0; i < _childPolicies.size(); i++) {
+      Policy& policy = _childPolicies[i];
+      float probability = policy.policy;
+
+      // Reflect the temperature parameter
+      probability = std::pow(probability, temperature_power);
+
+      // Add Gumbel noise
+      // Since noise is added to logits, multiply e^noise to the probability
+      probability *= std::exp(noise_dist(random_engine));
+
+      // Calculate priority
+      int32_t priority_type = 1;
+      float priority = probability / (policy.visits + 1);
+
+      // Lower the priority of registered candidate moves if the setting is to make the number of searches equal
+      if (equally) {
+        int32_t policy_index = policy.y * _board.getWidth() + policy.x;
+
+        if (_children.find(policy_index) != _children.end() ||
+            _waitingSet.find(policy_index) != _waitingSet.end()) {
+          priority_type = 0;
+        }
       }
 
-      // 一時的に取り出した候補手をキューに戻す
-      for (Policy temp_policy : temp_policies) {
-        _priorityQueue.push(temp_policy);
+      if (priority_type > max_priority_type ||
+          (priority_type == max_priority_type && priority > max_priority)) {
+        max_index = i;
+        max_priority_type = priority_type;
+        max_priority = priority;
       }
     }
 
-    // 探索対象とした候補手の訪問数を増やしてキューに再度追加する
-    _priorityQueue.emplace(policy.x, policy.y, policy.policy, policy.visits + 1);
+    // If the candidate move to add to evaluation is unregistered, register it in the waiting list
+    Policy& max_policy = _childPolicies[max_index];
+    int32_t max_policy_index = max_policy.y * _board.getWidth() + max_policy.x;
 
-    // 評価に追加する候補手が未登録状態であれば新たに待機リストに登録する
-    if (_children.find(policy_index) == _children.end() &&
-        _waitingSet.find(policy_index) == _waitingSet.end()) {
-      _waitingQueue.push(policy);
-      _waitingSet.insert(policy_index);
+    if (_children.find(max_policy_index) == _children.end() &&
+        _waitingSet.find(max_policy_index) == _waitingSet.end()) {
+      _waitingQueue.push(max_policy);
+      _waitingSet.insert(max_policy_index);
     }
+
+    // Increase the number of visits
+    _childPolicies[max_index].visits += 1;
   }
 
-  // 探索幅が指定されていない場合と子ノードの数が指定された探索幅に達していない場合、
-  // 待機リストに候補手が存在する場合は新しい子ノードを作成して次の探索先として返す
+  // If search width is not specified and the number of child nodes has not reached the specified search width,
+  // and if there are candidate moves in the waiting list, create a new child node and return it as the next search destination
+  // If this is the first child node and only leaf nodes are to be evaluated, return a result that cancels the evaluation value of this node
   if (_waitingQueue.size() > 0 && (width <= 0 || _children.size() < width)) {
-    // 最初に登録された待機中の候補手を取得する
+    // Get the first registered candidate move in the waiting list
     Policy policy = _waitingQueue.front();
     int32_t policy_index = policy.y * _board.getWidth() + policy.x;
 
     _waitingQueue.pop();
     _waitingSet.erase(policy_index);
 
-    // 未登録の候補手であれば新しい子ノードを作成して次の探索先として返す
+    // If the candidate move is unregistered, create a new child node and return it as the next search destination
     if (_children.find(policy_index) == _children.end()) {
       Node* node = _manager->createNode();
+      bool leaf = _children.empty();
 
       node->_setAsNextNode(this, policy.x, policy.y, policy.policy);
       _children[policy_index] = node;
 
-      return NodeResult(node, 0.0);
+      if (leaf) {
+        return NodeResult(node, _evaluator.getValue(), -1);
+      } else {
+        return NodeResult(node, _evaluator.getValue(), 0);
+      }
     }
   }
 
-  // 探索対象とする子ノードの一覧を作成する
+  // Create a list of child nodes to be searched
   std::vector<std::pair<Node*, float>> children;
 
   for (std::pair<int32_t, Node*> child : _children) {
@@ -154,7 +188,7 @@ NodeResult Node::evaluate(bool equally, int32_t width, bool useUcb1) {
         child.second, child.second->getValueLCB() * child.second->getColor()));
   }
 
-  // 探索幅が指定されている場合は探索対象とする子ノードの数を制限する
+  // Limit the number of child nodes to be searched if search width is specified
   if (width > 0 && children.size() > width) {
     std::sort(children.begin(), children.end(), [](auto a, auto b) {
       return a.second > b.second;
@@ -163,7 +197,7 @@ NodeResult Node::evaluate(bool equally, int32_t width, bool useUcb1) {
     children.resize(width);
   }
 
-  // 最も優先度が高いノードを次の探索先として返す
+  // Return the node with the highest priority as the next search destination
   Node* max_node = children[0].first;
   float max_priority = -1.0;
 
@@ -186,35 +220,46 @@ NodeResult Node::evaluate(bool equally, int32_t width, bool useUcb1) {
     }
   }
 
-  return NodeResult(max_node, 0.0);
+  // Return the next node to search
+  return NodeResult(max_node, _evaluator.getValue(), 0);
 }
 
 /**
- * 探索ノードを更新する。
- * @param value 反映する予想勝率
+ * Updates the evaluation value of the search node.
+ * @param value Evaluation value
  */
-void Node::update(float value) {
+void Node::updateValue(float value) {
   std::unique_lock<std::shared_mutex> lock(_valueMutex);
-  _value += value;
   _count += 1;
+  _value += value;
 }
 
 /**
- * PolicyNetworkの評価値をもとに候補手をランダムに取得する。
- * @param temperature 温度
- * @return 候補手
+ * Cancels the evaluation value of the search node.
+ * @param value Evaluation value
+ */
+void Node::cancelValue(float value) {
+  std::unique_lock<std::shared_mutex> lock(_valueMutex);
+  _count -= 1;
+  _value -= value;
+}
+
+/**
+ * Randomly obtains candidate moves based on the evaluation value of the PolicyNetwork.
+ * @param temperature Temperature
+ * @return Candidate move
  */
 std::pair<int32_t, int32_t> Node::getRandomMove(float temperature) {
-  // 温度パラメータを補正する
+  // Adjust the temperature parameter
   temperature = std::max(temperature, 0.1f);
 
-  // ノードの評価を実行する
+  // Execute node evaluation
   {
     std::unique_lock<std::shared_mutex> lock(_evalMutex);
     _evaluate();
   }
 
-  // 候補手の一覧を取得する
+  // Get the list of candidate moves
   std::vector<Policy> policies;
   std::vector<float> probs;
 
@@ -226,12 +271,12 @@ std::pair<int32_t, int32_t> Node::getRandomMove(float temperature) {
     }
   }
 
-  // 候補手がない場合はパスを返す
+  // If there are no candidate moves, return pass
   if (policies.empty()) {
     return std::make_pair(-1, -1);
   }
 
-  // 着手確率に基づいてランダムに選択する
+  // Randomly select based on move probability
   std::discrete_distribution<int32_t> dist(probs.begin(), probs.end());
   int32_t index = dist(random_engine);
   Policy policy = policies[index];
@@ -240,17 +285,17 @@ std::pair<int32_t, int32_t> Node::getRandomMove(float temperature) {
 }
 
 /**
- * PolicyNetworkの評価値が最も高い候補手を取得する。
- * @return 候補手
+ * Obtains the candidate move with the highest evaluation value from the PolicyNetwork.
+ * @return Candidate move
  */
 std::pair<int32_t, int32_t> Node::getPolicyMove() {
   {
-    // ノードの評価を実行する
+    // Execute node evaluation
     std::unique_lock<std::shared_mutex> lock(_evalMutex);
     _evaluate();
   }
 
-  // 候補手の一覧を取得する
+  // Get the list of candidate moves
   std::vector<Policy> policies;
 
   {
@@ -260,12 +305,12 @@ std::pair<int32_t, int32_t> Node::getPolicyMove() {
     }
   }
 
-  // 候補手がない場合はパスを返す
+  // If there are no candidate moves, return pass
   if (policies.empty()) {
     return std::make_pair(-1, -1);
   }
 
-  // 最も着手確率が高い候補手を取得する
+  // Get the candidate move with the highest move probability
   Policy max_policy = policies[0];
 
   for (Policy policy : policies) {
@@ -274,53 +319,53 @@ std::pair<int32_t, int32_t> Node::getPolicyMove() {
     }
   }
 
-  // 最も着手確率が高い候補手を返す
+  // Return the candidate move with the highest move probability
   return std::make_pair(max_policy.x, max_policy.y);
 }
 
 /**
- * 着手座標のx座標を取得する。
- * @return x座標
+ * Gets the x coordinate of the move.
+ * @return x coordinate
  */
-int32_t Node::getX() {
+int32_t Node::getX() const {
   return _x;
 }
 
 /**
- * 着手座標のy座標を取得する。
- * @return y座標
+ * Gets the y coordinate of the move.
+ * @return y coordinate
  */
-int32_t Node::getY() {
+int32_t Node::getY() const {
   return _y;
 }
 
 /**
- * 着手した石の色を取得する。
- * @return 石の色
+ * Gets the color of the stone played.
+ * @return Stone color
  */
-int32_t Node::getColor() {
+int32_t Node::getColor() const {
   return _color;
 }
 
 /**
- * このノードで打ち上げた石の数を取得する。
- * @return 打ち上げた石の数
+ * Gets the number of captured stones in this node.
+ * @return Number of captured stones
  */
-int32_t Node::getCaptured() {
+int32_t Node::getCaptured() const {
   return _captured;
 }
 
 /**
- * このノードの予想着手確率を取得する。
- * @return 予想着手確率
+ * Gets the predicted move probability of this node.
+ * @return Predicted move probability
  */
-float Node::getPolicy() {
+float Node::getPolicy() const {
   return _policy;
 }
 
 /**
- * 子ノードの一覧を取得する。
- * @return ノードオブジェクトの一覧
+ * Gets the list of child nodes.
+ * @return List of node objects
  */
 std::vector<Node*> Node::getChildren() {
   std::shared_lock<std::shared_mutex> lock(_evalMutex);
@@ -334,24 +379,24 @@ std::vector<Node*> Node::getChildren() {
 }
 
 /**
- * 指定した座標に着手したときのノードオブジェクトを取得する。
- * ノードオブジェクトが存在しない場合は新しく作成したオブジェクトを返す。
- * 作成したノードオブジェクトはこのノードオブジェクトの子ノードとしては登録されない。
- * @param x 着手するX座標
- * @param y 着手するY座標
- * @return ノードオブジェクトへのポインタ
+ * Gets the node object when a move is made at the specified coordinates.
+ * If the node object does not exist, returns a newly created object.
+ * The created node object is not registered as a child node of this node object.
+ * @param x X coordinate of the move
+ * @param y Y coordinate of the move
+ * @return Pointer to the node object
  */
 Node* Node::getChild(int32_t x, int32_t y) {
   std::unique_lock<std::shared_mutex> lock(_evalMutex);
 
-  // 子ノードが存在する場合はそのノードを返す
+  // If a child node exists, return that node
   int32_t index = y * _board.getWidth() + x;
 
   if (_children.find(index) != _children.end()) {
     return _children[index];
   }
 
-  // 子ノードが存在しない場合は新しいノードを作成する
+  // If a child node does not exist, create a new node
   Node* node = _manager->createNode();
 
   node->_setAsNextNode(this, x, y, 1.0);
@@ -360,8 +405,8 @@ Node* Node::getChild(int32_t x, int32_t y) {
 }
 
 /**
- * このノードの探索回数を取得する。
- * @return 探索回数
+ * Gets the number of searches for this node.
+ * @return Number of searches
  */
 int32_t Node::getVisits() {
   std::shared_lock<std::shared_mutex> lock(_evalMutex);
@@ -369,8 +414,26 @@ int32_t Node::getVisits() {
 }
 
 /**
- * このノードの評価値を取得する。
- * @return 評価値
+ * Gets the number of playouts.
+ * @return Number of playouts
+ */
+int32_t Node::getPlayouts() {
+  std::unique_lock<std::shared_mutex> lock(_valueMutex);
+  return _playouts;
+}
+
+/**
+ * Sets the number of playouts.
+ * @param playouts Number of playouts
+ */
+void Node::setPlayouts(int32_t playouts) {
+  std::unique_lock<std::shared_mutex> lock(_valueMutex);
+  _playouts = playouts;
+}
+
+/**
+ * Gets the evaluation value of this node.
+ * @return Evaluation value
  */
 float Node::getValue() {
   std::shared_lock<std::shared_mutex> lock(_valueMutex);
@@ -382,8 +445,17 @@ float Node::getValue() {
 }
 
 /**
- * このノードの評価値の信頼区間の下限を取得する。
- * @return 信頼区間の下限
+ * Gets the number of times the evaluation value of this node has been added.
+ * @return Number of times the evaluation value has been added
+ */
+int Node::getCount() {
+  std::shared_lock<std::shared_mutex> lock(_valueMutex);
+  return _count;
+}
+
+/**
+ * Gets the lower bound of the confidence interval for the evaluation value of this node.
+ * @return Lower bound of the confidence interval
  */
 float Node::getValueLCB() {
   std::shared_lock<std::shared_mutex> lock(_valueMutex);
@@ -397,9 +469,9 @@ float Node::getValueLCB() {
 }
 
 /**
- * PUCBに基づいてこのノードの優先度を取得する。
- * @param totalVisits 探索回数の合計
- * @return 優先度
+ * Gets the priority of this node based on PUCB.
+ * @param totalVisits Total number of searches
+ * @return Priority
  */
 float Node::getPriorityByPUCB(int32_t totalVisits) {
   std::shared_lock<std::shared_mutex> lock(_valueMutex);
@@ -414,9 +486,9 @@ float Node::getPriorityByPUCB(int32_t totalVisits) {
 }
 
 /**
- * UCB1に基づいてこのノードの優先度を取得する。
- * @param totalVisits 探索回数の合計
- * @return 優先度
+ * Gets the priority of this node based on UCB1.
+ * @param totalVisits Total number of searches
+ * @return Priority
  */
 float Node::getPriorityByUCB1(int32_t totalVisits) {
   std::shared_lock<std::shared_mutex> lock(_valueMutex);
@@ -430,8 +502,8 @@ float Node::getPriorityByUCB1(int32_t totalVisits) {
 }
 
 /**
- * このノードの予想進行を取得する。
- * @return 予想進行
+ * Gets the predicted sequence for this node.
+ * @return Predicted sequence
  */
 std::vector<std::pair<int32_t, int32_t>> Node::getVariations() {
   std::shared_lock<std::shared_mutex> lock(_valueMutex);
@@ -457,8 +529,8 @@ std::vector<std::pair<int32_t, int32_t>> Node::getVariations() {
 }
 
 /**
- * 盤面の状態を取得する。
- * @return 盤面の状態
+ * Gets the state of the board.
+ * @return State of the board
  */
 std::vector<int32_t> Node::getBoardState() {
   std::shared_lock<std::shared_mutex> lock(_valueMutex);
@@ -466,8 +538,8 @@ std::vector<int32_t> Node::getBoardState() {
 }
 
 /**
- * このノードの情報を出力する。
- * @param os 出力先
+ * Outputs the information of this node.
+ * @param os Output destination
  */
 void Node::print(std::ostream& os) {
   _board.print(os);
@@ -477,7 +549,7 @@ void Node::print(std::ostream& os) {
 }
 
 /**
- * このノードの評価を実行する。
+ * Executes the evaluation of this node.
  */
 void Node::_evaluate() {
   if (_evaluator.isEvaluated()) {
@@ -487,16 +559,31 @@ void Node::_evaluate() {
   _evaluator.evaluate(&_board, OPPOSITE(_color));
 
   for (Policy policy : _evaluator.getPolicies()) {
-    _priorityQueue.push(policy);
+    _childPolicies.push_back(policy);
   }
 }
 
 /**
- * 指定されたノードの継続ノードとしての値を設定する。
- * @param prevNode 前のノード
- * @param x 着手するX座標
- * @param y 着手するY座標
- * @param policy 予想着手確率
+ * Initializes the evaluation information of the node.
+ */
+void Node::_reset() {
+  _evaluator.clear();
+  _children.clear();
+  _childPolicies.clear();
+  _waitingQueue = std::queue<Policy>();
+  _waitingSet.clear();
+  _visits = 0;
+  _playouts = 0;
+  _value = 0.0f;
+  _count = 0;
+}
+
+/**
+ * Sets the value as a continuation node of the specified node.
+ * @param prevNode Previous node
+ * @param x X coordinate of the move
+ * @param y Y coordinate of the move
+ * @param policy Predicted move probability
  */
 void Node::_setAsNextNode(Node* prevNode, int32_t x, int32_t y, float policy) {
   _x = x;
@@ -506,6 +593,8 @@ void Node::_setAsNextNode(Node* prevNode, int32_t x, int32_t y, float policy) {
 
   _board.copyFrom(&prevNode->_board);
   _captured = _board.play(_x, _y, _color);
+
+  _reset();
 }
 
 }  // namespace deepgo

@@ -9,63 +9,63 @@ namespace deepgo {
 class ExecutorJob {
  public:
   /**
-   * 計算オブジェクトを生成する。
+   * Creates a computation object.
    */
   ExecutorJob(float* inputs, float* outputs, int32_t size);
 
   /**
-   * 計算が完了するまで待機する。
+   * Waits until computation is complete.
    */
   void wait();
 
   /**
-   * 計算が完了したことを通知する。
+   * Notifies that computation is complete.
    */
   void notify();
 
   /**
-   * 入力データを返す。
+   * Returns input data.
    */
   float* getInputs() const;
 
   /**
-   * 出力データを返す。
+   * Returns output data.
    */
   float* getOutputs() const;
 
   /**
-   * データの数を返す。
+   * Returns the number of data.
    */
   int32_t getSize() const;
 
  private:
   /**
-   * 同期用のミューテックス。
+   * Mutex for synchronization.
    */
   std::mutex _mutex;
 
   /**
-   * 同期用の条件変数。
+   * Condition variable for synchronization.
    */
   std::condition_variable _condition;
 
   /**
-   * 入力データ。
+   * Input data.
    */
   float* _inputs;
 
   /**
-   * 出力データ。
+   * Output data.
    */
   float* _outputs;
 
   /**
-   * データの数。
+   * Number of data.
    */
   int32_t _size;
 
   /**
-   * 計算が完了していればtrue。
+   * True if computation is complete.
    */
   bool _terminated;
 };

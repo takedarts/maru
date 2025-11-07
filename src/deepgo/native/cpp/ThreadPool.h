@@ -11,61 +11,61 @@
 namespace deepgo {
 
 /**
- * スレッド管理クラス。
+ * Thread management class.
  */
 class ThreadPool {
  public:
   /**
-   * スレッド管理オブジェクトを作成する。
-   * @param threads スレッド数
+   * Create thread management object.
+   * @param threads Number of threads
    */
   ThreadPool(int32_t threads);
 
   /**
-   * スレッド管理オブジェクトを破棄する。
+   * Destroy thread management object.
    */
   virtual ~ThreadPool();
 
   /**
-   * 実行対象のタスクを登録する。
-   * @param task タスク
+   * Register a task to execute.
+   * @param task Task
    */
   void submit(std::function<void()> task);
 
   /**
-   * スレッド数を返す。
-   * @return スレッド数
+   * Return the number of threads.
+   * @return Number of threads
    */
   int32_t getSize();
 
  private:
   /**
-   * 同期用のミューテックス。
+   * Mutex for synchronization.
    */
   std::mutex _mutex;
 
   /**
-   * 同期用の条件変数。
+   * Condition variable for synchronization.
    */
   std::condition_variable _condition;
 
   /**
-   * スレッドオブジェクトの一覧。
+   * List of thread objects.
    */
   std::vector<std::thread> _threads;
 
   /**
-   * 待機中のタスクの一覧。
+   * List of waiting tasks.
    */
   std::queue<std::function<void()>> _tasks;
 
   /**
-   * 動作を停止するならtrue。
+   * True to stop operation.
    */
   bool _terminated;
 
   /**
-   * 探索を実行する。
+   * Execute search.
    */
   void _run();
 };

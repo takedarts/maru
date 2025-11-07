@@ -3,7 +3,7 @@
 namespace deepgo {
 
 /**
- * 計算オブジェクトを生成する。
+ * Creates a computation object.
  */
 ExecutorJob::ExecutorJob(float* inputs, float* outputs, int32_t size)
     : _mutex(),
@@ -15,7 +15,7 @@ ExecutorJob::ExecutorJob(float* inputs, float* outputs, int32_t size)
 }
 
 /**
- * 計算が完了するまで待機する。
+ * Waits until computation is complete.
  */
 void ExecutorJob::wait() {
   {  // synchronize
@@ -25,7 +25,7 @@ void ExecutorJob::wait() {
 }
 
 /**
- * 計算が完了したことを通知する。
+ * Notifies that computation is complete.
  */
 void ExecutorJob::notify() {
   {  // synchronize
@@ -36,21 +36,21 @@ void ExecutorJob::notify() {
 }
 
 /**
- * 入力データを返す。
+ * Returns input data.
  */
 float* ExecutorJob::getInputs() const {
   return _inputs;
 }
 
 /**
- * 出力データを返す。
+ * Returns output data.
  */
 float* ExecutorJob::getOutputs() const {
   return _outputs;
 }
 
 /**
- * データの数を返す。
+ * Returns the number of data.
  */
 int32_t ExecutorJob::getSize() const {
   return _size;

@@ -7,9 +7,9 @@
 namespace deepgo {
 
 /**
- * 盤面パターンのオブジェクトを作成する。
- * @param width 盤面の幅
- * @param height 盤面の高さ
+ * Create a board pattern object.
+ * @param width Board width
+ * @param height Board height
  */
 Pattern::Pattern(int width, int height)
     : _width(width),
@@ -20,8 +20,8 @@ Pattern::Pattern(int width, int height)
 }
 
 /**
- * コピーした盤面パターンのオブジェクトを作成する。
- * @param pattern コピー元の盤面パターンのオブジェクト
+ * Create a copied board pattern object.
+ * @param pattern Source board pattern object to copy from
  */
 Pattern::Pattern(const Pattern& pattern)
     : _width(pattern._width),
@@ -32,17 +32,17 @@ Pattern::Pattern(const Pattern& pattern)
 }
 
 /**
- * 石の並びの表現値を初期化する。
+ * Initialize the representation value of the stone arrangement.
  */
 void Pattern::clear() {
   memset(_values.get(), 0, sizeof(int32_t) * _length);
 }
 
 /**
- * 指定された座標に石を置いた状態に更新する。
- * @param x X座標
- * @param y Y座標
- * @param color 石の色
+ * Update the state to place a stone at the specified coordinates.
+ * @param x X-coordinate
+ * @param y Y-coordinate
+ * @param color Stone color
  */
 void Pattern::put(int32_t x, int32_t y, int32_t color) {
   int32_t index = (y * _width + x) / 16;
@@ -52,10 +52,10 @@ void Pattern::put(int32_t x, int32_t y, int32_t color) {
 }
 
 /**
- * 指定された座標の石を取り除いた状態に更新する。
- * @param x X座標
- * @param y Y座標
- * @param color 石の色
+ * Update the state to remove a stone at the specified coordinates.
+ * @param x X-coordinate
+ * @param y Y-coordinate
+ * @param color Stone color
  */
 void Pattern::remove(int32_t x, int32_t y, int32_t color) {
   int32_t index = (y * _width + x) / 16;
@@ -65,8 +65,8 @@ void Pattern::remove(int32_t x, int32_t y, int32_t color) {
 }
 
 /**
- * パターンを表現する値を取得する。
- * @return パターンを表現する値
+ * Get the value representing the pattern.
+ * @return Value representing the pattern
  */
 std::vector<int32_t> Pattern::values() {
   std::vector<int32_t> values;
@@ -79,8 +79,8 @@ std::vector<int32_t> Pattern::values() {
 }
 
 /**
- * パターンを表現する値をコピーする。
- * @param pattern コピー元のパターン
+ * Copy the value representing the pattern.
+ * @param pattern Source pattern to copy from
  */
 void Pattern::copyFrom(const Pattern& pattern) {
   memcpy(_values.get(), pattern._values.get(), sizeof(int32_t) * _length);

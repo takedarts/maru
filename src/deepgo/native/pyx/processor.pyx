@@ -29,14 +29,14 @@ cdef class NativeProcessor:
         deterministic: bool,
         threads_par_gpu: int,
     ) -> None:
-        '''推論処理オブジェクトを作成する。
+        '''Create inference processor object.
         Args:
-            model (str): モデルファイルのパス
-            gpus (List[int]): 使用するGPUのIDのリスト
-            batch_size (int): バッチサイズ
-            fp16 (bool): FP16で計算を行うならTrue
-            deterministic (bool): 結果を再現可能にするならTrue
-            threads_par_gpu (int): 1GPUあたりのスレッド数
+            model (str): Path to the model file
+            gpus (List[int]): List of GPU IDs to use
+            batch_size (int): Batch size
+            fp16 (bool): True to compute with FP16
+            deterministic (bool): True to make results reproducible
+            threads_par_gpu (int): Number of threads per GPU
         '''
         self.processor = new Processor(
             model.encode('utf-8'), gpus,
@@ -46,11 +46,11 @@ cdef class NativeProcessor:
         del self.processor
 
     def execute(self, inputs: numpy.ndarray) -> numpy.ndarray:
-        '''推論を実行する。
+        '''Run inference.
         Args:
-            inputs (numpy.ndarray): 入力データ
+            inputs (numpy.ndarray): Input data
         Returns:
-            numpy.ndarray: 出力データ
+            numpy.ndarray: Output data
         '''
         cdef numpy.ndarray[numpy.float32_t, ndim=2, mode="c"] outputs = numpy.zeros(
             (inputs.shape[0], MODEL_OUTPUT_SIZE), dtype=numpy.float32)

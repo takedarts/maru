@@ -12,9 +12,10 @@ def start_logging(
     file: str | Path | None = None,
     console: TextIO | None = None,
 ) -> None:
-    '''ログ出力を開始する。
-    :param file: ログを出力するファイル
-    :param debug: Trueならデバッグ情報を出力する
+    '''Start log output.
+    Args:
+        file (str | Path | None): File to output logs
+        debug (bool): True to output debug information
     '''
     formatter = logging.Formatter(LOGGING_FORMAT, LOGGING_DATE_FORMAT)
 

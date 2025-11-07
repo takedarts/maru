@@ -99,12 +99,12 @@ class Properties(dict[str, str]):
 
 
 class Record(object):
-    '''SGFの棋譜データの変換を行うためのクラス。'''
+    '''Class for converting SGF game record data.'''
 
     def __init__(self, file: str | Path | TextIOBase | None = None) -> None:
-        '''棋譜データオブジェクトを初期化する。
+        '''Initialize game record data object.
         Args:
-            file (str | Path | TextIOBase | None): 入力ファイル
+            file (str | Path | TextIOBase | None): Input file
         '''
         self.properties = Properties()
         self.moves: List[Tuple[Tuple[int, int], int, str | None]] = []
@@ -153,9 +153,9 @@ class Record(object):
             self.moves.append((pos, color, message))
 
     def dump(self, file: str | Path | IOBase) -> None:
-        '''棋譜ファイルにデータを書き込む。
+        '''Write data to game record file.
         Args:
-            file (str | Path | IOBase): 出力ファイル
+            file (str | Path | IOBase): Output file
         '''
         if isinstance(file, IOBase):
             file.write(self.dumps())
@@ -165,9 +165,9 @@ class Record(object):
             Path(str(file)).write_text(self.dumps())
 
     def dumps(self) -> str:
-        '''棋譜を表現する文字列を返す。
+        '''Return a string representing the game record.
         Returns:
-            str: 棋譜を表現する文字列
+            str: String representing the game record
         '''
         props: Dict[str, str] = {}
         props.update(self.properties)
@@ -196,9 +196,9 @@ class Record(object):
         return text
 
     def create_board(self) -> Board:
-        '''盤面オブジェクトを作成する。
+        '''Create board object.
         Returns:
-            Board: 盤面オブジェクト
+            Board: Board object
         '''
         from .board import Board
 

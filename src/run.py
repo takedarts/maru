@@ -15,12 +15,21 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         'model', type=str, help='Path to the model file')
     parser.add_argument(
-        '--visits', type=int, default=50, help='Number of visits')
+        '--visits', type=int, default=50, help='Number of visits (default: 50)')
+    parser.add_argument(
+        '--playouts', type=int, default=0, help='Number of playouts (default: 0)')
     parser.add_argument(
         '--search', type=str, default='pucb', choices=['ucb1', 'pucb'],
-        help='Calculation method of search (default: pucb)')
+        help='Criterion for selecting search nodes (default: pucb)')
     parser.add_argument(
-        '--rule', type=str, default='ch', choices=['ch', 'jp', 'com'], help='Rule')
+        '--temperature', type=float, default=1.0, help='Temperature for exploration (default: 1.0)')
+    parser.add_argument(
+        '--randomness', type=float, default=0.0, help='Randomness for number of exploration (default: 0.0)')
+    parser.add_argument(
+        '--criterion', type=str, default='lcb', choices=['lcb', 'visits'],
+        help='Criterion for candidate prioritization (default: lcb)')
+    parser.add_argument(
+        '--rule', type=str, default='ch', choices=['ch', 'jp', 'com'], help='Rule (default: ch)')
     parser.add_argument(
         '--boardsize', type=int, default=DEFAULT_SIZE, help=f'Board size (default: {DEFAULT_SIZE})')
     parser.add_argument(
@@ -28,7 +37,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         '--superko', default=False, action='store_true', help='Use superko rule')
     parser.add_argument(
-        '--timelimit', type=float, default=10, help='Timelimit (sec) (default: 10 sec)')
+        '--eval-leaf-only', default=False, action='store_true', help='Evaluate leaf nodes only')
+    parser.add_argument(
+        '--timelimit', type=float, default=120, help='Timelimit (sec) (default: 120 sec)')
     parser.add_argument(
         '--ponder', default=False, action='store_true', help='Use pondering')
     parser.add_argument(
@@ -38,19 +49,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         '--min-turn', type=int, default=100, help='Minimum number of resign turns (default: 100)')
     parser.add_argument(
-        '--initial-turn', type=int, default=0, help='Number of turns to move randomly (default: 0)')
+        '--initial-turn', type=int, default=4, help='Number of turns to move randomly (default: 4)')
     parser.add_argument(
-        '--client-name', type=str, default=NAME, help='Client name (default: {NAME})')
+        '--client-name', type=str, default=NAME, help=f'Client name (default: {NAME})')
     parser.add_argument(
         '--client-version', type=str, default=VERSION, help=f'Client version (default: {VERSION})')
     parser.add_argument(
-        '--threads', type=int, default=16, help='Number of threads')
+        '--threads', type=int, default=16, help='Number of threads (default: 16)')
     parser.add_argument(
-        '--display', type=str, default=None, help='Command to display board')
+        '--display', type=str, default=None, help='Command to display board (default: None)')
     parser.add_argument(
-        '--sgf', type=str, default=None, help='SGF file to load')
+        '--sgf', type=str, default=None, help='SGF file to load (default: None)')
     parser.add_argument(
-        '--batch-size', type=int, default=2048, help='Batch size')
+        '--batch-size', type=int, default=2048, help='Batch size (default: 2048)')
     parser.add_argument(
         '--gpus', type=lambda x: list(map(int, x.split(','))), default=None,
         help='GPU IDs (comma-separated) (default: all available GPUs)')
@@ -68,16 +79,16 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
 
-    # ログ出力を設定する
+    # Set up log output
     start_logging(debug=args.verbose, console=sys.stderr)
 
-    # GPUに関する設定を行う
+    # Configure GPU settings
     if torch.cuda.device_count() != 0:
         torch.backends.cudnn.enabled = True
         torch.backends.cudnn.benchmark = True
         torch.backends.cudnn.deterministic = False
 
-    # ゲームルールを確認する
+    # Check game rules
     if args.rule == 'ch':
         rule = RULE_CH
     elif args.rule == 'jp':
@@ -87,19 +98,24 @@ def main() -> None:
     else:
         raise ValueError(f'Invalid rule: {args.rule}')
 
-    # 推論オブジェクトを作成する
+    # Create inference object
     processor = Processor(args.model, args.gpus, args.batch_size, args.fp16)
 
-    # GPTオブジェクトを作成する
+    # Create GPT object
     engine = GTPEngine(
         processor=processor,
         threads=args.threads,
         visits=args.visits,
+        playouts=args.playouts,
         use_ucb1=(args.search == 'ucb1'),
+        temperature=args.temperature,
+        randomness=args.randomness,
+        criterion=args.criterion,
         rule=rule,
         boardsize=args.boardsize,
         komi=args.komi,
         superko=args.superko,
+        eval_leaf_only=args.eval_leaf_only,
         timelimit=args.timelimit,
         ponder=args.ponder,
         resign_threshold=args.resign,
@@ -111,11 +127,11 @@ def main() -> None:
         display=args.display,
     )
 
-    # sgfファイルが指定されていれば読み込む
+    # Load sgf file if specified
     if args.sgf is not None:
         engine.load(args.sgf)
 
-    # ゲームを実行する
+    # Run the game
     engine.run()
 
 

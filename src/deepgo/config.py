@@ -1,66 +1,66 @@
 ################################################################
-# 全体の設定
+# Global settings
 ################################################################
-# プログラム名
+# Program name
 NAME = 'Maru'
-# バージョン番号
-VERSION = '8.0'
+# Version number
+VERSION = '8.1'
 
 ################################################################
-# 碁盤の設定
+# Board settings
 ################################################################
-# 黒石の値(変更不可)
+# Value for black stone (do not change)
 BLACK = 1
-# 白石の値(変更不可)
+# Value for white stone (do not change)
 WHITE = -1
-# 空白の値(変更不可)
+# Value for empty (do not change)
 EMPTY = 0
-# 盤面の端の値(変更不可)
+# Value for board edge (do not change)
 EDGE = 9
-# パスを意味する座標(変更不可)
+# Coordinates meaning pass (do not change)
 PASS = (-1, -1)
 
 ################################################################
-# ルールの設定値
+# Rule settings
 ################################################################
-# 中国ルール
+# Chinese rule
 RULE_CH = 0
-# 日本ルール
+# Japanese rule
 RULE_JP = 1
-# コンピュータ対戦ルール
+# Computer match rule
 RULE_COM = 2
 
 ################################################################
-# モデルの設定値
+# Model settings
 ################################################################
-# モデルに入力する盤面特徴量の大きさ(盤面の大きさ)
+# Board feature size for model input (board size)
 MODEL_SIZE = 19
-# モデルに入力する盤面特徴量の数
+# Number of board features for model input
 MODEL_FEATURES = 32
-# モデルに入力するゲーム特徴量の数
+# Number of game features for model input
 MODEL_INFOS = 7
-# モデルが出力する盤面予測値の数
+# Number of board predictions output by model
 MODEL_PREDICTIONS = 6
-# モデルが出力するゲーム予測値の数
+# Number of game predictions output by model
 MODEL_VALUES = 3
 
-# モデルに入力するデータの大きさ
+# Size of data input to model
 MODEL_INPUT_SIZE = (MODEL_FEATURES + 1) * MODEL_SIZE * MODEL_SIZE + MODEL_INFOS
-# モデルが出力するデータの大きさ
+# Size of data output by model
 MODEL_OUTPUT_SIZE = MODEL_PREDICTIONS * MODEL_SIZE * MODEL_SIZE + MODEL_VALUES
 
 ################################################################
-# デフォルト設定
+# Default settings
 ################################################################
-# デフォルトの碁盤の大きさ
+# Default board size
 DEFAULT_SIZE = 19
-# デフォルトのコミの数
+# Default komi value
 DEFAULT_KOMI = 7.5
 
 ################################################################
-# ロギングの設定
+# Logging settings
 ################################################################
-# ログの形式
+# Log format
 LOGGING_FORMAT = '%(asctime)s [%(levelname)-5.5s] %(message)s (%(module)s.%(funcName)s:%(lineno)s)'
-# 時刻表示の形式
+# Date format for log timestamps
 LOGGING_DATE_FORMAT = '%Y-%m-%d %H:%M:%S'

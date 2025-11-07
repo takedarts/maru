@@ -3,13 +3,13 @@
 namespace deepgo {
 
 /**
- * ノードオブジェクトの管理クラスを作成する。
- * @param processor 推論を実行するオブジェクト
- * @param width 盤面の幅
- * @param height 盤面の高さ
- * @param komi コミの目数
- * @param rule 勝敗判定ルール
- * @param superko スーパーコウルールを適用するならtrue
+ * Create a class to manage node objects.
+ * @param processor Object to execute inference
+ * @param width Board width
+ * @param height Board height
+ * @param komi Komi points
+ * @param rule Rule for determining the winner
+ * @param superko True to apply superko rule
  */
 NodeManager::NodeManager(
     Processor* processor, int32_t width, int32_t height,
@@ -22,43 +22,15 @@ NodeManager::NodeManager(
 }
 
 /**
- * 初期ノードとして使用できるノードオブジェクトを作成する。
- * 必ず新しいノードオブジェクトを作成する。
- * @return 初期ノードオブジェクト
- */
-Node* NodeManager::createInitNode() {
-  std::lock_guard<std::mutex> lock(_mutex);
-
-  // ノードオブジェクトを作成する
-  _nodes.emplace_back(std::make_unique<Node>(
-      this,
-      _parameter.getProcessor(),
-      _parameter.getWidth(),
-      _parameter.getHeight(),
-      _parameter.getKomi(),
-      _parameter.getRule(),
-      _parameter.getSuperko()));
-
-  // ノードオブジェクトのポインタを取得する
-  Node* node = _nodes.back().get();
-
-  // 使用中のノードオブジェクトとして登録する
-  _usedNodes.insert(node);
-
-  // ノードオブジェクトを返す
-  return node;
-}
-
-/**
- * ノードオブジェクトを作成する。
- * 未使用のノードオブジェクトがあればそれを返し、なければ新規作成する。
- * @return ノードオブジェクト
+ * Create a node object.
+ * If there is an unused node object, return it; otherwise, create a new one.
+ * @return Node object
  */
 Node* NodeManager::createNode() {
   std::lock_guard<std::mutex> lock(_mutex);
 
-  // ノードオブジェクトを作成する
-  // 未使用のノードオブジェクトがあればそれを利用する
+  // Create a node object
+  // Use an unused node object if available
   Node* node;
 
   if (_poolNodes.empty()) {
@@ -76,34 +48,33 @@ Node* NodeManager::createNode() {
     _poolNodes.pop_back();
   }
 
-  // 使用中のノードオブジェクトとして登録する
+  // Register as a node object in use
   _usedNodes.insert(node);
 
-  // ノードオブジェクトを返す
+  // Return the node object
   return node;
 }
 
 /**
- * ノードオブジェクトを未使用状態にする。
- * @param node ノードオブジェクト
+ * Set the node object to unused state.
+ * @param node Node object
  */
 void NodeManager::releaseNode(Node* node) {
   std::lock_guard<std::mutex> lock(_mutex);
 
-  // 登録済みのノードオブジェクトでないなら何もしない
+  // Do nothing if not a registered node object
   if (_usedNodes.find(node) == _usedNodes.end()) {
     return;
   }
 
-  // ノードオブジェクトをリセットして未使用状態にする
-  node->reset();
+  // Reset the node object and set to unused state
   _usedNodes.erase(node);
   _poolNodes.push_back(node);
 }
 
 /**
- * このノード管理オブジェクトのの情報を出力する。
- * @param os 出力先
+ * Output the information of this node manager object.
+ * @param os Output destination
  */
 void NodeManager::print(std::ostream& os) {
   os << "NodeManager: nodes=" << _nodes.size();
@@ -111,4 +82,4 @@ void NodeManager::print(std::ostream& os) {
   os << std::endl;
 }
 
-} // namespace deepgo
+}  // namespace deepgo

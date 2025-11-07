@@ -23,14 +23,14 @@ LOGGER = logging.getLogger(__name__)
 
 
 def gtp_string_to_position(s: str, width: int, height: int) -> Tuple[int, int] | None:
-    '''GTPの文字列表現を座標値に変換する
-    パスの場合は(-1, -1)を返し、投了の場合はNoneを返す。
+    '''Convert GTP string representation to coordinate values.
+    Returns (-1, -1) for pass, and None for resign.
     Args:
-        s (str): GTPの文字列表現
-        width (int): 盤面の幅
-        height (int): 盤面の高さ
+        s (str): GTP string representation
+        width (int): Board width
+        height (int): Board height
     Returns:
-        Tuple[int, int]: 座標値
+        Tuple[int, int]: Coordinate values
     '''
     if s.lower() == 'pass':
         return PASS
@@ -51,11 +51,11 @@ def gtp_string_to_position(s: str, width: int, height: int) -> Tuple[int, int] |
 
 
 def gtp_string_to_color(s: str) -> int | None:
-    '''文字列表現を石の色に変換する
+    '''Convert string representation to stone color.
     Args:
-        s (str): 文字列表現
+        s (str): String representation
     Returns:
-        int | None: 石の色
+        int | None: Stone color
     '''
     s = s.lower().strip()
 
@@ -68,13 +68,13 @@ def gtp_string_to_color(s: str) -> int | None:
 
 
 def gtp_position_to_string(p: Tuple[int, int] | None, width: int, height: int) -> str:
-    '''座標値をGTPの文字列表現に変換する
+    '''Convert coordinate values to GTP string representation.
     Args:
-        p (Tuple[int, int] | None): 座標値
-        width (int): 盤面の幅
-        height (int): 盤面の高さ
+        p (Tuple[int, int] | None): Coordinate values
+        width (int): Board width
+        height (int): Board height
     Returns:
-        str: GTPの文字列表現
+        str: GTP string representation
     '''
     if p is None:
         return 'resign'
@@ -92,11 +92,11 @@ def gtp_position_to_string(p: Tuple[int, int] | None, width: int, height: int) -
 
 
 def gtp_color_to_string(c: int) -> str:
-    '''石の色を文字列表現に変換する
+    '''Convert stone color to string representation.
     Args:
-        c (int): 石の色
+        c (int): Stone color
     Returns:
-        str: 文字列表現
+        str: String representation
     '''
     if c == BLACK:
         return 'black'
@@ -107,11 +107,11 @@ def gtp_color_to_string(c: int) -> str:
 
 
 def gtp_args_to_color(args: List[str]) -> int | None:
-    '''引数リストから色を取得する
+    '''Get color from argument list.
     Args:
-        args (List[str]): 引数リスト
+        args (List[str]): Argument list
     Returns:
-        int | None: 石の色
+        int | None: Stone color
     '''
     for arg in args:
         color = gtp_string_to_color(arg)
@@ -128,14 +128,14 @@ def lz_candidate_to_string(
     width: int,
     height: int
 ) -> str:
-    '''候補手をLeelaZeroの文字列表現に変換する
+    '''Convert candidate move to LeelaZero string representation.
     Args:
-        order (int): 優先順位
-        candidate (Candidate): 候補手
-        width (int): 盤面の幅
-        height (int): 盤面の高さ
+        order (int): Priority
+        candidate (Candidate): Candidate move
+        width (int): Board width
+        height (int): Board height
     Returns:
-        str: LeelaZeroの文字列表現
+        str: LeelaZero string representation
     '''
     candidate_text = (
         f'info move {gtp_position_to_string(candidate.pos, width, height)}'
@@ -160,15 +160,15 @@ def lz_candidates_to_string(
     width: int,
     height: int,
 ) -> str:
-    '''候補手の一覧をLeelaZeroの文字列表現に変換する
+    '''Convert list of candidate moves to LeelaZero string representation.
     Args:
-        candidates (List[Candidate]): 候補手の一覧
-        territories (np.ndarray): 領域のデータ（ここでは使用しない）
-        score (float): 予想目数差
-        width (int): 盤面の幅
-        height (int): 盤面の高さ
+        candidates (List[Candidate]): List of candidate moves
+        territories (np.ndarray): Territory data (not used here)
+        score (float): Predicted score difference
+        width (int): Board width
+        height (int): Board height
     Returns:
-        str: LeelaZeroの文字列表現
+        str: LeelaZero string representation
     '''
     return ' '.join(
         lz_candidate_to_string(o, c, width, height) for o, c in enumerate(candidates))
@@ -180,14 +180,14 @@ def kata_candidate_to_string(
     width: int,
     height: int
 ) -> str:
-    '''候補手をKataGoの文字列表現に変換する
+    '''Convert candidate move to KataGo string representation.
     Args:
-        order (int): 優先順位
-        candidate (Candidate): 候補手
-        width (int): 盤面の幅
-        height (int): 盤面の高さ
+        order (int): Priority
+        candidate (Candidate): Candidate move
+        width (int): Board width
+        height (int): Board height
     Returns:
-        str: KataGoの文字列表現
+        str: KataGo string representation
     '''
     candidate_text = (
         f'info move {gtp_position_to_string(candidate.pos, width, height)}'
@@ -212,27 +212,27 @@ def kata_candidates_to_string(
     width: int,
     height: int
 ) -> str:
-    '''候補手の一覧をKataGoの文字列表現に変換する
+    '''Convert list of candidate moves to KataGo string representation.
     Args:
-        candidates (List[Candidate]): 候補手の一覧
-        territories (np.ndarray): 領域のデータ
-        score (float): 予想目数差
-        width (int): 盤面の幅
-        height (int): 盤面の高さ
+        candidates (List[Candidate]): List of candidate moves
+        territories (np.ndarray): Territory data
+        score (float): Predicted score difference
+        width (int): Board width
+        height (int): Board height
     Returns:
-        str: KataGoの文字列表現
+        str: KataGo string representation
     '''
-    # 候補手の文字列を作成する
+    # Create candidate move string
     candidates_text = ' '.join(
         kata_candidate_to_string(o, c, width, height) for o, c in enumerate(candidates))
 
-    # rootInfoの文字列を作成する
+    # Create rootInfo string
     win_chance = candidates[0].win_chance
     visits = sum(c.visits for c in candidates)
     score = score if candidates[0].color == BLACK else -score
     root_text = (f'rootInfo winrate {win_chance:.4f} visits {visits} scoreLead {score:.1f}')
 
-    # 領域の文字列を作成する
+    # Create territory string
     def territory_to_string(t: np.ndarray) -> str:
         v = max(float(t[2] - t[1]), 0) - max(float(t[0] - t[1]), 0)
         return f'{v:.2f}' if candidates[0].color == BLACK else f'{-v:.2f}'
@@ -251,25 +251,25 @@ def cgos_candidates_to_string(
     width: int,
     height: int
 ) -> str:
-    '''候補手の一覧をCGOSの文字列表現に変換する
+    '''Convert list of candidate moves to CGOS string representation.
     Args:
-        candidates (List[Candidate]): 候補手の一覧
-        territories (np.ndarray): 領域のデータ
-        score (float): 予想目数差
-        width (int): 盤面の幅
-        height (int): 盤面の高さ
+        candidates (List[Candidate]): List of candidate moves
+        territories (np.ndarray): Territory data
+        score (float): Predicted score difference
+        width (int): Board width
+        height (int): Board height
     Returns:
-        str: CGOSの文字列表現
+        str: CGOS string representation
     '''
-    # 候補手のデータを格納する変数
+    # Variable to store candidate move data
     root_values: Dict[str, Any] = {}
 
-    # rootInfoの値を設定する
+    # Set rootInfo values
     root_values['winrate'] = candidates[0].win_chance
     root_values['score'] = score if candidates[0].color == BLACK else -score
     root_values['visits'] = sum(c.visits for c in candidates)
 
-    # 候補手の文字列を作成する
+    # Create candidate move string
     move_values: List[Dict[str, Any]] = []
 
     for candidate in candidates:
@@ -286,7 +286,7 @@ def cgos_candidates_to_string(
 
     root_values['moves'] = move_values
 
-    # 領域の値を設定する
+    # Set territory values
     def territory_to_string(t: np.ndarray) -> str:
         c = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+'
         v = max(float(t[2] - t[1]), 0) - max(float(t[0] - t[1]), 0)
@@ -300,40 +300,40 @@ def cgos_candidates_to_string(
 
 
 class Display(object):
-    '''盤面を表示するクラス。'''
+    '''Class for displaying the board.'''
 
     def __init__(self, cmd: str) -> None:
-        '''盤面表示オブジェクトを初期化する。
+        '''Initialize board display object.
         Args:
-            cmd (str): 盤面表示アプリケーションを実行するコマンド
+            cmd (str): Command to run board display application
         '''
         self._pipe = subprocess.Popen(
             cmd.split(), stdin=subprocess.PIPE, stdout=subprocess.PIPE)
         self.send('clear_board')
 
     def wait(self) -> None:
-        '''表示処理が終了するまで待機する。'''
+        '''Wait until display process finishes.'''
         self._pipe.wait()
 
     def close(self) -> None:
-        '''表示処理を終了する。'''
+        '''Terminate display process.'''
         self._pipe.terminate()
 
     def play(self, pos: Tuple[int, int], color: int) -> None:
-        '''盤面に石を表示する。
+        '''Display a stone on the board.
         Args:
-            pos (Tuple[int, int]): 石を置く座標
-            color (int): 置く石の色
+            pos (Tuple[int, int]): Coordinates to place the stone
+            color (int): Color of the stone to place
         '''
         pos_str = gtp_position_to_string(pos, 19, 19)
         color_str = 'b' if color == BLACK else 'w'
 
-        self.send(f'play {pos_str} {color_str}')
+        self.send(f'play {color_str} {pos_str}')
 
     def send(self, message: str) -> None:
-        '''表示命令を送信する。
+        '''Send display command.
         Args:
-            message (str): 表示命令
+            message (str): Display command
         '''
         assert self._pipe.stdin is not None
         assert self._pipe.stdout is not None
@@ -362,18 +362,23 @@ class Display(object):
 
 
 class GTPEngine(object):
-    '''GTPエンジンとして囲碁AIを実行するためのクラス'''
+    '''Class for running Go AI as a GTP engine.'''
 
     def __init__(
         self,
         processor: Processor,
         threads: int,
         visits: int,
-        use_ucb1: bool,
+        playouts: int = 0,
+        use_ucb1: bool = False,
+        temperature: float = 1.0,
+        randomness: float = 0.0,
+        criterion: str = 'lcb',
         rule: int = RULE_CH,
         boardsize: int = DEFAULT_SIZE,
         komi: float = DEFAULT_KOMI,
         superko: bool = False,
+        eval_leaf_only: bool = False,
         timelimit: float = 10,
         ponder: bool = False,
         resign_threshold: float = 0.0,
@@ -386,26 +391,31 @@ class GTPEngine(object):
         writer: TextIO = sys.stdout,
         display: str | None = None,
     ):
-        '''GTPエンジンを作成する。
+        '''Create a GTP engine.
         Args:
-            processor (Processor): 推論実行オブジェクト
-            threads (int): 使用するスレッドの数
-            visits (int): 訪問数の目標値
-            use_ucb1 (bool): UCB1を使用するならTrue、PUCBを使用するならFalse
-            rule (int): ゲームルール
-            komi: float: コミの値
-            superko (bool): スーパーコウルールを適用するならTrue
-            timelimit (float): 思考時間の上限
-            ponder (bool): 相手の思考中に解析を継続するならTrue
-            resign_threshold (float): 投了するときの勝率
-            resign_score (float): 投了するときの目数差
-            resign_turn (int): 投了するまでの最低ターン数
-            initial_turn (int): ランダム着手する初期ターン数
-            client_name (str): クライアントの表示名
-            client_version (str): クライアントの表示バージョン
-            reader (TextIO): 命令を入力するストリーム
-            writer (TextIO): 結果を出力するストリーム
-            display (str | None): 表示コマンド
+            processor (Processor): Inference execution object
+            threads (int): Number of threads to use
+            visits (int): Target number of visits
+            playouts (int): Target number of playouts
+            use_ucb1 (bool): True to use UCB1, False to use PUCB
+            criterion (str): Candidate move priority criterion ('lcb' or 'visits')
+            temperature (float): Search temperature parameter
+            randomness (float): Randomness of search visits
+            rule (int): Game rule
+            komi: float: Komi value
+            superko (bool): True to apply superko rule
+            eval_leaf_only (bool): True to evaluate only leaf nodes
+            timelimit (float): Maximum thinking time
+            ponder (bool): True to continue analysis during opponent's turn
+            resign_threshold (float): Win rate for resignation
+            resign_score (float): Score difference for resignation
+            resign_turn (int): Minimum number of turns before resignation
+            initial_turn (int): Number of initial random moves
+            client_name (str): Client display name
+            client_version (str): Client display version
+            reader (TextIO): Stream to input commands
+            writer (TextIO): Stream to output results
+            display (str | None): Display command
         '''
         self.processor = processor
         self.threads = threads
@@ -413,12 +423,17 @@ class GTPEngine(object):
         self.moves: List[Tuple[Tuple[int, int], int]] = []
 
         self.visits = visits
+        self.playouts = playouts
         self.use_ucb1 = use_ucb1
+        self.temperature = temperature
+        self.randomness = randomness
+        self.criterion = criterion
 
+        self.rule = rule
         self.size = boardsize
         self.komi = komi
-        self.rule = rule
         self.superko = superko
+        self.eval_leaf_only = eval_leaf_only
         self.timelimit = timelimit
         self.ponder = ponder
         self.remain_times = [-1, -1]
@@ -441,9 +456,9 @@ class GTPEngine(object):
         self.terminated = False
 
     def load(self, path: str | Path) -> None:
-        '''SGFファイルを読み込む。
+        '''Load SGF file.
         Args:
-            sgf (str | Path): SGFファイルのパス
+            sgf (str | Path): Path to SGF file
         '''
         record = Record(path)
         board_size = int(record.properties.get('sz', str(DEFAULT_SIZE)))
@@ -463,47 +478,47 @@ class GTPEngine(object):
             self._perform_command_play([gto_color, gtp_pos])
 
     def run(self) -> None:
-        '''GTPモードでエンジンを実行する。'''
+        '''Run the engine in GTP mode.'''
         regex = re.compile(r'^(\d+)\s+(.*)$')
 
         while not self.reader.closed and not self.writer.closed:
             try:
-                # コマンドを読み込む
+                # Read command
                 command = self.reader.readline()
 
-                # 文字がない（読み込むデータが存在しない）場合は終了する
+                # If no characters (no data to read), exit
                 if len(command) == 0:
                     break
 
-                # 改行文字を削除する
+                # Remove newline characters
                 command = command.strip()
 
-                # 空文字列だった場合は読み込みを継続する
+                # If empty string, continue reading
                 if len(command) == 0:
                     continue
 
-                # 実行中のスレッドがあれば終了する
+                # If a thread is running, terminate it
                 if self.thread is not None:
                     self.terminated = True
                     self.thread.join()
 
-                # ログを出力する
+                # Output log
                 LOGGER.debug('GTP command: %s', command)
 
-                # コマンドを解析する
+                # Parse command
                 number = ''
 
                 if match := regex.match(command):
                     number = match.group(1).strip()
                     command = match.group(2).strip()
 
-                # 終了命令ならループを抜ける
+                # If quit command, exit loop
                 if command.lower().startswith('quit'):
                     self.thread = None
-                    self.writer.write(f'={number}\n')
+                    self.writer.write(f'={number}\n\n')
                     break
 
-                # 別スレッドでコマンドを実行する
+                # Execute command in a separate thread
                 self.terminated = False
                 self.thread = Thread(target=self._perform, args=(number, command))
                 self.thread.start()
@@ -523,13 +538,14 @@ class GTPEngine(object):
             return max(min(self.timelimit, (remain_time - 20) * 0.02), 0)
 
     def _create_player(self) -> Player:
-        '''プレイヤオブジェクトを作成する
+        '''Create player object
         Returns:
-            Player: プレイヤオブジェクト
+            Player: Player object
         '''
         LOGGER.debug(
-            'Create player: width=%d, height=%d, komi=%.1f, rule=%d, superko=%s',
-            self.size, self.size, self.komi, self.rule, self.superko)
+            'Create player: '
+            'width=%d, height=%d, komi=%.1f, rule=%d, superko=%s, eval_leaf_only=%s',
+            self.size, self.size, self.komi, self.rule, self.superko, self.eval_leaf_only)
 
         return Player(
             processor=self.processor,
@@ -538,88 +554,105 @@ class GTPEngine(object):
             height=self.size,
             komi=self.komi,
             rule=self.rule,
-            superko=self.superko)
+            superko=self.superko,
+            eval_leaf_only=self.eval_leaf_only
+        )
 
     def _random_move(self, color: int) -> Candidate:
-        '''Policyに基づいてランダムに着手する。
+        '''Make a random move based on policy.
         Args:
-            color (int): 着手する色
+            color (int): Color to play
         Returns:
-            Candidate: 候補手
+            Candidate: Candidate move
         '''
-        # プレイヤオブジェクトがない場合は作成する
+        # Create player object if not present
         if self.player is None:
             self.player = self._create_player()
 
-        # 着手する色をあわせる
+        # Match the color to play
         if self.player.get_color() != color:
             self.player.play(PASS)
 
-        # 候補手を取得する
+        # Get candidate move
         LOGGER.debug('Random: color=%s', gtp_color_to_string(color))
         candiate = self.player.get_random()
 
-        # 候補手を返す
+        # Return candidate move
         return candiate
 
     def _evaluate(
         self,
         color: int,
         visits: int | None = None,
+        playouts: int | None = None,
         timelimit: float | None = None,
     ) -> List[Candidate]:
-        '''盤面の評価を実行する。
+        '''Evaluate the board.
         Args:
-            color (int): 着手する色
-            visits (int | None): 訪問数の目標値
-            timelimit (float | None): 思考時間の上限
+            color (int): Color to play
+            visits (int | None): Target number of visits
+            playouts (int | None): Target number of playouts
+            timelimit (float | None): Maximum thinking time
         Returns:
-            List[Candidate]: 候補手の一覧
+            List[Candidate]: List of candidate moves
         '''
-        # プレイヤオブジェクトがない場合は作成する
+        # Create player object if not present
         if self.player is None:
             self.player = self._create_player()
 
-        # 着手する色をあわせる
+        # Match the color to play
         if self.player.get_color() != color:
             self.player.play(PASS)
 
-        # 訪問数と思考時間を設定する
+        # Set number of visits
         if visits is None:
-            visits = self.visits
+            rand = (1 - self.randomness / 2) + (np.random.rand() * self.randomness)
+            visits = max(int(self.visits * rand), 1)
 
+        # Set number of playouts
+        if playouts is None:
+            rand = (1 - self.randomness / 2) + (np.random.rand() * self.randomness)
+            playouts = max(int(self.playouts * rand), 0)
+
+        # Set thinking time
         if timelimit is None:
             timelimit = self._get_timelimit(color)
 
-        # 盤面を評価する
+        # Evaluate the board
         LOGGER.debug(
-            'Evaluate: color=%s, visits=%d, timelimit=%.1f',
-            gtp_color_to_string(color), visits, timelimit)
+            'Evaluate: color=%s, visits=%d, playouts=%d, timelimit=%.1f',
+            gtp_color_to_string(color), visits, playouts, timelimit)
 
         candidates = self.player.evaluate(
             visits=visits,
+            playouts=playouts,
             use_ucb1=self.use_ucb1,
-            timelimit=timelimit)
+            timelimit=timelimit,
+            temperature=self.temperature,
+            criterion=self.criterion,
+            ponder=self.ponder)
 
-        # 候補手の一覧を返す
+        # Return list of candidate moves
         return candidates
 
     def _get_move(
         self,
         candidate: Candidate,
     ) -> Tuple[Tuple[int, int] | None, float, np.ndarray]:
-        '''着手座標を取得する。
-        投了の場合は座標としてNoneを返す。
+        '''Get move coordinates.
+        Returns None as coordinates in case of resignation.
         Args:
-            candidate (Candidate): 候補手
+            candidate (Candidate): Candidate move
         Returns:
-            Tuple[int, int]: 着手座標, 予想目数差, 予想領域
+            Tuple[int, int]: Move coordinates, predicted score difference, predicted territory
         '''
         # playerオブジェクトを確認する
+        # Check player object
         if self.player is None:
             raise GoException('Game has not started yet')
 
         # 着手した後の予想領域を取得する
+        # Get predicted territory after move
         board = self.player.get_board()
         territories = self.player.get_territories(
             pos=candidate.pos, color=candidate.color, raw=True)
@@ -627,13 +660,13 @@ class GTPEngine(object):
         score += (board.get_colors() * territories[1]).sum()
         score -= self.komi
 
-        # 日本ルールですべての境界領域に着手している場合はパスを検討する
-        # パスしたときの予測目数差と着手時の予測目数差に変化がない場合はパスする
-        # ただし、それまでにパスが存在している場合は境界領域の確認は行わない
+        # In Japanese rule, consider passing if all boundary territories have been fixed
+        # If predicted score difference does not change between passing and playing, pass
+        # However, if a pass has already occurred, do not check boundary territories
         if self.rule == RULE_JP:
             boundary_fixed = True
 
-            # それまでの着手にパスが存在しない場合、すべての境界領域が確定しているかを確認する
+            # If no pass has occurred, check if all boundary territories are fixed
             if PASS not in [m[0] for m in self.moves]:
                 owners = territories.argmax(axis=0) - 1
                 colors = board.get_colors()
@@ -655,8 +688,9 @@ class GTPEngine(object):
                     if not boundary_fixed:
                         break
 
-            # すべての境界領域が確定している場合はパスした場合の予測目数差を確認する
-            # 予測目数差が閾値(0.8)未満の場合はパスする
+            # If all boundary territories are fixed, check predicted score difference for passing
+            # If predicted score difference is below threshold (0.8), pass
+            # (stop search if pondering)
             if boundary_fixed:
                 pass_territories = self.player.get_territories(
                     pos=PASS, color=candidate.color, raw=True)
@@ -668,37 +702,39 @@ class GTPEngine(object):
                 score_diff = score_diff if candidate.color == BLACK else -score_diff
 
                 if score_diff < 0.8:
+                    self.player.stop_evaluation()
                     return PASS, pass_score, pass_territories
 
-        # 指定ターン未満なら投了しない
+        # Do not resign before specified turn
         if self.player.turn < self.resign_turn:
             return candidate.pos, score, territories
 
-        # 目数差が閾値未満なら投了しない
+        # Do not resign if score difference is below threshold
         if abs(score) < self.resign_score:
             return candidate.pos, score, territories
 
-        # 勝率が閾値未満なら投了する
+        # Resign if win rate is below threshold (stop search if pondering)
         if candidate.win_chance < self.resign_threshold:
+            self.player.stop_evaluation()
             return None, score, territories
 
-        # 投了しない場合は着手座標を返す
+        # If not resigning, return move coordinates
         return candidate.pos, score, territories
 
     def _perform(self, number: str, command: str) -> None:
-        '''命令を実行する。
+        '''Execute command.
         Args:
-            number (str): 命令番号
-            command (str): 命令
+            number (str): Command number
+            command (str): Command
         '''
         first_response = True
 
         while True:
             try:
-                # 処理を実行する
+                # Execute process
                 stat, message, cont = self._perform_command(command)
 
-                # 最初の応答の場合は応答マークを出力する
+                # For the first response, output response mark
                 if first_response:
                     first_response = False
                     mark = '=' if stat else '?'
@@ -706,13 +742,13 @@ class GTPEngine(object):
                 else:
                     header = ''
 
-                # 応答を出力する
+                # Output response
                 response = f'{header}{message}'
                 LOGGER.debug('GTP response: %s', response)
                 self.writer.write(response)
                 self.writer.flush()
 
-                # 実行を継続しない場合は改行を出力してループを抜ける
+                # If not continuing, output newline and exit loop
                 if not cont or self.terminated:
                     self.writer.write('\n\n')
                     self.writer.flush()
@@ -722,11 +758,11 @@ class GTPEngine(object):
                 return
 
     def _perform_command(self, command: str) -> Tuple[bool, str, bool]:
-        '''コマンドを実行する。
+        '''Execute command.
         Args:
-            command (str): コマンド文字列(引数を含む)
+            command (str): Command string (including arguments)
         Returns:
-            Tuple[bool, str, bool]: (成功ならTrue, メッセージ, 実行を継続するならTrue)
+            Tuple[bool, str, bool]: (True if successful, message, True to continue execution)
         '''
         tokens = [s for s in command.split() if len(s) != 0]
         command = tokens[0].lower().replace('-', '_')
@@ -781,6 +817,9 @@ class GTPEngine(object):
         return (True, '', False)
 
     def _perform_command_clear_board(self, args: List[str]) -> Tuple[bool, str, bool]:
+        if self.player is not None:
+            self.player.stop_evaluation()
+
         self.player = None
         self.moves.clear()
 
@@ -796,20 +835,50 @@ class GTPEngine(object):
             return (True, '', False)
 
         if self.player is not None:
-            return (False, 'can not change komi after the game starts', False)
+            self.player.komi = new_komi
 
         self.komi = new_komi
 
         return (True, '', False)
 
-    def _perform_command_play(self, args: List[str]) -> Tuple[bool, str, bool]:
-        '''playコマンドを実行する。
+    def _perform_command_fixed_handicap(self, args: List[str]) -> Tuple[bool, str, bool]:
+        '''Execute fixed_handicap command.
         Args:
-            args (List[str]): 引数リスト
+            args (List[str]): Argument list
         Returns:
-            Tuple[bool, str, bool]: (成功ならTrue, メッセージ, 継続するならTrue)
+            Tuple[bool, str, bool]: (True if successful, message, True to continue)
         '''
-        # 引数を確認する
+        # Check arguments
+        if len(args) < 1:
+            return (False, 'syntax error', False)
+
+        handicap = int(args[0])
+
+        if handicap < 2 or handicap > 9:
+            return (False, 'handicap must be between 2 and 9', False)
+
+        # Create player object if not present
+        if self.player is None:
+            self.player = self._create_player()
+
+        # Set handicap stones
+        self.player.set_handicap(handicap)
+
+        # Return coordinates where handicap stones were placed
+        positions = [
+            gtp_position_to_string(p, self.size, self.size)
+            for p in get_handicap_positions(self.size, self.size, handicap)]
+
+        return (True, ' '.join(positions), False)
+
+    def _perform_command_play(self, args: List[str]) -> Tuple[bool, str, bool]:
+        '''Execute play command.
+        Args:
+            args (List[str]): Argument list
+        Returns:
+            Tuple[bool, str, bool]: (True if successful, message, True to continue)
+        '''
+        # Check arguments
         if len(args) < 2:
             return (False, 'syntax error', False)
 
@@ -823,27 +892,27 @@ class GTPEngine(object):
         if pos is None:
             return (False, 'syntax error', False)
 
-        # プレイヤオブジェクトがない場合は作成する
+        # Create player object if not present
         if self.player is None:
             self.player = self._create_player()
 
-        # パスでない場合は着手できるか座標であることを確認する
+        # If not pass, check if move is legal and position is valid
         if (is_valid_position(pos, self.size, self.size)
                 and not self.player.get_board().is_enabled(pos, color)):
             return (False, 'illegal move', False)
 
-        # 着手を実行する
+        # Execute move
         try:
             self.player.play(pos, color)
             self.moves.append((pos, color))
         except GoException:
             return (False, 'illegal move', False)
 
-        # 表示を更新する
+        # Update display
         if self.display:
             self.display.play(pos, color)
 
-        # ログを出力する
+        # Output log
         if LOGGER.isEnabledFor(logging.DEBUG):
             colors = self.player.get_board().get_colors()
             territories = self.player.get_territories()
@@ -861,7 +930,7 @@ class GTPEngine(object):
             return (False, 'cannot undo', False)
 
         self.moves = self.moves[:-1]
-        self.player.clear()
+        self.player.initialize()
 
         for pos, color in self.moves:
             self.player.play(pos, color)
@@ -873,42 +942,42 @@ class GTPEngine(object):
         args: List[str],
         play: bool = True,
     ) -> Tuple[bool, str, bool]:
-        '''genmoveコマンドを実行する。
+        '''Execute genmove command.
         Args:
-            args (List[str]): 引数リスト
-            play (bool): 着手を実行するならTrue
+            args (List[str]): Argument list
+            play (bool): True to execute move
         Returns:
-            Tuple[bool, str, bool]: (成功ならTrue, メッセージ, 実行を継続するならTrue)
+            Tuple[bool, str, bool]: (True if successful, message, True to continue)
         '''
-        # プレイヤオブジェクトがない場合は作成する
+        # Create player object if not present
         if self.player is None:
             self.player = self._create_player()
 
-        # 色を取得する
+        # Get color
         if (color := gtp_args_to_color(args)) is None:
             color = self.player.get_color()
 
-        # 着手を計算する
+        # Calculate move
         if len(self.moves) < self.initial_turn:
             candidate = self._random_move(color)
         else:
             candidate = self._evaluate(color)[0]
 
-        # 着手座標を取得する
+        # Get move coordinates
         pos, score, territories = self._get_move(candidate)
 
-        # 投了の場合と盤面を進めない場合は着手座標を返す
+        # If resigning or not advancing the board, return response
         if pos is None or not play:
             return (True, gtp_position_to_string(pos, self.size, self.size), False)
 
-        # 盤面を進める
+        # Move to the next board
         self.player.play(pos, color)
         self.moves.append((pos, color))
 
         if self.display:
             self.display.play(pos, color)
 
-        # ログを出力する
+        # Output log
         if LOGGER.isEnabledFor(logging.DEBUG):
             colors = self.player.get_board().get_colors()
             territories = self.player.get_territories()
@@ -917,7 +986,7 @@ class GTPEngine(object):
                 gtp_color_to_string(color), pos, score,
                 get_array_string(colors, territories, pos=pos))
 
-        # 着手座標を表す文字列を返す
+        # Return string representing move coordinates
         return (True, gtp_position_to_string(pos, self.size, self.size), False)
 
     def _perform_command_reg_genmove(self, args: List[str]) -> Tuple[bool, str, bool]:
@@ -930,19 +999,19 @@ class GTPEngine(object):
             [List[Candidate], np.ndarray, float, int, int], str] = lz_candidates_to_string,
         play: bool = True,
     ) -> Tuple[bool, str, bool]:
-        '''genmove_analyzeコマンドを実行する。
+        '''Execute genmove_analyze command.
         Args:
-            args (List[str]): 引数リスト
-            analyze_func (Callable): 解析関数
-            play (bool): 着手を実行するならTrue
+            args (List[str]): Argument list
+            analyze_func (Callable): Analysis function
+            play (bool): True to execute move
         Returns:
-            Tuple[bool, str, bool]: (成功ならTrue, メッセージ, 実行を継続するならTrue)
+            Tuple[bool, str, bool]: (True if successful, message, True to continue)
         '''
-        # プレイヤオブジェクトがない場合は作成する
+        # Create player object if not present
         if self.player is None:
             self.player = self._create_player()
 
-        # 引数を解析する
+        # Parse arguments
         color = self.player.get_color()
         interval = 1.0
 
@@ -954,7 +1023,7 @@ class GTPEngine(object):
             elif arg.isdigit():
                 interval = float(arg) / 100
 
-        # 候補手の一覧を取得する
+        # Get list of candidate moves
         if play:
             if len(self.moves) < self.initial_turn:
                 candidates = [self._random_move(color)]
@@ -963,21 +1032,21 @@ class GTPEngine(object):
         else:
             candidates = self._evaluate(color, visits=100_000, timelimit=interval)
 
-        # 着手座標を作成する
+        # Create move coordinates
         pos, score, territories = self._get_move(candidates[0])
 
-        # パスの場合は最終予想目数を設定する
+        # If pass, set final predicted score
         if pos == PASS:
             score = self.player.get_final_score()
 
-        # 解析結果の文字列を作成する
+        # Create analysis result string
         analyze_line = analyze_func(candidates, territories, score, self.size, self.size)
 
-        # 盤面を進めない場合は解析結果のみを返す
+        # If not advancing the board, return only analysis result
         if not play:
             return (True, f'\n{analyze_line}', True)
 
-        # 投了でない場合は盤面を進める
+        # If not resigning, advance the board
         if pos is not None:
             self.player.play(pos, color)
             self.moves.append((pos, color))
@@ -985,7 +1054,7 @@ class GTPEngine(object):
             if self.display:
                 self.display.play(pos, color)
 
-        # 着手座標を表す文字列を返す
+        # Return string representing move coordinates
         gtp_pos = gtp_position_to_string(pos, self.size, self.size)
 
         return (True, f'\n{analyze_line}\nplay {gtp_pos}', False)

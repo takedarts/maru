@@ -7,51 +7,57 @@
 namespace deepgo {
 
 /**
- * 実行環境で使用できるデバイスを取得する。
- * @param gpu GPU番号
+ * Get the device available in the execution environment.
+ * @param gpu GPU number
  */
 static at::Device getDevice(int32_t gpu) {
-  // GPU番号が負の値ならCPUを使う
+  // Use CPU if GPU number is negative
   if (gpu < 0) {
     return at::Device(at::kCPU);
   }
 
-  // CUDAが使用できる場合はCUDAを使う
+  // Use CUDA if available
   if (torch::cuda::is_available() && gpu < torch::cuda::device_count()) {
     return at::Device(at::kCUDA, gpu);
   }
 
-  // MPSが使用できる場合はMPSを使う
+  // Use MPS if available
   if (torch::mps::is_available() && gpu == 0) {
     return at::Device(at::kMPS);
   }
 
-  // それ以外の場合は例外を投げる
+  // Otherwise, throw an exception
   throw std::runtime_error("Specified GPU device is not available.");
 }
 
+/**
+ * Get the scalar type used in the execution environment.
+ * @param gpu GPU number
+ * @param fp16 True to compute with 16-bit precision
+ * @return Scalar type
+ */
 static at::ScalarType getScalarType(int32_t gpu, bool fp16) {
-  // CUDAを使用して16bit精度で計算する場合はHalfを使う
+  // Use Half if calculating with 16-bit precision using CUDA
   if (torch::cuda::is_available() && gpu >= 0 && fp16) {
     return at::kHalf;
   }
-  // MPSを使用して16bit精度で計算する場合はHalfを使う
+  // Use Half if calculating with 16-bit precision using MPS
   else if (torch::mps::is_available() && gpu == 0 && fp16) {
     return at::kHalf;
   }
-  // それ以外はFloat32を使う
+  // Otherwise, use Float32
   else {
     return at::kFloat;
   }
 }
 
 /**
- * コンストラクタ。
- * GPU番号に-1を指定するとCPUで計算するオブジェクトを生成する。
- * @param filename モデルファル
- * @param gpu GPU番号
- * @param fp16 16bit精度で計算するならTrue
- * @param deterministic 計算結果を再現可能にするならTrue
+ * Constructor.
+ * If GPU number is -1, creates an object that computes on CPU.
+ * @param filename Model file
+ * @param gpu GPU number
+ * @param fp16 True to compute with 16-bit precision
+ * @param deterministic True to make computation results reproducible
  */
 Model::Model(std::string filename, int32_t gpu, bool fp16, bool deterministic)
     : _device(getDevice(gpu)),
@@ -74,10 +80,10 @@ Model::Model(std::string filename, int32_t gpu, bool fp16, bool deterministic)
 }
 
 /**
- * 推論を実行する。
- * @param inputs 入力データ
- * @param outputs 出力データ
- * @param size 評価データの数
+ * Execute inference.
+ * @param inputs Input data
+ * @param outputs Output data
+ * @param size Number of evaluation data
  */
 void Model::forward(float* inputs, float* outputs, uint32_t size) {
   torch::NoGradGuard no_grad;
@@ -94,8 +100,8 @@ void Model::forward(float* inputs, float* outputs, uint32_t size) {
 }
 
 /**
- * GPUを使うならTrueを返す。
- * @return GPUを使うなら1, 使わないなら0
+ * Returns True if using GPU.
+ * @return 1 if using GPU, 0 otherwise
  */
 int32_t Model::isCuda() {
   return _device.is_cuda();
