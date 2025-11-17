@@ -5,7 +5,7 @@ import numpy as np
 
 from .board import (Board, get_color_name, get_handicap_positions,
                     get_opposite_color, is_valid_position)
-from .config import (BLACK, DEFAULT_KOMI, DEFAULT_SIZE, EMPTY, MODEL_SIZE,
+from .config import (BLACK, DEFAULT_KOMI, DEFAULT_MAX_VISITS, DEFAULT_SIZE, EMPTY, MODEL_SIZE,
                      PASS, RULE_CH, RULE_COM, RULE_JP, WHITE)
 from .native import NativePlayer
 from .processor import Processor
@@ -114,6 +114,7 @@ class Player(object):
         rule: int = RULE_CH,
         superko: bool = False,
         eval_leaf_only: bool = False,
+        max_visits: int = DEFAULT_MAX_VISITS,
     ) -> None:
         '''Initialize player object.
         Args:
@@ -125,11 +126,12 @@ class Player(object):
             rule (int): Rule for determining winner
             superko (bool): True to apply superko rule
             eval_leaf_only (bool): True to evaluate only leaf nodes
+            max_visits (int): Maximum number of visits
         '''
         self.native = NativePlayer(
             processor=processor.native, threads=threads,
             width=width, height=height, komi=komi, rule=rule, superko=superko,
-            eval_leaf_only=eval_leaf_only)
+            eval_leaf_only=eval_leaf_only, max_visits=max_visits)
         self.processor = processor
         self.width = width
         self.height = height

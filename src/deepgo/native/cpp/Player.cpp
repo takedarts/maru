@@ -20,11 +20,12 @@ namespace deepgo {
  * @param rule Game rule
  * @param superko True to apply the superko rule
  * @param evalLeafOnly True to evaluate only leaf nodes
+ * @param maxVisits Maximum number of visits
  */
 Player::Player(
     Processor* processor, int32_t threads,
     int32_t width, int32_t height, float komi, int32_t rule, bool superko,
-    bool evalLeafOnly)
+    bool evalLeafOnly, int32_t maxVisits)
     : _mutex(),
       _condition(),
       _nodeManager(processor, width, height, komi, rule, superko),
@@ -32,6 +33,7 @@ Player::Player(
       _thread(),
       _root(_nodeManager.createNode()),
       _evalLeafOnly(evalLeafOnly),
+      _maxVisits(maxVisits),
       _searchVisits(0),
       _searchPlayouts(0),
       _searchEqually(false),
@@ -286,7 +288,11 @@ void Player::_run() {
       _condition.wait(lock, [this]() {
         if (_terminated) {
           return true;
-        } else if (!_stopped && !_paused && _runnings < _threadPool.getSize()) {
+        } else if (
+            !_stopped &&
+            !_paused &&
+            _runnings < _threadPool.getSize() &&
+            _searchVisits < _maxVisits) {
           return true;
         } else {
           return false;

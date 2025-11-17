@@ -34,11 +34,12 @@ class Player {
    * @param rule Rule for determining the winner
    * @param superko True to apply the superko rule
    * @param evalLeafOnly True to evaluate only leaf nodes
+   * @param maxVisits Maximum number of visits
    */
   Player(
       Processor* processor, int32_t threads,
       int32_t width, int32_t height, float komi, int32_t rule, bool superko,
-      bool evalLeafOnly);
+      bool evalLeafOnly, int32_t maxVisits);
 
   /**
    * Destroys the player object.
@@ -145,6 +146,11 @@ class Player {
    * True to evaluate only leaf nodes.
    */
   bool _evalLeafOnly;
+
+  /**
+   * Maximum number of visits.
+   */
+  int32_t _maxVisits;
 
   /**
    * Number of visits to execute.

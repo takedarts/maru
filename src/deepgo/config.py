@@ -56,6 +56,8 @@ MODEL_OUTPUT_SIZE = MODEL_PREDICTIONS * MODEL_SIZE * MODEL_SIZE + MODEL_VALUES
 DEFAULT_SIZE = 19
 # Default komi value
 DEFAULT_KOMI = 7.5
+# Default maximum visits for MCTS
+DEFAULT_MAX_VISITS = 1_000_000
 
 ################################################################
 # Logging settings
