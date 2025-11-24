@@ -1256,14 +1256,8 @@ bool Board::_isSeki(int32_t index, int32_t color) {
     return false;
   }
 
-  // Check liberty coordinates (if 9 or more liberties (8 or more after move), not subject to judgment)
+  // The number of liberties of the group before the move is 9 or more -> NG (not subject to seki judgment)
   std::set<int32_t> spaces;
-
-  for (auto a : AROUNDS) {
-    if (_renIds[index + a] == -1) {
-      spaces.insert(index + a);
-    }
-  }
 
   for (auto id : ren_ids) {
     spaces.insert(_renObjs[id].spaces.begin(), _renObjs[id].spaces.end());
@@ -1271,6 +1265,11 @@ bool Board::_isSeki(int32_t index, int32_t color) {
     if (spaces.size() >= 9) {
       return false;
     }
+  }
+
+  // The number of liberties of the group before the move is 1 -> NG (not subject to seki judgment)
+  if (spaces.size() == 1) {
+    return false;
   }
 
   // Remove own coordinate from liberties
@@ -1354,6 +1353,18 @@ bool Board::_isSekiRen(
     return true;
   }
 
+  // Add opponent groups adjacent to own group to the list
+  for (auto position : positions) {
+    for (auto a : AROUNDS) {
+      int32_t ren_id = _renIds[position + a];
+
+      if (ren_id != -1 &&
+          _renObjs[ren_id].color == op_color) {
+        op_ren_ids.insert(ren_id);
+      }
+    }
+  }
+
   // Create list of liberties of opponent groups adjacent to move point and liberty
   std::set<int32_t> op_spaces;
 
@@ -1362,8 +1373,12 @@ bool Board::_isSekiRen(
         _renObjs[ren_id].spaces.begin(), _renObjs[ren_id].spaces.end());
   }
 
-  // If opponent groups adjacent to move coordinate have liberties other than own liberty -> OK (seki)
-  // If opponent groups adjacent to own liberty have liberties other than own liberty -> OK (seki)
+  // If there is a liberty other than the move coordinate and own liberties
+  // in the opponent's group adjacent to the move coordinate -> OK (seki)
+  // If there is a liberty other than the move coordinate and own liberties
+  // in the opponent's group adjacent to own liberties -> OK (seki)
+  // If there is a liberty other than the move coordinate and own liberties
+  // in the opponent's group adjacent to own group -> OK (seki)
   op_spaces.erase(index);
   op_spaces.erase(spaceIndex);
 
