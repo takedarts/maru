@@ -37,7 +37,7 @@ Player::Player(
       _searchVisits(0),
       _searchPlayouts(0),
       _searchEqually(false),
-      _searchUseUcb1(false),
+      _searchAlgorithm(SEARCH_PUCB),
       _searchWidth(0),
       _searchTemperature(1.0f),
       _searchNoise(0.0f),
@@ -132,7 +132,7 @@ std::vector<Candidate> Player::getPass() {
 
   candidates.emplace_back(
       -1, -1, OPPOSITE(_root->getColor()),
-      0, 0, 1.0f, _root->getValue(),
+      0, 0, 1.0f, _root->getValue(), _root->getMinimax(),
       std::vector<std::pair<int32_t, int32_t>>());
 
   // Resume the thread
@@ -160,7 +160,7 @@ std::vector<Candidate> Player::getRandom(float temperature) {
 
   candidates.emplace_back(
       move.first, move.second, OPPOSITE(_root->getColor()),
-      1, 1, 1.0f, _root->getValue(),
+      1, 1, 1.0f, _root->getValue(), _root->getMinimax(),
       std::vector<std::pair<int32_t, int32_t>>());
 
   // Resume the thread
@@ -173,14 +173,14 @@ std::vector<Candidate> Player::getRandom(float temperature) {
 /**
  * Starts board evaluation.
  * Search processing is executed in a separate thread.
- * @param equally True to make the number of searches equal; false to use UCB1 or PUCB
- * @param useUcb1 True to use UCB1 as the search criterion; false to use PUCB
+ * @param equally True to make the number of searches equal; false to use UCB or PUCB
+ * @param algorithm Search algorithm
  * @param width Search width (if 0, search width is automatically adjusted)
  * @param temperature Temperature parameter for search
  * @param noise Strength of Gumbel noise for search
  */
 void Player::startEvaluation(
-    bool equally, bool useUcb1, int32_t width, float temperature, float noise) {
+    bool equally, int32_t algorithm, int32_t width, float temperature, float noise) {
   std::unique_lock<std::mutex> lock(_mutex);
 
   // Pause the thread
@@ -191,7 +191,7 @@ void Player::startEvaluation(
   _searchVisits = _root->getVisits();
   _searchPlayouts = _root->getPlayouts();
   _searchEqually = equally;
-  _searchUseUcb1 = useUcb1;
+  _searchAlgorithm = algorithm;
   _searchWidth = width;
   _searchTemperature = temperature;
   _searchNoise = noise;
@@ -242,7 +242,8 @@ std::vector<Candidate> Player::getCandidates() {
     candidates.emplace_back(
         node->getX(), node->getY(), node->getColor(),
         node->getVisits(), node->getPlayouts(),
-        node->getPolicy(), node->getValue(), node->getVariations());
+        node->getPolicy(), node->getValue(), node->getMinimax(),
+        node->getVariations());
   }
 
   // If there are no candidate moves, add a move by PolicyNetwork
@@ -251,7 +252,7 @@ std::vector<Candidate> Player::getCandidates() {
 
     candidates.emplace_back(
         move.first, move.second, OPPOSITE(_root->getColor()),
-        1, 1, 1.0f, _root->getValue(),
+        1, 1, 1.0f, _root->getValue(), _root->getMinimax(),
         std::vector<std::pair<int32_t, int32_t>>());
   }
 
@@ -276,6 +277,48 @@ int32_t Player::getColor() {
  */
 std::vector<int32_t> Player::getBoardState() {
   return _root->getBoardState();
+}
+
+/**
+ * Outputs debug information of the search tree.
+ */
+std::string Player::getDebugInfo() {
+  std::unique_lock<std::mutex> lock(_mutex);
+
+  // Pause the thread
+  _paused = true;
+  _condition.wait(lock, [this]() { return _runnings == 0; });
+
+  // Traverse the search tree in depth-first order and create debug information
+  std::vector<std::pair<Node*, std::string>> stack = {{_root, ""}};
+  std::ostringstream output;
+
+  while (!stack.empty()) {
+    Node* current = stack.back().first;
+    std::string prefix = stack.back().second;
+    stack.pop_back();
+
+    output << prefix
+           << "Move: (" << current->getX() << ", " << current->getY() << ") "
+           << "Color: " << current->getColor() << " "
+           << "Visits: " << current->getVisits() << " "
+           << "Playouts: " << current->getPlayouts() << " "
+           << "Value: " << current->getValue() << " "
+           << "Minimax: " << current->getMinimax() << " "
+           << "Policy: " << current->getPolicy()
+           << std::endl;
+
+    std::vector<Node*> children = current->getChildren();
+    for (auto it = children.rbegin(); it != children.rend(); ++it) {
+      stack.emplace_back(*it, prefix + "  ");
+    }
+  }
+
+  // Resume the thread
+  _paused = false;
+  _condition.notify_all();
+
+  return output.str();
 }
 
 /**
@@ -326,21 +369,53 @@ int32_t Player::_evaluate() {
   std::vector<Node*> nodes = {_root};
   bool search_equally = _searchEqually;
   int32_t search_width = _searchWidth;
-  bool search_use_ucb1 = _searchUseUcb1;
+  int32_t search_algorithm = _searchAlgorithm;
   float search_temperature = _searchTemperature;
   float search_noise = _searchNoise;
   int32_t playouts = 0;
 
   while (true) {
     NodeResult result = nodes.back()->evaluate(
-        search_equally, search_width, search_use_ucb1, search_temperature, search_noise);
+        search_equally, search_width, search_algorithm, search_temperature, search_noise);
 
     // Update the evaluation value of the node
+    // If the leaf node is reached (playout count is 1), update the evaluation value
+    // Start updating from the leaf node and update the minimax evaluation value if necessary
     if (result.getPlayouts() == 1) {
-      for (Node* node : nodes) {
-        node->updateValue(result.getValue());
+      bool minimax_update = true;
+
+      for (int32_t i = nodes.size() - 1; i >= 0; i--) {
+        std::vector<Node*> children = nodes[i]->getChildren();
+        int32_t color = OPPOSITE(nodes[i]->getColor());
+        float minimax_value = result.getValue();
+
+        if (!minimax_update) {
+          minimax_value = nodes[i]->getMinimax();
+        } else if (children.size() > 1) {
+          float value = -2.0f;
+
+          for (Node* child : children) {
+            float child_minimax = child->getMinimax() * color;
+
+            if (value < child_minimax) {
+              value = child_minimax;
+            }
+          }
+
+          minimax_value = value * color;
+
+          if (std::fabs(minimax_value - nodes[i]->getMinimax()) < 1e-6) {
+            minimax_update = false;
+          }
+        }
+
+        nodes[i]->updateValue(result.getValue(), minimax_value);
       }
-    } else if (result.getPlayouts() == -1 && _evalLeafOnly) {
+    }
+
+    // If only leaf nodes are evaluated and child nodes are created for a leaf node,
+    // cancel the evaluation value registered in the parent node
+    if (_evalLeafOnly && result.getPlayouts() == -1) {
       for (Node* node : nodes) {
         node->cancelValue(result.getValue());
       }
@@ -363,8 +438,8 @@ int32_t Player::_evaluate() {
 
     // Reset settings that apply only to the root node
     search_equally = 0;
-    search_use_ucb1 = false;
     search_width = 0;
+    search_algorithm = SEARCH_PUCB;
     search_temperature = 1.0f;
     search_noise = 0.0f;
   }

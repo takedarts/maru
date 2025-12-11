@@ -125,6 +125,7 @@ def gtp_args_to_color(args: List[str]) -> int | None:
 def lz_candidate_to_string(
     order: int,
     candidate: Candidate,
+    criterion: str,
     width: int,
     height: int
 ) -> str:
@@ -132,6 +133,7 @@ def lz_candidate_to_string(
     Args:
         order (int): Priority
         candidate (Candidate): Candidate move
+        criterion (str): Criterion ('value', 'minimax', or 'visits')
         width (int): Board width
         height (int): Board height
     Returns:
@@ -140,8 +142,8 @@ def lz_candidate_to_string(
     candidate_text = (
         f'info move {gtp_position_to_string(candidate.pos, width, height)}'
         f' visits {candidate.visits}'
-        f' winrate {int(candidate.win_chance * 10000)}'
-        f' lcb {int(candidate.win_chance_lcb * 10000)}'
+        f' winrate {int(candidate.get_win_chance(criterion) * 10000)}'
+        f' lcb {int(candidate.get_win_chance_lcb(criterion) * 10000)}'
         f' prior {int(candidate.policy * 10000)}'
         f' order {order}')
 
@@ -155,6 +157,7 @@ def lz_candidate_to_string(
 
 def lz_candidates_to_string(
     candidates: List[Candidate],
+    criterion: str,
     territories: np.ndarray,
     score: float,
     width: int,
@@ -163,6 +166,7 @@ def lz_candidates_to_string(
     '''Convert list of candidate moves to LeelaZero string representation.
     Args:
         candidates (List[Candidate]): List of candidate moves
+        criterion (str): Criterion ('value', 'minimax', or 'visits')
         territories (np.ndarray): Territory data (not used here)
         score (float): Predicted score difference
         width (int): Board width
@@ -171,12 +175,14 @@ def lz_candidates_to_string(
         str: LeelaZero string representation
     '''
     return ' '.join(
-        lz_candidate_to_string(o, c, width, height) for o, c in enumerate(candidates))
+        lz_candidate_to_string(o, c, criterion, width, height)
+        for o, c in enumerate(candidates))
 
 
 def kata_candidate_to_string(
     order: int,
     candidate: Candidate,
+    criterion: str,
     width: int,
     height: int
 ) -> str:
@@ -184,6 +190,7 @@ def kata_candidate_to_string(
     Args:
         order (int): Priority
         candidate (Candidate): Candidate move
+        criterion (str): Criterion ('value', 'minimax', or 'visits')
         width (int): Board width
         height (int): Board height
     Returns:
@@ -192,8 +199,8 @@ def kata_candidate_to_string(
     candidate_text = (
         f'info move {gtp_position_to_string(candidate.pos, width, height)}'
         f' visits {candidate.visits}'
-        f' winrate {candidate.win_chance:.4f}'
-        f' lcb {candidate.win_chance_lcb:.4f}'
+        f' winrate {candidate.get_win_chance(criterion):.4f}'
+        f' lcb {candidate.get_win_chance_lcb(criterion):.4f}'
         f' prior {candidate.policy:.4f}'
         f' order {order}')
 
@@ -207,6 +214,7 @@ def kata_candidate_to_string(
 
 def kata_candidates_to_string(
     candidates: List[Candidate],
+    criterion: str,
     territories: np.ndarray,
     score: float,
     width: int,
@@ -215,6 +223,7 @@ def kata_candidates_to_string(
     '''Convert list of candidate moves to KataGo string representation.
     Args:
         candidates (List[Candidate]): List of candidate moves
+        criterion (str): Criterion ('value', 'minimax', or 'visits')
         territories (np.ndarray): Territory data
         score (float): Predicted score difference
         width (int): Board width
@@ -224,10 +233,11 @@ def kata_candidates_to_string(
     '''
     # Create candidate move string
     candidates_text = ' '.join(
-        kata_candidate_to_string(o, c, width, height) for o, c in enumerate(candidates))
+        kata_candidate_to_string(o, c, criterion, width, height)
+        for o, c in enumerate(candidates))
 
     # Create rootInfo string
-    win_chance = candidates[0].win_chance
+    win_chance = candidates[0].get_win_chance(criterion)
     visits = sum(c.visits for c in candidates)
     score = score if candidates[0].color == BLACK else -score
     root_text = (f'rootInfo winrate {win_chance:.4f} visits {visits} scoreLead {score:.1f}')
@@ -246,6 +256,7 @@ def kata_candidates_to_string(
 
 def cgos_candidates_to_string(
     candidates: List[Candidate],
+    criterion: str,
     territories: np.ndarray,
     score: float,
     width: int,
@@ -254,6 +265,7 @@ def cgos_candidates_to_string(
     '''Convert list of candidate moves to CGOS string representation.
     Args:
         candidates (List[Candidate]): List of candidate moves
+        criterion (str): Criterion ('value', 'minimax', or 'visits')
         territories (np.ndarray): Territory data
         score (float): Predicted score difference
         width (int): Board width
@@ -265,7 +277,7 @@ def cgos_candidates_to_string(
     root_values: Dict[str, Any] = {}
 
     # Set rootInfo values
-    root_values['winrate'] = candidates[0].win_chance
+    root_values['winrate'] = candidates[0].get_win_chance(criterion)
     root_values['score'] = score if candidates[0].color == BLACK else -score
     root_values['visits'] = sum(c.visits for c in candidates)
 
@@ -278,7 +290,7 @@ def cgos_candidates_to_string(
 
         move_values.append({
             'move': gtp_position_to_string(candidate.pos, width, height),
-            'winrate': candidate.win_chance,
+            'winrate': candidate.get_win_chance(criterion),
             'prior': candidate.policy,
             'pv': variations,
             'visits': candidate.visits,
@@ -370,10 +382,10 @@ class GTPEngine(object):
         threads: int,
         visits: int,
         playouts: int = 0,
-        use_ucb1: bool = False,
+        algorithm: str = 'pucb',
+        criterion: str = 'value',
         temperature: float = 1.0,
         randomness: float = 0.0,
-        criterion: str = 'lcb',
         rule: int = RULE_CH,
         boardsize: int = DEFAULT_SIZE,
         komi: float = DEFAULT_KOMI,
@@ -397,8 +409,8 @@ class GTPEngine(object):
             threads (int): Number of threads to use
             visits (int): Target number of visits
             playouts (int): Target number of playouts
-            use_ucb1 (bool): True to use UCB1, False to use PUCB
-            criterion (str): Candidate move priority criterion ('lcb' or 'visits')
+            algorithm (str): Search algorithm ('ucb' or 'pucb')
+            criterion (str): Candidate move priority criterion ('value', 'minimax', or 'visits')
             temperature (float): Search temperature parameter
             randomness (float): Randomness of search visits
             rule (int): Game rule
@@ -424,10 +436,10 @@ class GTPEngine(object):
 
         self.visits = visits
         self.playouts = playouts
-        self.use_ucb1 = use_ucb1
+        self.algorithm = algorithm
+        self.criterion = criterion
         self.temperature = temperature
         self.randomness = randomness
-        self.criterion = criterion
 
         self.rule = rule
         self.size = boardsize
@@ -626,10 +638,10 @@ class GTPEngine(object):
         candidates = self.player.evaluate(
             visits=visits,
             playouts=playouts,
-            use_ucb1=self.use_ucb1,
+            algorithm=self.algorithm,
+            criterion=self.criterion,
             timelimit=timelimit,
             temperature=self.temperature,
-            criterion=self.criterion,
             ponder=self.ponder)
 
         # Return list of candidate moves
@@ -714,7 +726,7 @@ class GTPEngine(object):
             return candidate.pos, score, territories
 
         # Resign if win rate is below threshold (stop search if pondering)
-        if candidate.win_chance < self.resign_threshold:
+        if candidate.get_win_chance(self.criterion) < self.resign_threshold:
             self.player.stop_evaluation()
             return None, score, territories
 
@@ -996,7 +1008,7 @@ class GTPEngine(object):
         self,
         args: List[str],
         analyze_func: Callable[
-            [List[Candidate], np.ndarray, float, int, int], str] = lz_candidates_to_string,
+            [List[Candidate], str, np.ndarray, float, int, int], str] = lz_candidates_to_string,
         play: bool = True,
     ) -> Tuple[bool, str, bool]:
         '''Execute genmove_analyze command.
@@ -1040,7 +1052,8 @@ class GTPEngine(object):
             score = self.player.get_final_score()
 
         # Create analysis result string
-        analyze_line = analyze_func(candidates, territories, score, self.size, self.size)
+        analyze_line = analyze_func(
+            candidates, self.criterion, territories, score, self.size, self.size)
 
         # If not advancing the board, return only analysis result
         if not play:

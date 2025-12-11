@@ -29,3 +29,8 @@
 #define MODEL_INPUT_SIZE (${MODEL_INPUT_SIZE})
 // Size of data output by the inference model
 #define MODEL_OUTPUT_SIZE (${MODEL_OUTPUT_SIZE})
+
+// Search algorithm: UCB
+#define SEARCH_UCB (${SEARCH_UCB})
+// Search algorithm: PUCB
+#define SEARCH_PUCB (${SEARCH_PUCB})

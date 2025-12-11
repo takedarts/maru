@@ -19,15 +19,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         '--playouts', type=int, default=0, help='Number of playouts (default: 0)')
     parser.add_argument(
-        '--search', type=str, default='pucb', choices=['ucb1', 'pucb'],
-        help='Criterion for selecting search nodes (default: pucb)')
+        '--search', type=str, default='pucb', choices=['ucb', 'pucb'],
+        help='Calculation method of search (default: pucb)')
+    parser.add_argument(
+        '--criterion', type=str, default='value', choices=['value', 'minimax', 'visits'],
+        help='Criterion for candidate prioritization (default: value)')
     parser.add_argument(
         '--temperature', type=float, default=1.0, help='Temperature for exploration (default: 1.0)')
     parser.add_argument(
         '--randomness', type=float, default=0.0, help='Randomness for number of exploration (default: 0.0)')
-    parser.add_argument(
-        '--criterion', type=str, default='lcb', choices=['lcb', 'visits'],
-        help='Criterion for candidate prioritization (default: lcb)')
     parser.add_argument(
         '--rule', type=str, default='ch', choices=['ch', 'jp', 'com'], help='Rule (default: ch)')
     parser.add_argument(
@@ -107,7 +107,7 @@ def main() -> None:
         threads=args.threads,
         visits=args.visits,
         playouts=args.playouts,
-        use_ucb1=(args.search == 'ucb1'),
+        algorithm=args.search,
         temperature=args.temperature,
         randomness=args.randomness,
         criterion=args.criterion,

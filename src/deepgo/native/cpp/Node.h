@@ -42,19 +42,20 @@ class Node {
    * Evaluate the search node.
    * @param equally True to equalize the number of searches
    * @param width Search width (if 0, width is automatically adjusted)
-   * @param useUcb1 True to use UCB1, false to use PUCB
+   * @param algorithm Search algorithm
    * @param temperature Temperature parameter for search
    * @param noise Strength of Gumbel noise
    * @return Evaluation result
    */
   NodeResult evaluate(
-      bool equally, int32_t width, bool useUcb1, float temperature, float noise);
+      bool equally, int32_t width, int32_t algorithm, float temperature, float noise);
 
   /**
    * Update the evaluation value of the search node.
    * @param value Evaluation value
+   * @param minimax Minimax value
    */
-  void updateValue(float value);
+  void updateValue(float value, float minimax);
 
   /**
    * Cancel the evaluation value of the search node.
@@ -152,10 +153,23 @@ class Node {
   int getCount();
 
   /**
+   * Get the minimax evaluation value of this node.
+   * @return Minimax evaluation value
+   */
+  float getMinimax();
+
+  /**
    * Get the lower bound of the confidence interval for the evaluation value of this node.
    * @return Lower bound of confidence interval
    */
   float getValueLCB();
+
+  /**
+   * Get the priority of this node based on UCB.
+   * @param totalVisits Total number of searches
+   * @return Priority
+   */
+  float getPriorityByUCB(int32_t totalVisits);
 
   /**
    * Get the priority of this node based on PUCB.
@@ -163,13 +177,6 @@ class Node {
    * @return Priority
    */
   float getPriorityByPUCB(int32_t totalVisits);
-
-  /**
-   * Get the priority of this node based on UCB1.
-   * @param totalVisits Total number of searches
-   * @return Priority
-   */
-  float getPriorityByUCB1(int32_t totalVisits);
 
   /**
    * Get the predicted sequence for this node.
@@ -182,12 +189,6 @@ class Node {
    * @return Board state
    */
   std::vector<int32_t> getBoardState();
-
-  /**
-   * Output the information of this node.
-   * @param os Output destination
-   */
-  void print(std::ostream& os = std::cout);
 
  private:
   /**
@@ -279,6 +280,11 @@ class Node {
    * Number of additions to evaluation value.
    */
   int32_t _count;
+
+  /**
+   * Minimax evaluation value.
+   */
+  float _minimax;
 
   /**
    * Execute the evaluation of this node.

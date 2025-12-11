@@ -75,14 +75,14 @@ class Player {
   /**
    * Starts board evaluation.
    * Search processing is executed in a separate thread.
-   * @param equally True to make the number of searches equal; false to use UCB1 or PUCB
-   * @param useUcb1 True to use UCB1 as the search criterion; false to use PUCB
+   * @param equally True to make the number of searches equal; false to use UCB or PUCB
+   * @param algorithm Search algorithm
    * @param width Search width (if 0, search width is automatically adjusted)
    * @param temperature Temperature parameter for search
    * @param noise Strength of Gumbel noise for search
    */
   void startEvaluation(
-      bool equally, bool useUcb1, int32_t width, float temperature, float noise);
+      bool equally, int32_t algorithm, int32_t width, float temperature, float noise);
 
   /**
    * Waits until the specified number of visits and playouts is reached.
@@ -110,6 +110,12 @@ class Player {
    * @return State of the board
    */
   std::vector<int32_t> getBoardState();
+
+  /**
+   * Gets the debug information string of the search tree.
+   * @return Debug information string
+   */
+  std::string getDebugInfo();
 
  private:
   /**
@@ -168,9 +174,9 @@ class Player {
   bool _searchEqually;
 
   /**
-   * True to use UCB1 as the search criterion.
+   * Search algorithm.
    */
-  bool _searchUseUcb1;
+  int32_t _searchAlgorithm;
 
   /**
    * Search width.

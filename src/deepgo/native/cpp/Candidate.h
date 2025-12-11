@@ -19,11 +19,12 @@ class Candidate {
    * @param playouts Number of playouts
    * @param policy Predicted move probability
    * @param value Evaluation value
+   * @param minimax Minimax value
    * @param variations Predicted sequence
    */
   Candidate(
-      int32_t x, int32_t y, int32_t color,
-      int32_t visits, int32_t playouts, float policy, float value,
+      int32_t x, int32_t y, int32_t color, int32_t visits, int32_t playouts,
+      float policy, float value, float minimax,
       std::vector<std::pair<int32_t, int32_t>> variations);
 
   /**
@@ -74,6 +75,12 @@ class Candidate {
   float getValue() const;
 
   /**
+   * Gets the minimax evaluation value.
+   * @return Minimax evaluation value
+   */
+  float getMinimax() const;
+
+  /**
    * Gets the predicted sequence.
    * @return Predicted sequence
    */
@@ -113,6 +120,11 @@ class Candidate {
    * Evaluation value.
    */
   float _value;
+
+  /**
+   * Minimax value.
+   */
+  float _minimax;
 
   /**
    * Predicted sequence.

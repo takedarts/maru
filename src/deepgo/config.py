@@ -50,6 +50,14 @@ MODEL_INPUT_SIZE = (MODEL_FEATURES + 1) * MODEL_SIZE * MODEL_SIZE + MODEL_INFOS
 MODEL_OUTPUT_SIZE = MODEL_PREDICTIONS * MODEL_SIZE * MODEL_SIZE + MODEL_VALUES
 
 ################################################################
+# Search algorithm settings
+################################################################
+# Search algorithm: UCB
+SEARCH_UCB = 0
+# Search algorithm: PUCB
+SEARCH_PUCB = 1
+
+################################################################
 # Default settings
 ################################################################
 # Default board size

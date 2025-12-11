@@ -11,11 +11,12 @@ namespace deepgo {
  * @param playouts Number of playouts
  * @param policy Predicted move probability
  * @param value Evaluation value
+ * @param minimax Minimax value
  * @param variations Predicted sequence
  */
 Candidate::Candidate(
-    int32_t x, int32_t y, int32_t color,
-    int32_t visits, int32_t playouts, float policy, float value,
+    int32_t x, int32_t y, int32_t color, int32_t visits, int32_t playouts,
+    float policy, float value, float minimax,
     std::vector<std::pair<int32_t, int32_t>> variations)
     : _x(x),
       _y(y),
@@ -24,6 +25,7 @@ Candidate::Candidate(
       _playouts(playouts),
       _policy(policy),
       _value(value),
+      _minimax(minimax),
       _variations(variations) {
 }
 
@@ -81,6 +83,14 @@ float Candidate::getPolicy() const {
  */
 float Candidate::getValue() const {
   return _value;
+}
+
+/**
+ * Gets the minimax evaluation value.
+ * @return Minimax evaluation value
+ */
+float Candidate::getMinimax() const {
+  return _minimax;
 }
 
 /**

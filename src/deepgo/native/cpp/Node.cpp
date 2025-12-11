@@ -41,7 +41,8 @@ Node::Node(
       _visits(0),
       _playouts(0),
       _value(0.0f),
-      _count(0) {
+      _count(0),
+      _minimax(0.0f) {
 }
 
 /**
@@ -63,13 +64,13 @@ void Node::initialize() {
  * Returns nullptr if there is no next node object to evaluate.
  * @param equally True to make the number of searches equal
  * @param width Search width (if 0, search width is automatically adjusted)
- * @param useUcb1 True to use UCB1; false to use PUCB
+ * @param algorithm Search algorithm
  * @param temperature Temperature parameter for search
  * @param noise Strength of Gumbel noise
  * @return Next node object to evaluate
  */
 NodeResult Node::evaluate(
-    bool equally, int32_t width, bool useUcb1, float temperature, float noise) {
+    bool equally, int32_t width, int32_t algorithm, float temperature, float noise) {
   std::unique_lock<std::shared_mutex> lock(_evalMutex);
 
   // Execute node evaluation
@@ -208,8 +209,8 @@ NodeResult Node::evaluate(
       float visits = child.first->getVisits();
       float value = child.first->getValue() * child.first->getColor();
       priority = 1.0 / (visits + 1 - value * 0.5);
-    } else if (useUcb1) {
-      priority = child.first->getPriorityByUCB1(_visits);
+    } else if (algorithm == SEARCH_UCB) {
+      priority = child.first->getPriorityByUCB(_visits);
     } else {
       priority = child.first->getPriorityByPUCB(_visits);
     }
@@ -227,11 +228,13 @@ NodeResult Node::evaluate(
 /**
  * Updates the evaluation value of the search node.
  * @param value Evaluation value
+ * @param minimax Minimax value
  */
-void Node::updateValue(float value) {
+void Node::updateValue(float value, float minimax) {
   std::unique_lock<std::shared_mutex> lock(_valueMutex);
   _count += 1;
   _value += value;
+  _minimax = minimax;
 }
 
 /**
@@ -454,6 +457,15 @@ int Node::getCount() {
 }
 
 /**
+ * Gets the minimax evaluation value of this node.
+ * @return Minimax evaluation value
+ */
+float Node::getMinimax() {
+  std::shared_lock<std::shared_mutex> lock(_valueMutex);
+  return _minimax;
+}
+
+/**
  * Gets the lower bound of the confidence interval for the evaluation value of this node.
  * @return Lower bound of the confidence interval
  */
@@ -465,6 +477,22 @@ float Node::getValueLCB() {
     float value = _value / _count;
     float lower = 1.96 * 0.5 / std::sqrt(_visits + 1);
     return value - (lower * _color);
+  }
+}
+
+/**
+ * Gets the priority of this node based on UCB.
+ * @param totalVisits Total number of searches
+ * @return Priority
+ */
+float Node::getPriorityByUCB(int32_t totalVisits) {
+  std::shared_lock<std::shared_mutex> lock(_valueMutex);
+  if (_count == 0) {
+    return -99.0f;
+  } else {
+    float value = (_value / _count) * _color;
+    float upper = 0.5 * std::sqrt(std::log(totalVisits) / (_visits + 1));
+    return value + upper;
   }
 }
 
@@ -482,22 +510,6 @@ float Node::getPriorityByPUCB(int32_t totalVisits) {
     float value = (_value / _count) * _color;
     float upper = c_puct * _policy * std::sqrt(totalVisits) / (1 + _visits);
     return value + 2 * upper;
-  }
-}
-
-/**
- * Gets the priority of this node based on UCB1.
- * @param totalVisits Total number of searches
- * @return Priority
- */
-float Node::getPriorityByUCB1(int32_t totalVisits) {
-  std::shared_lock<std::shared_mutex> lock(_valueMutex);
-  if (_count == 0) {
-    return -99.0f;
-  } else {
-    float value = (_value / _count) * _color;
-    float upper = 0.5 * std::sqrt(std::log(totalVisits) / (_visits + 1));
-    return value + upper;
   }
 }
 
@@ -538,17 +550,6 @@ std::vector<int32_t> Node::getBoardState() {
 }
 
 /**
- * Outputs the information of this node.
- * @param os Output destination
- */
-void Node::print(std::ostream& os) {
-  _board.print(os);
-  os << "color:" << _color << std::endl;
-  os << "visits:" << _visits << std::endl;
-  os << "value:" << getValue() << std::endl;
-}
-
-/**
  * Executes the evaluation of this node.
  */
 void Node::_evaluate() {
@@ -576,6 +577,7 @@ void Node::_reset() {
   _playouts = 0;
   _value = 0.0f;
   _count = 0;
+  _minimax = 0.0f;
 }
 
 /**

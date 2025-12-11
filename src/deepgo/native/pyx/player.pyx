@@ -4,6 +4,7 @@ from libc.stdint cimport int32_t
 from libcpp cimport bool
 from libcpp.vector cimport vector
 from libcpp.pair cimport pair
+from libcpp.string cimport string
 
 include "processor.pyx"
 
@@ -16,6 +17,7 @@ cdef extern from "cpp/Candidate.h" namespace "deepgo":
         int32_t getPlayouts()
         float getPolicy()
         float getValue()
+        float getMinimax()
         vector[pair[int32_t, int32_t]] getVariations()
 
 
@@ -26,11 +28,12 @@ cdef extern from "cpp/Player.h" namespace "deepgo":
         int32_t play(int32_t, int32_t)
         vector[Candidate] getPass() nogil
         vector[Candidate] getRandom(float) nogil
-        void startEvaluation(bool, bool, int32_t, float, float)
+        void startEvaluation(bool, int32_t, int32_t, float, float)
         void waitEvaluation(int32_t, int32_t, float, bool) nogil
         vector[Candidate] getCandidates()
         int32_t getColor()
         vector[int32_t] getBoardState()
+        string getDebugInfo()
 
 
 cdef class NativePlayer:
@@ -80,10 +83,10 @@ cdef class NativePlayer:
 
     def get_pass(
         self,
-    ) -> Tuple[Tuple[int, int], int, int, int, float, float, List[Tuple[int, int]]]:
+    ) -> Tuple[Tuple[int, int], int, int, int, float, float, float, List[Tuple[int, int]]]:
         '''Get a candidate for pass.
         Returns:
-            Tuple[Tuple[int, int], int, int, int, float, float, List[Tuple[int, int]]]: Candidate
+            Tuple[Tuple[int, int], int, int, int, float, float, float, List[Tuple[int, int]]]: Candidate
         '''
         cdef vector[Candidate] candidates
 
@@ -93,18 +96,19 @@ cdef class NativePlayer:
         return (
             (candidates[0].getX(), candidates[0].getY()), candidates[0].getColor(),
              candidates[0].getVisits(), candidates[0].getPlayouts(),
-             candidates[0].getPolicy(), candidates[0].getValue(), candidates[0].getVariations(),
+             candidates[0].getPolicy(), candidates[0].getValue(), candidates[0].getMinimax(),
+             candidates[0].getVariations(),
         )
 
     def get_random(
         self,
         temperature: float,
-    ) -> Tuple[Tuple[int, int], int, float, float, float, List[Tuple[int, int]]]:
+    ) -> Tuple[Tuple[int, int], int, int, int, float, float, float, List[Tuple[int, int]]]:
         '''Select a candidate move randomly.
         Args:
             temperature (float): Temperature
         Returns:
-            Tuple[Tuple[int, int], int, float, float, float, List[Tuple[int, int]]]: Candidate
+            Tuple[Tuple[int, int], int, int, int, float, float, float, List[Tuple[int, int]]]: Candidate
         '''
         cdef vector[Candidate] candidates
 
@@ -114,26 +118,27 @@ cdef class NativePlayer:
         return (
             (candidates[0].getX(), candidates[0].getY()), candidates[0].getColor(),
              candidates[0].getVisits(), candidates[0].getPlayouts(),
-             candidates[0].getPolicy(), candidates[0].getValue(), candidates[0].getVariations(),
+             candidates[0].getPolicy(), candidates[0].getValue(), candidates[0].getMinimax(),
+             candidates[0].getVariations(),
         )
 
     def start_evaluation(
         self,
         equally: bool,
-        use_ucb1: bool,
+        algorithm: int,
         width: int,
         temperature: float,
         noise: float,
     ) -> None:
         '''Start evaluation.
         Args:
-            equality (int): True to make the number of searches equal, False to use UCB1 or PUCB
-            use_ucb1 (int): True to use UCB1 as the search criterion, False to use PUCB
+            equality (int): True to make the number of searches equal, False to use UCB or PUCB
+            algorithm (int): Search algorithm
             width (int): Search width (0 means no restriction)
             temperature (float): Temperature parameter for search
             noise (float): Strength of Gumbel noise for search
         '''
-        self.player.startEvaluation(equally, use_ucb1, width, temperature, noise)
+        self.player.startEvaluation(equally, algorithm, width, temperature, noise)
 
     def wait_evaluation(self, visits: int, playouts: int, timelimit: float, stop: bool) -> None:
         '''Wait until the specified number of visits and playouts is reached.
@@ -153,10 +158,10 @@ cdef class NativePlayer:
 
     def get_candidates(
         self,
-    ) -> List[Tuple[Tuple[int, int], int, float, float, List[Tuple[int, int]]]]:
+    ) -> List[Tuple[Tuple[int, int], int, int, int, float, float, float, List[Tuple[int, int]]]]:
         '''Get the list of candidate moves.
         Returns:
-            List[Tuple[Tuple[int, int], int, float, float, float, List[Tuple[int, int]]]]: List of candidates
+            List[Tuple[Tuple[int, int], int, int, int, float, float, float, List[Tuple[int, int]]]]: List of candidates
         '''
         cdef vector[Candidate] candidates
 
@@ -165,7 +170,8 @@ cdef class NativePlayer:
         results = [
             ((candidates[i].getX(), candidates[i].getY()), candidates[i].getColor(),
              candidates[i].getVisits(), candidates[i].getPlayouts(),
-             candidates[i].getPolicy(), candidates[i].getValue(), candidates[i].getVariations(),
+             candidates[i].getPolicy(), candidates[i].getValue(), candidates[i].getMinimax(),
+             candidates[i].getVariations(),
             ) for i in range(candidates.size())]
 
         return results
@@ -183,3 +189,10 @@ cdef class NativePlayer:
             List[int]: Board state
         '''
         return self.player.getBoardState()
+
+    def get_debug_info(self) -> str:
+        '''Output debug information of the search tree.
+        Returns:
+            str: Debug information
+        '''
+        return self.player.getDebugInfo().decode('utf-8')
