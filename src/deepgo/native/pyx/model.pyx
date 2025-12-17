@@ -11,7 +11,7 @@ from deepgo.config import MODEL_OUTPUT_SIZE
 cdef extern from "cpp/Model.h" namespace "deepgo":
     cdef cppclass Model:
         Model(string, int32_t, bool, bool) except +
-        void forward(float*, float*, uint32_t)
+        void forward(int32_t*, float*, uint32_t)
         int32_t isCuda()
 
 
@@ -42,7 +42,7 @@ cdef class NativeModel:
             (inputs.shape[0], MODEL_OUTPUT_SIZE), dtype=numpy.float32)
 
         cdef int size = inputs.shape[0]
-        cdef float* in_data = <float*> inputs.data
+        cdef int32_t* in_data = <int32_t*> inputs.data
         cdef float* out_data = <float*> outputs.data
 
         self.model.forward(in_data, out_data, size)

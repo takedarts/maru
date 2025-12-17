@@ -27,6 +27,8 @@
 
 // Size of data input to the inference model
 #define MODEL_INPUT_SIZE (${MODEL_INPUT_SIZE})
+// Size of input data embedded as int32 for the model
+#define MODEL_INPUT_PACK_SIZE (${MODEL_INPUT_PACK_SIZE})
 // Size of data output by the inference model
 #define MODEL_OUTPUT_SIZE (${MODEL_OUTPUT_SIZE})
 

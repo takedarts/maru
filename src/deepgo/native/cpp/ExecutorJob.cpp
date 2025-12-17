@@ -5,7 +5,7 @@ namespace deepgo {
 /**
  * Creates a computation object.
  */
-ExecutorJob::ExecutorJob(float* inputs, float* outputs, int32_t size)
+ExecutorJob::ExecutorJob(int32_t* inputs, float* outputs, int32_t size)
     : _mutex(),
       _condition(),
       _inputs(inputs),
@@ -38,7 +38,7 @@ void ExecutorJob::notify() {
 /**
  * Returns input data.
  */
-float* ExecutorJob::getInputs() const {
+int32_t* ExecutorJob::getInputs() const {
   return _inputs;
 }
 

@@ -10,6 +10,15 @@ namespace deepgo {
 #define AROUNDS {-1, -_width, 1, _width}
 
 /**
+ * Set the specified bit.
+ * @param inputs Bit sequence
+ * @param index Position of the bit to set
+ */
+inline void setInputBit(int32_t* inputs, int32_t index, int32_t value = 1) {
+  inputs[index / 32] |= (value << (index % 32));
+}
+
+/**
  * Create a board object.
  * @param width Board width
  * @param height Board height
@@ -491,7 +500,7 @@ std::vector<int32_t> Board::getPatterns() {
  * @param rule Rule for determining winner
  * @param superko True to apply superko rule
  */
-void Board::getInputs(float* inputs, int32_t color, float komi, int32_t rule, bool superko) {
+void Board::getInputs(int32_t* inputs, int32_t color, float komi, int32_t rule, bool superko) {
   int length = MODEL_SIZE * MODEL_SIZE;
   int32_t offset_x = (MODEL_SIZE - _width + 2) / 2;
   int32_t offset_y = (MODEL_SIZE - _height + 2) / 2;
@@ -500,8 +509,8 @@ void Board::getInputs(float* inputs, int32_t color, float komi, int32_t rule, bo
   _updateShicho();
 
   // Initialize input data
-  for (int32_t i = 0; i < MODEL_INPUT_SIZE; i++) {
-    inputs[i] = 0.0;
+  for (int32_t i = 0; i < MODEL_INPUT_PACK_SIZE; i++) {
+    inputs[i] = 0;
   }
 
   // Set stone arrangement
@@ -511,11 +520,11 @@ void Board::getInputs(float* inputs, int32_t color, float komi, int32_t rule, bo
       int32_t index = (offset_y + y) * MODEL_SIZE + (offset_x + x);
 
       // Set mask
-      inputs[length * MODEL_FEATURES + index] = 1.0;
+      setInputBit(inputs, length * MODEL_FEATURES + index);
 
       // Set value for empty coordinates
       if (ren_id == -1) {
-        inputs[length * 0 + index] = 1.0;
+        setInputBit(inputs, length * 0 + index);
         continue;
       }
 
@@ -525,15 +534,15 @@ void Board::getInputs(float* inputs, int32_t color, float komi, int32_t rule, bo
 
       // Set value for black stone coordinates
       if (_renObjs[ren_id].color * color == BLACK) {
-        inputs[length * 1 + index] = 1.0;
-        inputs[length * 2 + index] = shicho;
-        inputs[length * (2 + size) + index] = 1.0;
+        setInputBit(inputs, length * 1 + index);
+        setInputBit(inputs, length * 2 + index, shicho);
+        setInputBit(inputs, length * (2 + size) + index);
       }
       // Set value for white stone coordinates
       else if (_renObjs[ren_id].color * color == WHITE) {
-        inputs[length * 14 + index] = 1.0;
-        inputs[length * 15 + index] = shicho;
-        inputs[length * (15 + size) + index] = 1.0;
+        setInputBit(inputs, length * 14 + index);
+        setInputBit(inputs, length * 15 + index, shicho);
+        setInputBit(inputs, length * (15 + size) + index);
       }
     }
   }
@@ -551,7 +560,7 @@ void Board::getInputs(float* inputs, int32_t color, float komi, int32_t rule, bo
       int32_t y = _getPosY(black_histotires[i]);
       int32_t index = (offset_y + y) * MODEL_SIZE + (offset_x + x);
 
-      inputs[length * (11 + i) + index] = 1.0;
+      setInputBit(inputs, length * (11 + i) + index);
     }
   }
 
@@ -561,7 +570,7 @@ void Board::getInputs(float* inputs, int32_t color, float komi, int32_t rule, bo
       int32_t y = _getPosY(white_histotires[i]);
       int32_t index = (offset_y + y) * MODEL_SIZE + (offset_x + x);
 
-      inputs[length * (24 + i) + index] = 1.0;
+      setInputBit(inputs, length * (24 + i) + index);
     }
   }
 
@@ -573,13 +582,13 @@ void Board::getInputs(float* inputs, int32_t color, float komi, int32_t rule, bo
     int32_t end_y = offset_y + _height - 2 - i;
 
     for (int y = begin_y; y < end_y; y++) {
-      inputs[length * (27 + i) + y * MODEL_SIZE + begin_x] = 1.0;
-      inputs[length * (27 + i) + y * MODEL_SIZE + end_x - 1] = 1.0;
+      setInputBit(inputs, length * (27 + i) + y * MODEL_SIZE + begin_x);
+      setInputBit(inputs, length * (27 + i) + y * MODEL_SIZE + end_x - 1);
     }
 
     for (int x = begin_x; x < end_x; x++) {
-      inputs[length * (27 + i) + begin_y * MODEL_SIZE + x] = 1.0;
-      inputs[length * (27 + i) + (end_y - 1) * MODEL_SIZE + x] = 1.0;
+      setInputBit(inputs, length * (27 + i) + begin_y * MODEL_SIZE + x);
+      setInputBit(inputs, length * (27 + i) + (end_y - 1) * MODEL_SIZE + x);
     }
   }
 
@@ -589,36 +598,36 @@ void Board::getInputs(float* inputs, int32_t color, float komi, int32_t rule, bo
     int32_t y = _getPosY(_koIndex);
     int32_t index = y * MODEL_SIZE + x;
 
-    inputs[length * 31 + index] = 1.0;
+    setInputBit(inputs, length * 31 + index);
   }
 
   // Register turn
   int32_t info_offset = (MODEL_FEATURES + 1) * length;
 
   if (color == BLACK) {
-    inputs[info_offset + 0] = 1.0;
+    setInputBit(inputs, info_offset + 0);
   } else {
-    inputs[info_offset + 1] = 1.0;
+    setInputBit(inputs, info_offset + 1);
   }
 
   // Register komi value
-  inputs[info_offset + 2] = (komi * color) / 13.0;
+  inputs[MODEL_INPUT_PACK_SIZE - 1] = (int32_t)((komi * color) / 13.0 * 0xfffff);
 
   // Register whether superko rule is applied
   if (superko) {
-    inputs[info_offset + 3] = 1.0;
+    setInputBit(inputs, info_offset + 3);
   }
 
   // Register whether ko has occurred
   if (_koColor == color && _koIndex > 0) {
-    inputs[info_offset + 4] = 1.0;
+    setInputBit(inputs, info_offset + 4);
   }
 
   // Register rule for determining winner
   if (rule != RULE_JP) {
-    inputs[info_offset + 5] = 1.0;
+    setInputBit(inputs, info_offset + 5);
   } else {
-    inputs[info_offset + 6] = 1.0;
+    setInputBit(inputs, info_offset + 6);
   }
 }
 

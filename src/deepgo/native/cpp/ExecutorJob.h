@@ -11,7 +11,7 @@ class ExecutorJob {
   /**
    * Creates a computation object.
    */
-  ExecutorJob(float* inputs, float* outputs, int32_t size);
+  ExecutorJob(int32_t* inputs, float* outputs, int32_t size);
 
   /**
    * Waits until computation is complete.
@@ -26,7 +26,7 @@ class ExecutorJob {
   /**
    * Returns input data.
    */
-  float* getInputs() const;
+  int32_t* getInputs() const;
 
   /**
    * Returns output data.
@@ -52,7 +52,7 @@ class ExecutorJob {
   /**
    * Input data.
    */
-  float* _inputs;
+  int32_t* _inputs;
 
   /**
    * Output data.

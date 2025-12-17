@@ -14,7 +14,7 @@ from deepgo.config import MODEL_OUTPUT_SIZE
 cdef extern from "cpp/Processor.h" namespace "deepgo":
     cdef cppclass Processor:
         Processor(string, vector[int32_t], int32_t, bool, bool, int32_t) except +
-        void execute(float*, float*, int32_t)
+        void execute(int32_t*, float*, int32_t)
 
 
 cdef class NativeProcessor:
@@ -56,7 +56,7 @@ cdef class NativeProcessor:
             (inputs.shape[0], MODEL_OUTPUT_SIZE), dtype=numpy.float32)
 
         cdef int size = inputs.shape[0]
-        cdef float* in_data = <float*> inputs.data
+        cdef int32_t* in_data = <int32_t*> inputs.data
         cdef float* out_data = <float*> outputs.data
 
         self.processor.execute(in_data, out_data, size)

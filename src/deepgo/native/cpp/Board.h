@@ -162,7 +162,7 @@ class Board {
    * @param rule Rule for determining the winner
    * @param superko True to apply the superko rule
    */
-  void getInputs(float* inputs, int32_t color, float komi, int32_t rule, bool superko);
+  void getInputs(int32_t* inputs, int32_t color, float komi, int32_t rule, bool superko);
 
   /**
    * Gets the state of the board.

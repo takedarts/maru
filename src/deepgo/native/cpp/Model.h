@@ -32,7 +32,7 @@ class Model {
    * @param outputs Output data
    * @param size Number of evaluation data
    */
-  virtual void forward(float* inputs, float* outputs, uint32_t size);
+  virtual void forward(int32_t* inputs, float* outputs, uint32_t size);
 
   /**
    * Returns True if using GPU.
@@ -55,6 +55,11 @@ class Model {
    * Data type used for computation.
    */
   at::ScalarType _dtype;
+
+  /**
+   * Tensor for bit shifting.
+   */
+  torch::Tensor _bitShift;
 };
 
 }  // namespace deepgo

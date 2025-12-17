@@ -1,7 +1,9 @@
 import logging
+import math
 from typing import List, Set, Tuple
 
 import numpy as np
+from deepgo.exception import GoException
 
 from .board import (Board, get_color_name, get_handicap_positions,
                     get_opposite_color, is_valid_position)
@@ -93,6 +95,15 @@ class Candidate(object):
         self.value = value
         self.minimax = minimax
         self.variations = variations
+
+        if math.isnan(self.policy):
+            raise GoException('Policy is NaN')
+
+        if math .isnan(self.value):
+            raise GoException('Value is NaN')
+
+        if math.isnan(self.minimax):
+            raise GoException('Minimax is NaN')
 
         self.value_lcb = value - color * 1.96 * 0.5 / (visits + 1)**0.5
         self.minimax_lcb = minimax - color * 1.96 * 0.5 / (visits + 1)**0.5

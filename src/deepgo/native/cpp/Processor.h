@@ -30,7 +30,7 @@ class Processor {
    * @param outputs Output data
    * @param size Number of input/output data
    */
-  void execute(float* inputs, float* outputs, int32_t size);
+  void execute(int32_t* inputs, float* outputs, int32_t size);
 
  private:
   /**

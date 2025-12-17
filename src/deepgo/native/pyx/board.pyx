@@ -8,7 +8,7 @@ from libcpp.vector cimport vector
 import numpy
 cimport numpy
 
-from deepgo.config import MODEL_INPUT_SIZE
+from deepgo.config import MODEL_INPUT_PACK_SIZE
 
 
 cdef extern from "cpp/Board.h" namespace "deepgo":
@@ -29,7 +29,7 @@ cdef extern from "cpp/Board.h" namespace "deepgo":
         void getTerritories(int32_t*, int32_t)
         void getOwners(int32_t*, int32_t, int32_t)
         vector[int32_t] getPatterns()
-        void getInputs(float*, int32_t, float, int32_t, bool)
+        void getInputs(int32_t*, int32_t, float, int32_t, bool)
         vector[int32_t] getState()
         void loadState(vector[int32_t])
         void copyFrom(Board*)
@@ -229,10 +229,10 @@ cdef class NativeBoard:
         Returns:
             numpy.ndarray: Board data
         '''
-        cdef numpy.ndarray[numpy.float32_t, ndim=1, mode="c"] inputs = numpy.zeros(
-            (MODEL_INPUT_SIZE,), dtype=numpy.float32)
+        cdef numpy.ndarray[numpy.int32_t, ndim=1, mode="c"] inputs = numpy.zeros(
+            (MODEL_INPUT_PACK_SIZE,), dtype=numpy.int32)
 
-        self.board.getInputs(<float*> &inputs[0], color, komi, rule, superko)
+        self.board.getInputs(<int32_t*> &inputs[0], color, komi, rule, superko)
 
         return inputs
 

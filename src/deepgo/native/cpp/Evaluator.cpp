@@ -45,7 +45,7 @@ void Evaluator::evaluate(Board* board, int32_t color) {
   int32_t height = board->getHeight();
 
   // Execute evaluation of the current board.
-  float inputs[MODEL_INPUT_SIZE];
+  int32_t inputs[MODEL_INPUT_PACK_SIZE];
   float outputs[MODEL_OUTPUT_SIZE];
 
   board->getInputs(inputs, color, _komi, _rule, _superko);

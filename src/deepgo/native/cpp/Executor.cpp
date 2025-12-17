@@ -49,7 +49,7 @@ Executor::~Executor() {
  * @param outputs Output data
  * @param size Number of input/output data
  */
-void Executor::execute(float* inputs, float* outputs, int32_t size) {
+void Executor::execute(int32_t* inputs, float* outputs, int32_t size) {
   // Create a computation object.
   std::unique_ptr<ExecutorJob> job(new ExecutorJob(inputs, outputs, size));
 
@@ -150,20 +150,20 @@ void Executor::_forward(std::vector<ExecutorJob*>& jobs) {
   }
 
   // Allocate areas for input and output data
-  std::unique_ptr<float[]> all_inputs(new float[jobs_size * MODEL_INPUT_SIZE]);
+  std::unique_ptr<int32_t[]> all_inputs(new int32_t[jobs_size * MODEL_INPUT_PACK_SIZE]);
   std::unique_ptr<float[]> all_outputs(new float[jobs_size * MODEL_OUTPUT_SIZE]);
 
   // Create input data
   int32_t input_offset = 0;
 
   for (auto job : jobs) {
-    float* inputs = job->getInputs();
+    int32_t* inputs = job->getInputs();
     int32_t size = job->getSize();
 
     memcpy(
-        all_inputs.get() + input_offset * MODEL_INPUT_SIZE,
+        all_inputs.get() + input_offset * MODEL_INPUT_PACK_SIZE,
         inputs,
-        size * MODEL_INPUT_SIZE * sizeof(float));
+        size * MODEL_INPUT_PACK_SIZE * sizeof(int32_t));
 
     input_offset += size;
   }
