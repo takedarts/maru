@@ -2,7 +2,9 @@ import argparse
 import sys
 
 import torch
-from deepgo.config import (DEFAULT_KOMI, DEFAULT_SIZE, NAME, RULE_CH, RULE_COM,
+from deepgo.config import (DEFAULT_KOMI, DEFAULT_PUCB_CONSTANT_BASE,
+                           DEFAULT_PUCB_CONSTANT_INIT, DEFAULT_SIZE,
+                           DEFAULT_UCB_CONSTANT, NAME, RULE_CH, RULE_COM,
                            RULE_JP, VERSION)
 from deepgo.gpu import get_default_gpus
 from deepgo.gtp import GTPEngine
@@ -36,6 +38,15 @@ def parse_args() -> argparse.Namespace:
         '--komi', type=float, default=DEFAULT_KOMI, help=f'Komi (default: {DEFAULT_KOMI})')
     parser.add_argument(
         '--superko', default=False, action='store_true', help='Use superko rule')
+    parser.add_argument(
+        '--ucb-constant', type=float, default=DEFAULT_UCB_CONSTANT,
+        help=f'Constant value in UCB (default: {DEFAULT_UCB_CONSTANT})')
+    parser.add_argument(
+        '--pucb-constant-init', type=float, default=DEFAULT_PUCB_CONSTANT_INIT,
+        help=f'Initial value of the constant in PUCB (default: {DEFAULT_PUCB_CONSTANT_INIT})')
+    parser.add_argument(
+        '--pucb-constant-base', type=float, default=DEFAULT_PUCB_CONSTANT_BASE,
+        help=f'Change value of the constant in PUCB (default: {DEFAULT_PUCB_CONSTANT_BASE})')
     parser.add_argument(
         '--eval-leaf-only', default=False, action='store_true', help='Evaluate leaf nodes only')
     parser.add_argument(
@@ -115,6 +126,9 @@ def main() -> None:
         boardsize=args.boardsize,
         komi=args.komi,
         superko=args.superko,
+        ucb_constant=args.ucb_constant,
+        pucb_constant_init=args.pucb_constant_init,
+        pucb_constant_base=args.pucb_constant_base,
         eval_leaf_only=args.eval_leaf_only,
         timelimit=args.timelimit,
         ponder=args.ponder,

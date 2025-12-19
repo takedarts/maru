@@ -68,6 +68,12 @@ DEFAULT_SIZE = 19
 DEFAULT_KOMI = 7.5
 # Default maximum visits for MCTS
 DEFAULT_MAX_VISITS = 1_000_000
+# Default constant multiplier for UCB upper confidence bound
+DEFAULT_UCB_CONSTANT = 1.4
+# Initial constant applied to PUCB upper confidence bound
+DEFAULT_PUCB_CONSTANT_INIT = 1.25
+# Base constant applied to PUCB upper confidence bound
+DEFAULT_PUCB_CONSTANT_BASE = 19652.0
 
 ################################################################
 # Logging settings

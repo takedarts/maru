@@ -23,7 +23,9 @@ cdef extern from "cpp/Candidate.h" namespace "deepgo":
 
 cdef extern from "cpp/Player.h" namespace "deepgo":
     cdef cppclass Player:
-        Player(Processor*, int32_t, int32_t, int32_t, float, int, bool, bool, int32_t) except +
+        Player(
+            Processor*, int32_t, int32_t, int32_t, float, int, bool, 
+            float, float, float, bool, int32_t) except +
         void initialize()
         int32_t play(int32_t, int32_t)
         vector[Candidate] getPass() nogil
@@ -47,6 +49,9 @@ cdef class NativePlayer:
         komi: float,
         rule: int,
         superko: bool,
+        ucb_constant: float,
+        pucb_constant_init: float,
+        pucb_constant_base: float,
         eval_leaf_only: bool,
         max_visits: int,
     )->None:
@@ -59,12 +64,17 @@ cdef class NativePlayer:
             komi (float): Komi value
             rule (int): Rule for determining winner
             superko (bool): True to apply superko rule
+            ucb_constant (float): Constant multiplied to UCB upper confidence bound
+            pucb_constant_init (float): Initial constant for PUCB upper confidence bound
+            pucb_constant_base (float): Base constant for PUCB upper confidence bound
             eval_leaf_only (bool): True to evaluate only leaf nodes
             max_visits (int): Maximum number of visits
         '''
         self.player = new Player(
-            processor.processor, threads,
-            width, height, komi, rule, superko, eval_leaf_only, max_visits)
+            processor.processor, threads, width, height, komi, rule, superko,
+            ucb_constant, pucb_constant_init, pucb_constant_base,
+            eval_leaf_only, max_visits)
+
     def __dealloc__(self):
         del self.player
 

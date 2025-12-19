@@ -21,10 +21,14 @@ class NodeManager {
    * @param komi Komi points
    * @param rule Rule for determining the winner
    * @param superko True to apply superko rule
+   * @param ucbConstant Constant multiplied to the UCB upper confidence bound
+   * @param pucbConstantInit Initial value applied to the PUCB upper confidence bound
+   * @param pucbConstantBase Base value applied to the PUCB upper confidence bound
    */
   NodeManager(
       Processor* processor, int32_t width, int32_t height,
-      float komi, int32_t rule, bool superko);
+      float komi, int32_t rule, bool superko,
+      float ucbConstant, float pucbConstantInit, float pucbConstantBase);
 
   /**
    * Create a node object.

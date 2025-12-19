@@ -7,9 +7,11 @@ from deepgo.exception import GoException
 
 from .board import (Board, get_color_name, get_handicap_positions,
                     get_opposite_color, is_valid_position)
-from .config import (BLACK, DEFAULT_KOMI, DEFAULT_MAX_VISITS, DEFAULT_SIZE,
-                     EMPTY, MODEL_SIZE, PASS, RULE_CH, RULE_COM, RULE_JP,
-                     SEARCH_PUCB, SEARCH_UCB, WHITE)
+from .config import (BLACK, DEFAULT_KOMI, DEFAULT_MAX_VISITS,
+                     DEFAULT_PUCB_CONSTANT_BASE, DEFAULT_PUCB_CONSTANT_INIT,
+                     DEFAULT_SIZE, DEFAULT_UCB_CONSTANT, EMPTY, MODEL_SIZE,
+                     PASS, RULE_CH, RULE_COM, RULE_JP, SEARCH_PUCB, SEARCH_UCB,
+                     WHITE)
 from .native import NativePlayer
 from .processor import Processor
 
@@ -158,6 +160,9 @@ class Player(object):
         komi: float = DEFAULT_KOMI,
         rule: int = RULE_CH,
         superko: bool = False,
+        ucb_constant: float = DEFAULT_UCB_CONSTANT,
+        pucb_constant_init: float = DEFAULT_PUCB_CONSTANT_INIT,
+        pucb_constant_base: float = DEFAULT_PUCB_CONSTANT_BASE,
         eval_leaf_only: bool = False,
         max_visits: int = DEFAULT_MAX_VISITS,
     ) -> None:
@@ -170,13 +175,20 @@ class Player(object):
             komi (float): Komi value
             rule (int): Rule for determining winner
             superko (bool): True to apply superko rule
+            ucb_constant (float): Constant multiplied to UCB upper confidence bound
+            pucb_constant_init (float): Initial constant for PUCB upper confidence bound
+            pucb_constant_base (float): Base constant for PUCB upper confidence bound
             eval_leaf_only (bool): True to evaluate only leaf nodes
             max_visits (int): Maximum number of visits
         '''
         self.native = NativePlayer(
             processor=processor.native, threads=threads,
             width=width, height=height, komi=komi, rule=rule, superko=superko,
-            eval_leaf_only=eval_leaf_only, max_visits=max_visits)
+            ucb_constant=ucb_constant,
+            pucb_constant_init=pucb_constant_init,
+            pucb_constant_base=pucb_constant_base,
+            eval_leaf_only=eval_leaf_only,
+            max_visits=max_visits)
         self.processor = processor
         self.width = width
         self.height = height

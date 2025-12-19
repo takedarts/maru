@@ -13,8 +13,10 @@ from deepgo.record import Record
 
 from .board import (Board, get_array_string, get_color_name,
                     get_handicap_positions, is_valid_position)
-from .config import (BLACK, DEFAULT_KOMI, DEFAULT_SIZE, EMPTY, MODEL_SIZE,
-                     NAME, PASS, RULE_CH, RULE_JP, VERSION, WHITE)
+from .config import (BLACK, DEFAULT_KOMI, DEFAULT_PUCB_CONSTANT_BASE,
+                     DEFAULT_PUCB_CONSTANT_INIT, DEFAULT_SIZE,
+                     DEFAULT_UCB_CONSTANT, EMPTY, MODEL_SIZE, NAME, PASS,
+                     RULE_CH, RULE_JP, VERSION, WHITE)
 from .exception import GoException
 from .player import Candidate, Player
 from .processor import Processor
@@ -390,6 +392,9 @@ class GTPEngine(object):
         boardsize: int = DEFAULT_SIZE,
         komi: float = DEFAULT_KOMI,
         superko: bool = False,
+        ucb_constant: float = DEFAULT_UCB_CONSTANT,
+        pucb_constant_init: float = DEFAULT_PUCB_CONSTANT_INIT,
+        pucb_constant_base: float = DEFAULT_PUCB_CONSTANT_BASE,
         eval_leaf_only: bool = False,
         timelimit: float = 10,
         ponder: bool = False,
@@ -416,6 +421,9 @@ class GTPEngine(object):
             rule (int): Game rule
             komi: float: Komi value
             superko (bool): True to apply superko rule
+            ucb_constant (float): Constant multiplied to UCB upper confidence bound
+            pucb_constant_init (float): Initial constant for PUCB upper confidence bound
+            pucb_constant_base (float): Base constant for PUCB upper confidence bound
             eval_leaf_only (bool): True to evaluate only leaf nodes
             timelimit (float): Maximum thinking time
             ponder (bool): True to continue analysis during opponent's turn
@@ -445,6 +453,9 @@ class GTPEngine(object):
         self.size = boardsize
         self.komi = komi
         self.superko = superko
+        self.ucb_constant = ucb_constant
+        self.pucb_constant_init = pucb_constant_init
+        self.pucb_constant_base = pucb_constant_base
         self.eval_leaf_only = eval_leaf_only
         self.timelimit = timelimit
         self.ponder = ponder
@@ -567,6 +578,9 @@ class GTPEngine(object):
             komi=self.komi,
             rule=self.rule,
             superko=self.superko,
+            ucb_constant=self.ucb_constant,
+            pucb_constant_init=self.pucb_constant_init,
+            pucb_constant_base=self.pucb_constant_base,
             eval_leaf_only=self.eval_leaf_only
         )
 

@@ -8,6 +8,7 @@
 #include "Board.h"
 #include "Config.h"
 #include "Evaluator.h"
+#include "NodeParameter.h"
 #include "NodeResult.h"
 #include "Policy.h"
 
@@ -22,16 +23,9 @@ class Node {
   /**
    * Create a search node object.
    * @param manager Node manager object
-   * @param processor Object to execute inference
-   * @param width Board width
-   * @param height Board height
-   * @param komi Komi points
-   * @param rule Rule for determining the winner
-   * @param superko True to apply superko rule
+   * @param parameter Node creation parameters
    */
-  Node(
-      NodeManager* manager, Processor* processor, int32_t width, int32_t height,
-      float komi, int32_t rule, bool superko);
+  Node(NodeManager* manager, const NodeParameter& parameter);
 
   /**
    * Set as the initial board node.
@@ -240,6 +234,21 @@ class Node {
    * Object to evaluate the board.
    */
   Evaluator _evaluator;
+
+  /**
+   * Constant multiplied to the UCB upper confidence bound.
+   */
+  float _ucbConstant;
+
+  /**
+   * Initial value applied to the PUCB upper confidence bound.
+   */
+  float _pucbConstantInit;
+
+  /**
+   * Base value applied to the PUCB upper confidence bound.
+   */
+  float _pucbConstantBase;
 
   /**
    * List of child nodes.

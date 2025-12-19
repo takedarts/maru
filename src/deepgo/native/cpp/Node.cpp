@@ -14,26 +14,24 @@ static std::default_random_engine random_engine(random_seed_gen());
 /**
  * Creates a search node object.
  * @param manager Node management object
- * @param processor Object to execute inference
- * @param width Board width
- * @param height Board height
- * @param komi Komi points
- * @param rule Rule for determining the winner
- * @param superko True to apply the superko rule
+ * @param parameter Node creation parameters
  */
-Node::Node(
-    NodeManager* manager, Processor* processor, int32_t width, int32_t height,
-    float komi, int32_t rule, bool superko)
+Node::Node(NodeManager* manager, const NodeParameter& parameter)
     : _evalMutex(),
       _valueMutex(),
       _manager(manager),
-      _board(width, height),
+      _board(parameter.getWidth(), parameter.getHeight()),
       _x(-1),
       _y(-1),
       _color(WHITE),
       _captured(0),
       _policy(0.0f),
-      _evaluator(processor, komi, rule, superko),
+      _evaluator(
+          parameter.getProcessor(), parameter.getKomi(),
+          parameter.getRule(), parameter.getSuperko()),
+      _ucbConstant(parameter.getUcbConstant()),
+      _pucbConstantInit(parameter.getPucbConstantInit()),
+      _pucbConstantBase(parameter.getPucbConstantBase()),
       _children(),
       _childPolicies(),
       _waitingQueue(),
@@ -491,8 +489,8 @@ float Node::getPriorityByUCB(int32_t totalVisits) {
     return -99.0f;
   } else {
     float value = (_value / _count) * _color;
-    float upper = 0.5 * std::sqrt(std::log(totalVisits) / (_visits + 1));
-    return value + upper;
+    float upper = std::sqrt(std::log(totalVisits) / (_visits + 1));
+    return value + _ucbConstant * upper;
   }
 }
 
@@ -506,10 +504,12 @@ float Node::getPriorityByPUCB(int32_t totalVisits) {
   if (_count == 0) {
     return -99.0f;
   } else {
-    float c_puct = std::log((1 + totalVisits + 19652.0) / 19652.0) + 1.25;
+    float c_pucb_inc = std::log((1 + totalVisits + _pucbConstantBase) / _pucbConstantBase);
+    float c_pucb = c_pucb_inc + _pucbConstantInit;
     float value = (_value / _count) * _color;
-    float upper = c_puct * _policy * std::sqrt(totalVisits) / (1 + _visits);
-    return value + 2 * upper;
+    float ucb = _policy * std::sqrt(totalVisits) / (1 + _visits);
+
+    return value + c_pucb * ucb;
   }
 }
 

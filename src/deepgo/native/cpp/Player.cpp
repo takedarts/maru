@@ -19,16 +19,22 @@ namespace deepgo {
  * @param komi Komi points
  * @param rule Game rule
  * @param superko True to apply the superko rule
+ * @param ucbConstant Constant multiplied to the UCB upper confidence bound
+ * @param pucbConstantInit Initial value applied to the PUCB upper confidence bound
+ * @param pucbConstantBase Base value applied to the PUCB upper confidence bound
  * @param evalLeafOnly True to evaluate only leaf nodes
  * @param maxVisits Maximum number of visits
  */
 Player::Player(
     Processor* processor, int32_t threads,
     int32_t width, int32_t height, float komi, int32_t rule, bool superko,
+    float ucbConstant, float pucbConstantInit, float pucbConstantBase,
     bool evalLeafOnly, int32_t maxVisits)
     : _mutex(),
       _condition(),
-      _nodeManager(processor, width, height, komi, rule, superko),
+      _nodeManager(
+          processor, width, height, komi, rule, superko,
+          ucbConstant, pucbConstantInit, pucbConstantBase),
       _threadPool(threads),
       _thread(),
       _root(_nodeManager.createNode()),

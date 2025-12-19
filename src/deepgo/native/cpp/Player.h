@@ -33,12 +33,16 @@ class Player {
    * @param komi Komi points
    * @param rule Rule for determining the winner
    * @param superko True to apply the superko rule
+   * @param ucbConstant Constant multiplied to the UCB upper confidence bound
+   * @param pucbConstantInit Initial value applied to the PUCB upper confidence bound
+   * @param pucbConstantBase Base value applied to the PUCB upper confidence bound
    * @param evalLeafOnly True to evaluate only leaf nodes
    * @param maxVisits Maximum number of visits
    */
   Player(
       Processor* processor, int32_t threads,
       int32_t width, int32_t height, float komi, int32_t rule, bool superko,
+      float ucbConstant, float pucbConstantInit, float pucbConstantBase,
       bool evalLeafOnly, int32_t maxVisits);
 
   /**
