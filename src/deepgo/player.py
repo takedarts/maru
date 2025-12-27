@@ -176,8 +176,8 @@ class Player(object):
             rule (int): Rule for determining winner
             superko (bool): True to apply superko rule
             ucb_constant (float): Constant multiplied to UCB upper confidence bound
-            pucb_constant_init (float): Initial constant for PUCB upper confidence bound
-            pucb_constant_base (float): Base constant for PUCB upper confidence bound
+            pucb_constant_init (float): Initial value applied to PUCB upper confidence bound
+            pucb_constant_base (float): Base value applied to PUCB upper confidence bound
             eval_leaf_only (bool): True to evaluate only leaf nodes
             max_visits (int): Maximum number of visits
         '''

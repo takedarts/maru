@@ -505,7 +505,7 @@ float Node::getPriorityByPUCB(int32_t totalVisits) {
     return -99.0f;
   } else {
     float c_pucb_inc = std::log((1 + totalVisits + _pucbConstantBase) / _pucbConstantBase);
-    float c_pucb = c_pucb_inc + _pucbConstantInit;
+    float c_pucb = _pucbConstantInit * (1.0f + c_pucb_inc);
     float value = (_value / _count) * _color;
     float ucb = _policy * std::sqrt(totalVisits) / (1 + _visits);
 
