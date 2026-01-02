@@ -4,7 +4,7 @@
 # Program name
 NAME = 'Maru'
 # Version number
-VERSION = '8.1'
+VERSION = '8.1a'
 
 ################################################################
 # Board settings
