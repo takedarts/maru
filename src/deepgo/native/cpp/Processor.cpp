@@ -12,15 +12,15 @@ namespace deepgo {
  * @param batchSize Maximum batch size
  * @param fp16 True to compute with 16-bit precision
  * @param deterministic True to make computation results reproducible
- * @param threadsParGpu Number of threads per GPU
+ * @param threadsPerGpu Number of threads per GPU
  */
 Processor::Processor(
     std::string model, std::vector<int32_t> gpus, int32_t batchSize,
-    bool fp16, bool deterministic, int32_t threadsParGpu)
+    bool fp16, bool deterministic, int32_t threadsPerGpu)
     : _mutex(),
       _executors() {
   for (auto gpu : gpus) {
-    for (int32_t i = 0; i < threadsParGpu; i++) {
+    for (int32_t i = 0; i < threadsPerGpu; i++) {
       _executors.push_back(
           std::make_unique<Executor>(model, gpu, batchSize, fp16, deterministic));
     }

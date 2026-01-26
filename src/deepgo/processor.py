@@ -14,7 +14,7 @@ class Processor(object):
         batch_size: int = 2048,
         fp16: bool = False,
         deterministic: bool = False,
-        threads_par_gpu: int = 1,
+        threads_per_gpu: int = 1,
     ) -> None:
         '''Initialize computation management object.
         Args:
@@ -23,13 +23,13 @@ class Processor(object):
             batch_size (int): Maximum batch size
             fp16 (bool): True to use FP16
             deterministic (bool): True to make results reproducible
-            threads_par_gpu (int): Number of threads per GPU
+            threads_per_gpu (int): Number of threads per GPU
         '''
         if not Path(model).exists():
             raise FileNotFoundError(f'File not found: {model}')
 
         self.native = NativeProcessor(
-            str(model), gpus, batch_size, fp16, deterministic, threads_par_gpu)
+            str(model), gpus, batch_size, fp16, deterministic, threads_per_gpu)
 
     def execute(self, inputs: np.ndarray) -> np.ndarray:
         '''Execute inference.

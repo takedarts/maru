@@ -27,7 +27,7 @@ cdef class NativeProcessor:
         batch_size: int,
         fp16: bool,
         deterministic: bool,
-        threads_par_gpu: int,
+        threads_per_gpu: int,
     ) -> None:
         '''Create inference processor object.
         Args:
@@ -36,11 +36,11 @@ cdef class NativeProcessor:
             batch_size (int): Batch size
             fp16 (bool): True to compute with FP16
             deterministic (bool): True to make results reproducible
-            threads_par_gpu (int): Number of threads per GPU
+            threads_per_gpu (int): Number of threads per GPU
         '''
         self.processor = new Processor(
             model.encode('utf-8'), gpus,
-            batch_size, fp16, deterministic, threads_par_gpu)
+            batch_size, fp16, deterministic, threads_per_gpu)
 
     def __dealloc__(self) -> None:
         del self.processor
