@@ -3,46 +3,15 @@ from typing import List, Tuple
 from libc.stdint cimport int32_t
 from libcpp cimport bool
 from libcpp.vector cimport vector
-from libcpp.pair cimport pair
-from libcpp.string cimport string
-
-include "processor.pyx"
-
-cdef extern from "cpp/Candidate.h" namespace "deepgo":
-    cdef cppclass Candidate:
-        int32_t getX()
-        int32_t getY()
-        int32_t getColor()
-        int32_t getVisits()
-        int32_t getPlayouts()
-        float getPolicy()
-        float getValue()
-        float getMinimax()
-        vector[pair[int32_t, int32_t]] getVariations()
-
-
-cdef extern from "cpp/Player.h" namespace "deepgo":
-    cdef cppclass Player:
-        Player(
-            Processor*, int32_t, int32_t, int32_t, float, int, bool, 
-            float, float, float, bool, int32_t) except +
-        void initialize()
-        int32_t play(int32_t, int32_t)
-        vector[Candidate] getPass() nogil
-        vector[Candidate] getRandom(float) nogil
-        void startEvaluation(bool, int32_t, int32_t, float, float)
-        void waitEvaluation(int32_t, int32_t, float, bool) nogil
-        vector[Candidate] getCandidates()
-        int32_t getColor()
-        vector[int32_t] getBoardState()
-        string getDebugInfo()
+from pyx.candidate cimport Candidate
+from pyx.player cimport Player
 
 
 cdef class NativePlayer:
     cdef Player* player
     def __cinit__(
         self,
-        processor: NativeProcessor,
+        processor: NativeProcessor,  # type: ignore
         threads: int,
         width: int,
         height: int,
