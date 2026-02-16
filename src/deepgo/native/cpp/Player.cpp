@@ -63,6 +63,7 @@ Player::~Player() {
     std::unique_lock<std::mutex> lock(_mutex);
     _terminated = true;
     _condition.notify_all();
+    _condition.wait(lock, [this]() { return _runnings == 0; });
   }
 
   _thread->join();
