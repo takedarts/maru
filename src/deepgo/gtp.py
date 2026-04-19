@@ -573,6 +573,7 @@ class GTPEngine(object):
         return Player(
             processor=self.processor,
             threads=self.threads,
+            cache_size=max(self.visits, self.playouts * 2) * 2,
             width=self.size,
             height=self.size,
             komi=self.komi,

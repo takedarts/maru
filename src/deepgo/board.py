@@ -378,15 +378,24 @@ class Board(object):
         '''
         return self.native.get_inputs(color, komi, rule, superko)
 
+    def get_hash(self) -> int:
+        '''Get the hash value of the board.
+        Returns:
+            int: Hash value of the board
+        '''
+        return self.native.get_hash()
+
     def get_state(self) -> List[int]:
         '''Return the serialized value of the board state.
-        :return: Board state value
+        Returns:
+            List[int]: Board state value
         '''
         return self.native.get_state()
 
     def load_state(self, state: List[int]) -> None:
         '''Deserialize the board state.
-        :param state: Board state value
+        Args:
+            state (List[int]): Board state value
         '''
         self.native.load_state(state)
 

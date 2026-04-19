@@ -211,6 +211,13 @@ cdef class NativeBoard:
 
         return inputs
 
+    def get_hash(self) -> int:
+        '''Get the hash value of the board.
+        Returns:
+            int: Hash value of the board
+        '''
+        return self.board.getHash()
+
     def get_state(self) -> List[int]:
         '''Get the board state.
         Returns:

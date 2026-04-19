@@ -16,6 +16,7 @@ class NodeManager {
   /**
    * Create a class to manage node objects.
    * @param processor Object to execute inference
+   * @param cacheSize Cache size for evaluation results
    * @param width Board width
    * @param height Board height
    * @param komi Komi points
@@ -26,8 +27,8 @@ class NodeManager {
    * @param pucbConstantBase Base value applied to the PUCB upper confidence bound
    */
   NodeManager(
-      Processor* processor, int32_t width, int32_t height,
-      float komi, int32_t rule, bool superko,
+      Processor* processor, int32_t cacheSize,
+      int32_t width, int32_t height, float komi, int32_t rule, bool superko,
       float ucbConstant, float pucbConstantInit, float pucbConstantBase);
 
   /**
@@ -59,6 +60,11 @@ class NodeManager {
    * Parameters used when creating node objects.
    */
   NodeParameter _parameter;
+
+  /**
+   * Object to evaluate the board.
+   */
+  Evaluator _evaluator;
 
   /**
    * List of node objects.

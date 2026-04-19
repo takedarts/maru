@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
-#include <iostream>
 #include <map>
 #include <queue>
 #include <unordered_map>
@@ -14,6 +13,7 @@ namespace deepgo {
  * Creates a player object.
  * @param processor Object to evaluate the board
  * @param threads Number of board search threads
+ * @param cacheSize Cache size for evaluation results
  * @param width Board width
  * @param height Board height
  * @param komi Komi points
@@ -26,14 +26,14 @@ namespace deepgo {
  * @param maxVisits Maximum number of visits
  */
 Player::Player(
-    Processor* processor, int32_t threads,
+    Processor* processor, int32_t threads, int32_t cacheSize,
     int32_t width, int32_t height, float komi, int32_t rule, bool superko,
     float ucbConstant, float pucbConstantInit, float pucbConstantBase,
     bool evalLeafOnly, int32_t maxVisits)
     : _mutex(),
       _condition(),
       _nodeManager(
-          processor, width, height, komi, rule, superko,
+          processor, cacheSize, width, height, komi, rule, superko,
           ucbConstant, pucbConstantInit, pucbConstantBase),
       _threadPool(threads),
       _thread(),

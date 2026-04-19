@@ -162,7 +162,15 @@ class Board {
    * @param rule Rule for determining the winner
    * @param superko True to apply the superko rule
    */
-  void getInputs(int32_t* inputs, int32_t color, float komi, int32_t rule, bool superko);
+  void getInputs(
+      int32_t* inputs, int32_t color, float komi, int32_t rule, bool superko);
+
+  /**
+   * Gets the hash value of the board.
+   * Returns a value that includes not only the arrangement of stones but also the Ko information.
+   * @return Hash value of the board
+   */
+  uint64_t getHash() const;
 
   /**
    * Gets the state of the board.
@@ -254,6 +262,12 @@ class Board {
    * True if atari information has been updated.
    */
   bool _shichoUpdated;
+
+  /**
+   * Hash value of the board.
+   * Represents only the arrangement of stones and does not include Ko information.
+   */
+  uint64_t _hash;
 
   /**
    * Places a stone at the specified location.
@@ -360,7 +374,9 @@ class Board {
    * @param y Y coordinate
    * @return True if the position is valid
    */
-  inline bool _isValidPosition(int32_t x, int32_t y);
+  inline bool _isValidPosition(int32_t x, int32_t y) {
+    return (x >= 0 && x < _width - 2 && y >= 0 && y < _height - 2);
+  }
 
   /**
    * Gets the position number for the specified coordinates.
@@ -368,21 +384,27 @@ class Board {
    * @param y Y coordinate
    * @return Position number
    */
-  inline int32_t _getIndex(int32_t x, int32_t y);
+  inline int32_t _getIndex(int32_t x, int32_t y) {
+    return ((y + 1) * _width) + (x + 1);
+  }
 
   /**
    * Gets the X coordinate for the specified position number.
    * @param index Position number
    * @return X coordinate
    */
-  inline int32_t _getPosX(int32_t index);
+  inline int32_t _getPosX(int32_t index) {
+    return (index % _width) - 1;
+  }
 
   /**
    * Gets the Y coordinate for the specified position number.
    * @param index Position number
    * @return Y coordinate
    */
-  inline int32_t _getPosY(int32_t index);
+  inline int32_t _getPosY(int32_t index) {
+    return (index / _width) - 1;
+  }
 };
 
 }  // namespace deepgo

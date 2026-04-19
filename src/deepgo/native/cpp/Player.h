@@ -28,6 +28,7 @@ class Player {
    * Creates a player object.
    * @param processor Object to execute inference
    * @param threads Number of threads
+   * @param cacheSize Cache size for evaluation results
    * @param width Board width
    * @param height Board height
    * @param komi Komi points
@@ -40,7 +41,7 @@ class Player {
    * @param maxVisits Maximum number of visits
    */
   Player(
-      Processor* processor, int32_t threads,
+      Processor* processor, int32_t threads, int32_t cacheSize,
       int32_t width, int32_t height, float komi, int32_t rule, bool superko,
       float ucbConstant, float pucbConstantInit, float pucbConstantBase,
       bool evalLeafOnly, int32_t maxVisits);

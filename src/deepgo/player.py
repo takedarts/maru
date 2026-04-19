@@ -155,6 +155,7 @@ class Player(object):
         self,
         processor: Processor,
         threads: int = 1,
+        cache_size: int = 0,
         width: int = DEFAULT_SIZE,
         height: int = DEFAULT_SIZE,
         komi: float = DEFAULT_KOMI,
@@ -170,6 +171,7 @@ class Player(object):
         Args:
             processor (Processor): Computation management object
             threads (int): Number of threads to use
+            cache_size (int): Cache size for evaluation results (0 for no cache)
             width (int): Board width
             height (int): Board height
             komi (float): Komi value
@@ -182,7 +184,7 @@ class Player(object):
             max_visits (int): Maximum number of visits
         '''
         self.native = NativePlayer(
-            processor=processor.native, threads=threads,
+            processor=processor.native, threads=threads, cache_size=cache_size,
             width=width, height=height, komi=komi, rule=rule, superko=superko,
             ucb_constant=ucb_constant,
             pucb_constant_init=pucb_constant_init,

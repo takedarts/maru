@@ -5,6 +5,7 @@ namespace deepgo {
 /**
  * Create a class to manage node objects.
  * @param processor Object to execute inference
+ * @param cacheSize Cache size for evaluation results
  * @param width Board width
  * @param height Board height
  * @param komi Komi points
@@ -15,13 +16,14 @@ namespace deepgo {
  * @param pucbConstantBase Base value applied to the PUCB upper confidence bound
  */
 NodeManager::NodeManager(
-    Processor* processor, int32_t width, int32_t height,
-    float komi, int32_t rule, bool superko,
+    Processor* processor, int32_t cacheSize,
+    int32_t width, int32_t height, float komi, int32_t rule, bool superko,
     float ucbConstant, float pucbConstantInit, float pucbConstantBase)
     : _mutex(),
       _parameter(
           processor, width, height, komi, rule, superko,
           ucbConstant, pucbConstantInit, pucbConstantBase),
+      _evaluator(processor, cacheSize, komi, rule, superko),
       _nodes(),
       _poolNodes(),
       _usedNodes() {
@@ -40,7 +42,7 @@ Node* NodeManager::createNode() {
   Node* node;
 
   if (_poolNodes.empty()) {
-    _nodes.emplace_back(std::make_unique<Node>(this, _parameter));
+    _nodes.emplace_back(std::make_unique<Node>(this, &_evaluator, _parameter));
     node = _nodes.back().get();
   } else {
     node = _poolNodes.back();

@@ -13,6 +13,7 @@ cdef class NativePlayer:
         self,
         processor: NativeProcessor,  # type: ignore
         threads: int,
+        cache_size: int,
         width: int,
         height: int,
         komi: float,
@@ -28,6 +29,7 @@ cdef class NativePlayer:
         Args:
             processor (NativeProcessor): Processor object
             threads (int): Number of threads
+            cache_size (int): Cache size for evaluation results
             width (int): Board width
             height (int): Board height
             komi (float): Komi value
@@ -40,7 +42,8 @@ cdef class NativePlayer:
             max_visits (int): Maximum number of visits
         '''
         self.player = new Player(
-            processor.processor, threads, width, height, komi, rule, superko,
+            processor.processor, threads, cache_size,
+            width, height, komi, rule, superko,
             ucb_constant, pucb_constant_init, pucb_constant_base,
             eval_leaf_only, max_visits)
 

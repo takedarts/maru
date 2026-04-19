@@ -1,7 +1,5 @@
 #include "Model.h"
 
-#include <iostream>
-
 #include "Config.h"
 
 namespace deepgo {

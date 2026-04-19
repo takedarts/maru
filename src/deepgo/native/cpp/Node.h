@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstdint>
-#include <iostream>
 #include <queue>
 #include <shared_mutex>
 
@@ -23,9 +22,10 @@ class Node {
   /**
    * Create a search node object.
    * @param manager Node manager object
+   * @param evaluator Evaluator object
    * @param parameter Node creation parameters
    */
-  Node(NodeManager* manager, const NodeParameter& parameter);
+  Node(NodeManager* manager, Evaluator* evaluator, const NodeParameter& parameter);
 
   /**
    * Set as the initial board node.
@@ -233,7 +233,17 @@ class Node {
   /**
    * Object to evaluate the board.
    */
-  Evaluator _evaluator;
+  Evaluator* _evaluator;
+
+  /**
+   * Evaluation result.
+   */
+  Evaluation _evaluation;
+
+  /**
+   * True if the evaluation has been executed.
+   */
+  bool _evaluated;
 
   /**
    * Constant multiplied to the UCB upper confidence bound.

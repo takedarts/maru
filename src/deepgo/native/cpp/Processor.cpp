@@ -1,7 +1,6 @@
 #include "Processor.h"
 
 #include <algorithm>
-#include <iostream>
 
 namespace deepgo {
 

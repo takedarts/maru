@@ -4,6 +4,7 @@
 #include <cstring>
 
 #include "Config.h"
+#include "Constant.h"
 
 namespace deepgo {
 
@@ -36,7 +37,8 @@ Board::Board(int width, int height)
       _histories(),
       _pattern(width, height),
       _areaUpdated(false),
-      _shichoUpdated(false) {
+      _shichoUpdated(false),
+      _hash(0) {
   // Create arrays to store data
   _areaIds[0].reset(new int32_t[_length]);
   _areaIds[1].reset(new int32_t[_length]);
@@ -81,7 +83,8 @@ Board::Board(const Board& board)
       _histories(),
       _pattern(board._pattern),
       _areaUpdated(false),
-      _shichoUpdated(false) {
+      _shichoUpdated(false),
+      _hash(0) {
   // Create arrays to store data
   _areaIds[0].reset(new int32_t[_length]);
   _areaIds[1].reset(new int32_t[_length]);
@@ -121,6 +124,9 @@ void Board::clear() {
 
   // Initialize stone arrangement information
   _pattern.clear();
+
+  // Initialize the hash value of the board
+  _hash = 0;
 }
 
 /**
@@ -632,6 +638,22 @@ void Board::getInputs(int32_t* inputs, int32_t color, float komi, int32_t rule, 
 }
 
 /**
+ * Gets the hash value of the board.
+ * Returns a value that includes not only the arrangement of stones but also the Ko information.
+ * @return Hash value of the board
+ */
+uint64_t Board::getHash() const {
+  uint64_t hash = _hash;
+
+  // Include Ko information in the hash value
+  if (_koIndex != -1 && _koColor != EMPTY) {
+    hash ^= BOARD_HASH_VALUES[(_koColor == BLACK) ? 2 : 3][_koIndex];
+  }
+
+  return hash;
+}
+
+/**
  * Get the board state.
  * @return Board state
  */
@@ -737,6 +759,9 @@ void Board::copyFrom(const Board* board) {
   _histories[0] = board->_histories[0];
   _histories[1] = board->_histories[1];
 
+  // Copy the hash value of the board
+  _hash = board->_hash;
+
   // Initialize flags
   _areaUpdated = false;
   _shichoUpdated = false;
@@ -796,6 +821,9 @@ void Board::_put(int32_t index, int32_t color) {
 
   // Change arrangement representation value
   _pattern.put(_getPosX(index), _getPosY(index), color);
+
+  // Update the hash value of the board
+  _hash ^= BOARD_HASH_VALUES[(color == BLACK) ? 0 : 1][index];
 
   // Create group information
   _renIds[index] = index;
@@ -858,6 +886,9 @@ void Board::_removeRen(int32_t index) {
 
     // Change value
     _pattern.remove(_getPosX(pos), _getPosY(pos), color);
+
+    // Update the hash value of the board
+    _hash ^= BOARD_HASH_VALUES[(color == BLACK) ? 0 : 1][pos];
 
     // Add liberties to surrounding groups
     for (auto a : AROUNDS) {
@@ -1652,44 +1683,6 @@ bool Board::_isSingleArea(
   }
 
   return true;
-}
-
-/**
- * Returns whether the specified coordinates are a valid position.
- * @param x X coordinate
- * @param y Y coordinate
- * @return True if the position is valid
- */
-inline bool Board::_isValidPosition(int32_t x, int32_t y) {
-  return (x >= 0 && x < _width - 2 && y >= 0 && y < _height - 2);
-}
-
-/**
- * Gets the position number for the specified coordinates.
- * @param x X coordinate
- * @param y Y coordinate
- * @return Position number
- */
-inline int32_t Board::_getIndex(int32_t x, int32_t y) {
-  return ((y + 1) * _width) + (x + 1);
-}
-
-/**
- * Gets the X coordinate for the specified position number.
- * @param index Position number
- * @return X coordinate
- */
-inline int32_t Board::_getPosX(int32_t index) {
-  return (index % _width) - 1;
-}
-
-/**
- * Gets the Y coordinate for the specified position number.
- * @param index Position number
- * @return Y coordinate
- */
-inline int32_t Board::_getPosY(int32_t index) {
-  return (index / _width) - 1;
 }
 
 }  // namespace deepgo

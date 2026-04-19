@@ -14,9 +14,10 @@ static std::default_random_engine random_engine(random_seed_gen());
 /**
  * Creates a search node object.
  * @param manager Node management object
+ * @param evaluator Evaluation object
  * @param parameter Node creation parameters
  */
-Node::Node(NodeManager* manager, const NodeParameter& parameter)
+Node::Node(NodeManager* manager, Evaluator* evaluator, const NodeParameter& parameter)
     : _evalMutex(),
       _valueMutex(),
       _manager(manager),
@@ -26,9 +27,9 @@ Node::Node(NodeManager* manager, const NodeParameter& parameter)
       _color(WHITE),
       _captured(0),
       _policy(0.0f),
-      _evaluator(
-          parameter.getProcessor(), parameter.getKomi(),
-          parameter.getRule(), parameter.getSuperko()),
+      _evaluator(evaluator),
+      _evaluation(0.0f, std::vector<Policy>()),
+      _evaluated(false),
       _ucbConstant(parameter.getUcbConstant()),
       _pucbConstantInit(parameter.getPucbConstantInit()),
       _pucbConstantBase(parameter.getPucbConstantBase()),
@@ -79,12 +80,12 @@ NodeResult Node::evaluate(
 
   // If this is the first visit, return the evaluation result of this node
   if (_visits == 1) {
-    return NodeResult(nullptr, _evaluator.getValue(), 1);
+    return NodeResult(nullptr, _evaluation.getValue(), 1);
   }
 
   // If there are no candidate moves, return the evaluation value of this node
   if (_childPolicies.empty()) {
-    return NodeResult(nullptr, _evaluator.getValue(), 1);
+    return NodeResult(nullptr, _evaluation.getValue(), 1);
   }
 
   // Get candidate moves to add to evaluation
@@ -172,9 +173,9 @@ NodeResult Node::evaluate(
       _children[policy_index] = node;
 
       if (leaf) {
-        return NodeResult(node, _evaluator.getValue(), -1);
+        return NodeResult(node, _evaluation.getValue(), -1);
       } else {
-        return NodeResult(node, _evaluator.getValue(), 0);
+        return NodeResult(node, _evaluation.getValue(), 0);
       }
     }
   }
@@ -220,7 +221,7 @@ NodeResult Node::evaluate(
   }
 
   // Return the next node to search
-  return NodeResult(max_node, _evaluator.getValue(), 0);
+  return NodeResult(max_node, _evaluation.getValue(), 0);
 }
 
 /**
@@ -266,7 +267,7 @@ std::pair<int32_t, int32_t> Node::getRandomMove(float temperature) {
 
   {
     std::shared_lock<std::shared_mutex> lock(_evalMutex);
-    for (Policy policy : _evaluator.getPolicies()) {
+    for (Policy policy : _evaluation.getPolicies()) {
       policies.push_back(policy);
       probs.push_back(std::pow(policy.policy, 1.0 / temperature));
     }
@@ -301,7 +302,7 @@ std::pair<int32_t, int32_t> Node::getPolicyMove() {
 
   {
     std::shared_lock<std::shared_mutex> lock(_evalMutex);
-    for (Policy policy : _evaluator.getPolicies()) {
+    for (Policy policy : _evaluation.getPolicies()) {
       policies.push_back(policy);
     }
   }
@@ -553,13 +554,14 @@ std::vector<int32_t> Node::getBoardState() {
  * Executes the evaluation of this node.
  */
 void Node::_evaluate() {
-  if (_evaluator.isEvaluated()) {
+  if (_evaluated) {
     return;
   }
 
-  _evaluator.evaluate(&_board, OPPOSITE(_color));
+  _evaluation = _evaluator->evaluate(&_board, OPPOSITE(_color));
+  _evaluated = true;
 
-  for (Policy policy : _evaluator.getPolicies()) {
+  for (Policy policy : _evaluation.getPolicies()) {
     _childPolicies.push_back(policy);
   }
 }
@@ -568,7 +570,8 @@ void Node::_evaluate() {
  * Initializes the evaluation information of the node.
  */
 void Node::_reset() {
-  _evaluator.clear();
+  _evaluation = Evaluation(0.0f, std::vector<Policy>());
+  _evaluated = false;
   _children.clear();
   _childPolicies.clear();
   _waitingQueue = std::queue<Policy>();
