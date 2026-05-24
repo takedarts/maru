@@ -6,60 +6,60 @@
 namespace deepgo {
 
 /**
- * MCTSの評価値を管理するクラス。
+ * Class for managing MCTS evaluation values.
  */
 class MctsValue {
  public:
   /**
-   * 評価値オブジェクトを作成する。
+   * Creates an evaluation value object.
    */
   MctsValue();
 
   /**
-   * 評価値オブジェクトをコピーする。
-   * @param other コピー元のオブジェクト
+   * Copies an evaluation value object.
+   * @param other Source object to copy from
    */
   MctsValue(const MctsValue& other);
 
   /**
-   * 評価値を初期化する。
+   * Resets the evaluation value.
    */
   void reset();
 
   /**
-   * 評価値を更新する。
-   * @param value 評価値
+   * Updates the evaluation value.
+   * @param value Evaluation value
    */
   void update(float value);
 
   /**
-   * 評価値の平均を取得する。
-   * @param defaultValue 評価回数が0の場合に返す値
-   * @return 評価値の平均
+   * Returns the average evaluation value.
+   * @param defaultValue Value to return when the evaluation count is 0
+   * @return Average evaluation value
    */
   float getValue(float defaultValue);
 
   /**
-   * 評価値の信頼区間の下限を取得する。
-   * @param color 着手した石の色
-   * @param defaultValue 評価回数が0の場合に返す値
-   * @return 評価値の信頼区間の下限
+   * Returns the lower confidence bound of the evaluation value.
+   * @param color Color of the played stone
+   * @param defaultValue Value to return when the evaluation count is 0
+   * @return Lower confidence bound of the evaluation value
    */
   float getValueLCB(int32_t color, float defaultValue);
 
  private:
   /**
-   * 同期用ミューテックス。
+   * Mutex for synchronization.
    */
   std::mutex _mutex;
 
   /**
-   * 評価値の合計。
+   * Sum of evaluation values.
    */
   float _value;
 
   /**
-   * 評価回数。
+   * Number of evaluations.
    */
   int32_t _count;
 };

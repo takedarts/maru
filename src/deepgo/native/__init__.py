@@ -1,4 +1,4 @@
-# Windows環境ではLibTorchライブラリをロードするためにTorchモジュールをロードする必要がある
+# The torch module needs to be loaded to load the libtorch library in Windows environment
 import torch  # noqa
 
 from .modules import NativeBoard  # type: ignore # noqa

@@ -9,76 +9,76 @@
 namespace deepgo {
 
 /**
- * 予測着手確率を計算するクラス。
+ * Class that computes predicted move probabilities.
  */
 class Policy {
  public:
   /**
-   * 予測着手確率のオブジェクトを作成する。
-   * @param move 着手座標
-   * @param probability 予測着手確率
-   * @param visits 探索回数
+   * Creates a predicted move probability object.
+   * @param move move coordinate
+   * @param probability predicted move probability
+   * @param visits number of searches
    */
   Policy(Move move, float probability, int32_t visits);
 
   /**
-   * 予測着手確率をコピーしたオブジェクトを作成する。
-   * @param policy コピー元の予測着手確率
+   * Creates a copy of a predicted move probability object.
+   * @param policy source predicted move probability to copy from
    */
   Policy(const Policy& policy) = default;
 
   /**
-   * 予測着手確率のオブジェクトを作成する。
+   * Creates a predicted move probability object.
    */
   Policy();
 
   /**
-   * 予測着手確率オブジェクトを破棄する。
+   * Destroys the predicted move probability object.
    */
   virtual ~Policy() = default;
 
   /**
-   * 予測着手確率オブジェクトの文字列表現を取得する。
-   * @return 予測着手確率オブジェクトの文字列表現
+   * Returns the string representation of the predicted move probability object.
+   * @return string representation of the predicted move probability object
    */
   std::string toString() const;
 
   /**
-   * 着手座標を取得する。
-   * @return 着手座標
+   * Returns the move coordinate.
+   * @return move coordinate
    */
   inline Move getMove() const {
     return _move;
   }
 
   /**
-   * 予測着手確率を取得する。
-   * @return 予測着手確率
+   * Returns the predicted move probability.
+   * @return predicted move probability
    */
   inline float getProbability() const {
     return _probability;
   }
 
   /**
-   * 探索回数を取得する。
-   * @return 探索回数
+   * Returns the number of searches.
+   * @return number of searches
    */
   inline int32_t getVisits() const {
     return _visits;
   }
 
   /**
-   * 探索回数を1増やす。
+   * Increments the search count by 1.
    */
   inline void incrementVisits() {
     _visits += 1;
   }
 
   /**
-   * 着手予測確率の文字列表現をストリームに出力する。
-   * @param os 出力ストリーム
-   * @param policy 予測着手確率
-   * @return 出力ストリーム
+   * Writes the string representation of the predicted move probability to an output stream.
+   * @param os output stream
+   * @param policy predicted move probability object
+   * @return output stream
    */
   friend std::ostream& operator<<(std::ostream& os, const Policy& policy) {
     os << policy.toString();
@@ -87,17 +87,17 @@ class Policy {
 
  private:
   /**
-   * 着手座標。
+   * Move coordinate.
    */
   Move _move;
 
   /**
-   * 予測着手確率。
+   * Predicted move probability.
    */
   float _probability;
 
   /**
-   * 探索回数。
+   * Number of searches.
    */
   int32_t _visits;
 };

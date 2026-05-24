@@ -10,19 +10,19 @@
 namespace deepgo {
 
 /**
- * 候補手クラス。
+ * Candidate move class.
  */
 class Candidate {
  public:
   /**
-   * 候補手データを作成する。
-   * @param move 着手
-   * @param visits 訪問回数
-   * @param playouts プレイアウト数
-   * @param policy 予想着手確率
-   * @param value 評価値
-   * @param variations 予想進行
-   * @param territories 予測領域確率
+   * Creates candidate move data.
+   * @param move move
+   * @param visits number of visits
+   * @param playouts number of playouts
+   * @param policy predicted move probability
+   * @param value evaluation value
+   * @param variations predicted sequence of moves
+   * @param territories predicted territory probabilities
    */
   Candidate(
       Move move, int32_t visits, int32_t playouts,
@@ -30,95 +30,95 @@ class Candidate {
       const std::array<float, 3 * MODEL_SIZE * MODEL_SIZE>& territories);
 
   /**
-   * ノードオブジェクトから候補手データを作成する。
-   * @param node ノードオブジェクト
+   * Creates candidate move data from a node object.
+   * @param node node object
    */
   Candidate(MctsNode* node);
 
   /**
-   * 候補手オブジェクトをコピーする。
-   * @param other コピー元の候補手オブジェクト
+   * Copies a candidate move object.
+   * @param other source candidate move object to copy from
    */
   Candidate(const Candidate& other);
 
   /**
-   * 候補手オブジェクトを作成する。
-   * 不正な候補手を表すオブジェクトを作成する。
+   * Creates a candidate move object.
+   * Creates an object representing an invalid candidate move.
    */
   Candidate();
 
   /**
-   * 候補手の文字列表現を取得する。
-   * @return 候補手の文字列表現
+   * Returns the string representation of the candidate move.
+   * @return string representation of the candidate move
    */
   std::string toString() const;
 
   /**
-   * インスタンスを破棄する。
+   * Destructor.
    */
   virtual ~Candidate() = default;
 
   /**
-   * 着手を取得する。
-   * @return 着手
+   * Returns the move.
+   * @return move
    */
   inline Move getMove() const {
     return _move;
   }
 
   /**
-   * 訪問回数を取得する。
-   * @return 訪問回数
+   * Returns the number of visits.
+   * @return number of visits
    */
   inline int32_t getVisits() const {
     return _visits;
   }
 
   /**
-   * プレイアウト数を取得する。
-   * @return プレイアウト数
+   * Returns the number of playouts.
+   * @return number of playouts
    */
   inline int32_t getPlayouts() const {
     return _playouts;
   }
 
   /**
-   * 予想着手確率を取得する。
-   * @return 予想着手確率
+   * Returns the predicted move probability.
+   * @return predicted move probability
    */
   inline float getPolicy() const {
     return _policy;
   }
 
   /**
-   * 評価値を取得する。
-   * @return 評価値
+   * Returns the evaluation value.
+   * @return evaluation value
    */
   inline float getValue() const {
     return _value;
   }
 
   /**
-   * 予想進行を取得する。
-   * @return 予想進行
+   * Returns the predicted sequence of moves.
+   * @return predicted sequence of moves
    */
   inline std::vector<Move> getVariations() const {
     return _variations;
   }
 
   /**
-   * 予測領域確率を取得する。
-   * @param territories 予測領域確率を格納する配列
+   * Returns the predicted territory probabilities.
+   * @param territories array to store the predicted territory probabilities
    */
   inline void getTerritories(float* territories) const {
     std::copy(std::begin(_territories), std::end(_territories), territories);
   }
 
   /**
-   * 候補手の文字列表現を出力ストリームに書き込む。
-   * @param os 出力ストリーム
-   * @param candidate 候補手オブジェクト
-   * @return 出力ストリーム
+   * Writes the string representation of the candidate move to an output stream.
+   * @param os output stream
+   * @param candidate candidate move object
+   * @return output stream
    */
   friend std::ostream& operator<<(std::ostream& os, const Candidate& candidate) {
     os << candidate.toString();
@@ -127,37 +127,37 @@ class Candidate {
 
  private:
   /**
-   * 着手。
+   * Move.
    */
   Move _move;
 
   /**
-   * 訪問回数。
+   * Number of visits.
    */
   int32_t _visits;
 
   /**
-   * プレイアウト数。
+   * Number of playouts.
    */
   int32_t _playouts;
 
   /**
-   * 予想着手確率。
+   * Predicted move probability.
    */
   float _policy;
 
   /**
-   * 評価値。
+   * Evaluation value.
    */
   float _value;
 
   /**
-   * 予想進行。
+   * Predicted sequence of moves.
    */
   std::vector<Move> _variations;
 
   /**
-   * 予測領域確率。
+   * Predicted territory probabilities.
    */
   std::array<float, 3 * MODEL_SIZE * MODEL_SIZE> _territories;
 };

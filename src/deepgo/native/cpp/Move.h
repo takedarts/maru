@@ -9,79 +9,79 @@
 namespace deepgo {
 
 /**
- * 着手の情報を管理するクラス。
+ * Class that manages move information.
  */
 class Move {
  public:
   /**
-   * パスの着手値を生成する。
-   * @param color 置いた石の色
-   * @return パスの着手値
+   * Creates a pass move.
+   * @param color color of the placed stone
+   * @return pass move
    */
   inline static Move createPassMove(int8_t color) {
     return Move(-1, -1, color);
   }
 
   /**
-   * 着手オブジェクトを作成する。
-   * @param x 置いた石のX座標
-   * @param y 置いた石のY座標
-   * @param color 置いた石の色
+   * Creates a move object.
+   * @param x x coordinate of the placed stone
+   * @param y y coordinate of the placed stone
+   * @param color color of the placed stone
    */
   Move(int8_t x, int8_t y, int8_t color);
 
   /**
-   * 着手オブジェクトをコピーする。
-   * @param other コピー元の着手オブジェクト
+   * Copies a move object.
+   * @param other source move object to copy from
    */
   Move(const Move& other) = default;
 
   /**
-   * 着手オブジェクトを作成する。
-   * 不正な着手を表すオブジェクトを作成する。
+   * Creates a move object.
+   * Creates an object representing an invalid move.
    */
   Move();
 
   /**
-   * 着手オブジェクトを破棄する。
+   * Destructor.
    */
   virtual ~Move() = default;
 
   /**
-   * 着手オブジェクトの文字列表現を取得する。
-   * @return 着手オブジェクトの文字列表現
+   * Returns the string representation of the move object.
+   * @return string representation of the move object
    */
   std::string toString() const;
 
   /**
-   * X座標を取得する。
-   * @return X座標
+   * Returns the x coordinate.
+   * @return x coordinate
    */
   inline int8_t getX() const {
     return _x;
   }
 
   /**
-   * Y座標を取得する。
-   * @return Y座標
+   * Returns the y coordinate.
+   * @return y coordinate
    */
   inline int8_t getY() const {
     return _y;
   }
 
   /**
-   * 置いた石の色を取得する。
-   * @return 石の色
+   * Returns the color of the placed stone.
+   * @return stone color
    */
   inline int8_t getColor() const {
     return _color;
   }
 
   /**
-   * 着手オブジェクトが有効な値を持っているかどうかを返す。
-   * @param width 盤面の幅
-   * @param height 盤面の高さ
-   * @return 有効な値を持っているならtrue
+   * Returns whether the move object holds a valid value.
+   * @param width board width
+   * @param height board height
+   * @return true if the move holds a valid value
    */
   inline bool isValid(int8_t width, int8_t height) const {
     if (_x < 0 || _x >= width || _y < 0 || _y >= height) {
@@ -94,18 +94,18 @@ class Move {
   }
 
   /**
-   * 着手オブジェクトがパスを表しているかどうかを返す。
-   * @return パスを表しているならtrue
+   * Returns whether the move object represents a pass.
+   * @return true if the move represents a pass
    */
   inline bool isPass() const {
     return _x == -1 && _y == -1;
   }
 
   /**
-   * 着手オブジェクトの文字列表現を出力ストリームに書き込む。
-   * @param os 出力ストリーム
-   * @param move 着手オブジェクト
-   * @return 出力ストリーム
+   * Writes the string representation of the move object to an output stream.
+   * @param os output stream
+   * @param move move object
+   * @return output stream
    */
   friend std::ostream& operator<<(std::ostream& os, const Move& move) {
     os << move.toString();
@@ -114,22 +114,22 @@ class Move {
 
  private:
   /**
-   * X座標。
+   * X coordinate.
    */
   int8_t _x;
 
   /**
-   * Y座標。
+   * Y coordinate.
    */
   int8_t _y;
 
   /**
-   * 置いた石の色。
+   * Color of the placed stone.
    */
   int8_t _color;
 };
 
-// 無効な着手値
+// Invalid move value
 const Move MOVE_INVALID = Move();
 
 }  // namespace deepgo

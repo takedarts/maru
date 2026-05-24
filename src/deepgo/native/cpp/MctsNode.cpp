@@ -8,14 +8,14 @@
 
 namespace deepgo {
 
-// 探索時のPolicyサンプリングとガンベルノイズで使用する
-// スレッドローカル乱数生成器
+// Thread-local random number generators used for
+// policy sampling and Gumbel noise during search
 thread_local static std::random_device random_seed_gen;
 thread_local static std::default_random_engine random_engine(random_seed_gen());
 
 /**
- * 探索ノードオブジェクトを作成する。
- * @param manager ノード管理オブジェクト
+ * Creates a search node object.
+ * @param manager Node management object
  */
 MctsNode::MctsNode(MctsManager* manager)
     : _mutex(),
@@ -42,7 +42,7 @@ MctsNode::MctsNode(MctsManager* manager)
 }
 
 /**
- * 初期盤面ノードとして設定する。
+ * Initializes this as an initial board node.
  */
 void MctsNode::initialize() {
   std::unique_lock<std::shared_mutex> lock(_mutex);
@@ -54,12 +54,12 @@ void MctsNode::initialize() {
 }
 
 /**
- * 初期盤面ノードとして設定する。
- * @param board 盤面
- * @param x 着手座標のX座標
- * @param y 着手座標のY座標
- * @param previousColor 直前に打った石の色
- * @param captured 打ち上げた石の数
+ * Initializes this as an initial board node.
+ * @param board Board state
+ * @param x X coordinate of the move
+ * @param y Y coordinate of the move
+ * @param previousColor Color of the last played stone
+ * @param captured Number of captured stones
  */
 void MctsNode::initialize(
     const Board* board, int x, int y, int32_t previousColor, int32_t captured) {
@@ -72,56 +72,56 @@ void MctsNode::initialize(
 }
 
 /**
- * 推論結果を適用する。
- * @param result 推論結果
+ * Applies an inference result.
+ * @param result Inference result
  */
 void MctsNode::applyInferenceResult(const InferenceResult& result) {
   std::unique_lock<std::shared_mutex> lock(_mutex);
 
-  // 盤面評価値を更新する
+  // Update the board evaluation value
   _nodeValue = result.getValue();
 
-  // 予想着手確率の一覧を更新する
+  // Update the list of predicted move probabilities
   _policies = result.getPolicies();
 
-  // 予測領域の確率を更新する
+  // Update the predicted territory probabilities
   _territories = result.getTerritories();
 
-  // 評価済みとする
+  // Mark as evaluated
   _evaluating = false;
   _evaluated = true;
 
-  // 評価の完了を待機しているスレッドに通知する
+  // Notify threads waiting for evaluation to complete
   _condition.notify_all();
 }
 
 /**
- * 次に評価するノードを取得する。
- * @param equally 探索回数を均等にする場合はtrue
- * @param width 探索幅
- * @param temperature 探索の温度パラメータ
- * @param noise ガンベルノイズの強さ
- * @return 次に評価するノード
+ * Returns the next node to evaluate.
+ * @param equally True to equalize the visit count
+ * @param width Search width
+ * @param temperature Temperature parameter for search
+ * @param noise Gumbel noise strength
+ * @return Next node to evaluate
  */
 MctsNode* MctsNode::pickupNextNode(bool equally, int32_t width, float temperature, float noise) {
   std::unique_lock<std::shared_mutex> lock(_mutex);
 
-  // このノードに到達した探索回数を増やす
+  // Increment the visit count for this node
   _visits += 1;
 
-  // このノードが評価中ならば、評価の完了を待機する
+  // If this node is being evaluated, wait for evaluation to complete
   if (_evaluating) {
     _condition.wait(lock, [this] { return !_evaluating; });
   }
 
-  // すでに評価済みの場合は次に評価するノードを返す
+  // If already evaluated, return the next node to evaluate
   if (_evaluated) {
-    // 次に評価するノードが存在する場合は次に評価するノードを返す
-    // プレイアウト数は末端ノードによって増やされる
+    // If the next node to evaluate exists, return the next node to evaluate
+    // Playout count is incremented by the leaf node
     if (!_policies.empty()) {
       return _pickupNextNode(equally, width, temperature, noise);
     }
-    // そうでない場合はプレイアウト数だけ増やしてこのノードを返す
+    // Otherwise, increment the playout count only and return this node
     else {
       MctsNode* current_node = this;
 
@@ -134,7 +134,7 @@ MctsNode* MctsNode::pickupNextNode(bool equally, int32_t width, float temperatur
     }
   }
 
-  // 未評価ノードに到達したのでプレイアウト数を増やす
+  // Reached an unevaluated node, so increment the playout count
   _playouts.fetch_add(1, std::memory_order_relaxed);
 
   if (!_firstChild) {
@@ -146,14 +146,14 @@ MctsNode* MctsNode::pickupNextNode(bool equally, int32_t width, float temperatur
     }
   }
 
-  // このノードの状態を評価中にする
+  // Mark this node as being evaluated
   _evaluating = true;
 
   return nullptr;
 }
 
 /**
- * ルートノードとして設定する。
+ * Sets this node as the root node.
  */
 void MctsNode::setAsRootNode() {
   std::unique_lock<std::shared_mutex> lock(_mutex);
@@ -163,8 +163,8 @@ void MctsNode::setAsRootNode() {
 }
 
 /**
- * 評価済みならtrueを返す。
- * @return 評価済みならtrue
+ * Returns true if this node has been evaluated.
+ * @return True if evaluated
  */
 bool MctsNode::isEvaluated() {
   std::shared_lock<std::shared_mutex> lock(_mutex);
@@ -172,8 +172,8 @@ bool MctsNode::isEvaluated() {
 }
 
 /**
- * 盤面評価値を取得する。
- * @return 盤面評価値
+ * Returns the board evaluation value.
+ * @return Board evaluation value
  */
 float MctsNode::getNodeValue() {
   std::shared_lock<std::shared_mutex> lock(_mutex);
@@ -181,8 +181,8 @@ float MctsNode::getNodeValue() {
 }
 
 /**
- * 直前に打った石の色を設定する。
- * @param color 直前に打った石の色
+ * Sets the color of the previously played stone.
+ * @param color Color of the previously played stone
  */
 void MctsNode::setPreviousColor(int32_t color) {
   std::unique_lock<std::shared_mutex> lock(_mutex);
@@ -190,42 +190,42 @@ void MctsNode::setPreviousColor(int32_t color) {
 }
 
 /**
- * コミを取得する。
- * @return コミ
+ * Returns the komi.
+ * @return Komi
  */
 float MctsNode::getKomi() const {
   return _manager->getParameter().getKomi();
 }
 
 /**
- * ルールを取得する。
- * @return ルール
+ * Returns the rule.
+ * @return Rule
  */
 int32_t MctsNode::getRule() const {
   return _manager->getParameter().getRule();
 }
 
 /**
- * スーパーコウルールを適用するならtrueを返す。
- * @return スーパーコウルールを適用するならtrue
+ * Returns true if the superko rule is applied.
+ * @return True if the superko rule is applied
  */
 bool MctsNode::getSuperko() const {
   return _manager->getParameter().getSuperko();
 }
 
 /**
- * PolicyNetworkの評価値が最も高い候補手を取得する。
- * @return 候補手
+ * Returns the candidate move with the highest PolicyNetwork evaluation value.
+ * @return Candidate move
  */
 Move MctsNode::getPolicyMove() {
   std::shared_lock<std::shared_mutex> lock(_mutex);
 
-  // 候補手がない場合はパスを返す
+  // If there are no candidate moves, return a pass
   if (_policies.empty()) {
     return Move::createPassMove(getNextColor());
   }
 
-  // 最も着手確率が高い候補手を取得する
+  // Get the candidate move with the highest move probability
   Policy max_policy = _policies[0];
 
   for (const Policy& policy : _policies) {
@@ -234,13 +234,13 @@ Move MctsNode::getPolicyMove() {
     }
   }
 
-  // 最も着手確率が高い候補手を返す
+  // Return the candidate move with the highest move probability
   return max_policy.getMove();
 }
 
 /**
- * 子ノードの一覧を取得する。
- * @return 子ノードの一覧
+ * Returns the list of child nodes.
+ * @return List of child nodes
  */
 std::vector<MctsNode*> MctsNode::getChildren() {
   std::shared_lock<std::shared_mutex> lock(_mutex);
@@ -254,8 +254,8 @@ std::vector<MctsNode*> MctsNode::getChildren() {
 }
 
 /**
- * 親ノードを取得する。
- * @return 親ノード
+ * Returns the parent node.
+ * @return Parent node
  */
 MctsNode* MctsNode::getParent() {
   std::shared_lock<std::shared_mutex> lock(_mutex);
@@ -263,21 +263,21 @@ MctsNode* MctsNode::getParent() {
 }
 
 /**
- * 指定した着手に対応するノードを取得する。
- * @param move 着手
- * @return ノード
+ * Returns the node corresponding to the specified move.
+ * @param move Move
+ * @return Node
  */
 MctsNode* MctsNode::getChild(Move move) {
   std::unique_lock<std::shared_mutex> lock(_mutex);
   int32_t index = _getMoveIndex(move);
 
-  // 子ノードが存在する場合はそのノードを返す
+  // If the child node exists, return it
   if (_children.find(index) != _children.end()) {
     return _children[index];
   }
 
-  // 子ノードが存在しない場合は新しくノードオブジェクトを作成して返す
-  // 作成したノードオブジェクトはこのノードオブジェクトの子ノードとしては登録しない
+  // If no child node exists, create a new node object and return it
+  // The created node is not registered as a child node of this node
   MctsNode* node = _manager->createNode();
 
   node->_resetNode();
@@ -290,8 +290,8 @@ MctsNode* MctsNode::getChild(Move move) {
 }
 
 /**
- * 指定した着手に対応する子ノードを削除する。
- * @param move 着手
+ * Removes the child node corresponding to the specified move.
+ * @param move Move
  */
 void MctsNode::removeChild(Move move) {
   std::unique_lock<std::shared_mutex> lock(_mutex);
@@ -300,8 +300,8 @@ void MctsNode::removeChild(Move move) {
 }
 
 /**
- * このノードの探索回数を取得する。
- * @return 探索回数
+ * Returns the visit count of this node.
+ * @return Visit count
  */
 int32_t MctsNode::getVisits() {
   std::shared_lock<std::shared_mutex> lock(_mutex);
@@ -309,48 +309,48 @@ int32_t MctsNode::getVisits() {
 }
 
 /**
- * プレイアウト数を取得する。
- * @return プレイアウト数
+ * Returns the playout count.
+ * @return Playout count
  */
 int32_t MctsNode::getPlayouts() {
   return _playouts.load(std::memory_order_relaxed);
 }
 
 /**
- * MCTS評価値を更新する。
- * @param value 評価値
+ * Updates the MCTS evaluation value.
+ * @param value Evaluation value
  */
 void MctsNode::updateMctsValue(float value) {
   _mctsValue.update(value);
 }
 
 /**
- * MCTS評価値を取得する。
- * @return MCTS評価値
+ * Returns the MCTS evaluation value.
+ * @return MCTS evaluation value
  */
 float MctsNode::getMctsValue() {
   return _mctsValue.getValue(_nodeValue);
 }
 
 /**
- * MCTS評価値の信頼区間の下限を取得する。
- * @return 信頼区間の下限
+ * Returns the lower confidence bound of the MCTS evaluation value.
+ * @return Lower confidence bound
  */
 float MctsNode::getMctsValueLCB() {
   return _mctsValue.getValueLCB(_move.getColor(), _nodeValue);
 }
 
 /**
- * PUCBに基づいて優先度を取得する。
- * @param totalVisits 探索回数の合計
- * @return 優先度
+ * Returns the priority based on PUCB.
+ * @param totalVisits Total visit count
+ * @return Priority
  */
 float MctsNode::getPriorityByPUCB(int32_t totalVisits) {
   std::shared_lock<std::shared_mutex> lock(_mutex);
   float pucb_constant_base = _manager->getParameter().getPucbConstantBase();
   float pucb_constant_init = _manager->getParameter().getPucbConstantInit();
 
-  // 手番側から見た評価値に、Policy由来の探索ボーナスを足す
+  // Add the Policy-based search bonus to the evaluation value from the current player's perspective
   float value = _mctsValue.getValue(_nodeValue) * _move.getColor();
   float c_pucb_inc = std::log((1 + totalVisits + pucb_constant_base) / pucb_constant_base);
   float c_pucb = pucb_constant_init * (1.0f + c_pucb_inc);
@@ -360,21 +360,21 @@ float MctsNode::getPriorityByPUCB(int32_t totalVisits) {
 }
 
 /**
- * このノードの予想進行を取得する。
- * @return 予想進行
+ * Returns the predicted variation from this node.
+ * @return Predicted variation
  */
 std::vector<Move> MctsNode::getVariations() {
   std::vector<Move> variations;
   MctsNode* max_child = nullptr;
 
   {
-    // 同期用ミューテックスをロックする
+    // Lock the synchronization mutex
     std::shared_lock<std::shared_mutex> lock(_mutex);
 
-    // このノードの着手を予想進行の先頭に追加する
+    // Add this node's move to the front of the predicted variation
     variations.push_back(_move);
 
-    // 評価値のLCBが最大の子ノードを辿る手順で予想進行を作成する
+    // Build the predicted variation by following the child node with the highest evaluation LCB
     float max_lcb = -std::numeric_limits<float>::infinity();
 
     for (auto child : _children) {
@@ -387,7 +387,7 @@ std::vector<Move> MctsNode::getVariations() {
     }
   }
 
-  // 子ノードの予想進行を予想進行の末尾に追加する
+  // Append the child node's predicted variation to the end
   if (max_child != nullptr) {
     std::vector<Move> child_variations = max_child->getVariations();
     variations.insert(variations.end(), child_variations.begin(), child_variations.end());
@@ -397,17 +397,17 @@ std::vector<Move> MctsNode::getVariations() {
 }
 
 /**
- * 領域の予測確率を取得する。
- * @return 領域の予測確率
+ * Returns the predicted territory probabilities.
+ * @return Predicted territory probabilities
  */
 std::array<float, 3 * MODEL_SIZE * MODEL_SIZE> MctsNode::getTerritories() {
   MctsNode* max_child = nullptr;
 
   {
-    // 同期用ミューテックスをロックする
+    // Lock the synchronization mutex
     std::shared_lock<std::shared_mutex> lock(_mutex);
 
-    // 子ノードが存在しない場合はこのノードの予測領域確率を返す
+    // If there are no child nodes, return this node's predicted territory probabilities
     if (_children.empty()) {
       const int32_t width = _board.getWidth();
       const int32_t height = _board.getHeight();
@@ -438,7 +438,7 @@ std::array<float, 3 * MODEL_SIZE * MODEL_SIZE> MctsNode::getTerritories() {
       return _territories;
     }
 
-    // 評価値のLCBが最大の子ノードを辿る手順で予測領域確率を取得する
+    // Get the predicted territory probabilities by following the child node with the highest evaluation LCB
     float max_lcb = -std::numeric_limits<float>::infinity();
 
     for (auto child : _children) {
@@ -451,13 +451,13 @@ std::array<float, 3 * MODEL_SIZE * MODEL_SIZE> MctsNode::getTerritories() {
     }
   }
 
-  // 子ノードの予測領域確率を返す
+  // Return the child node's predicted territory probabilities
   return max_child->getTerritories();
 }
 
 /**
- * 盤面の状態を取得する。
- * @return 盤面の状態
+ * Returns the board state.
+ * @return Board state
  */
 std::vector<int32_t> MctsNode::getBoardState() {
   std::shared_lock<std::shared_mutex> lock(_mutex);
@@ -465,7 +465,7 @@ std::vector<int32_t> MctsNode::getBoardState() {
 }
 
 /**
- * 盤面以外の状態を初期化する。
+ * Initializes all state except the board.
  */
 void MctsNode::_resetNode() {
   _probability = 0.0f;
@@ -484,17 +484,17 @@ void MctsNode::_resetNode() {
 }
 
 /**
- * 次に評価するノードを取得する。
- * @param equally 探索回数を均等にする場合はtrue
- * @param width 探索幅
- * @param temperature 探索の温度パラメータ
- * @param noise ガンベルノイズの強さ
- * @return 次に評価するノード
+ * Returns the next node to evaluate.
+ * @param equally True to equalize the visit count
+ * @param width Search width
+ * @param temperature Temperature parameter for search
+ * @param noise Gumbel noise strength
+ * @return Next node to evaluate
  */
 MctsNode* MctsNode::_pickupNextNode(bool equally, int32_t width, float temperature, float noise) {
-  // ルートノードであり、日本ルールであり、子ノードが1個以上であり、
-  // パスの子ノードが存在せず、パスの候補手が待機リストに存在しない場合、
-  // パスの候補手を着手確率0として待機リストに追加する
+  // If this is the root node, the Japanese rule is in effect, there is at least one child node,
+  // no pass child node exists, and no pass candidate is in the waiting list,
+  // add a pass candidate with probability 0 to the waiting list
   Move pass_move = Move::createPassMove(getNextColor());
   int32_t pass_move_index = _getMoveIndex(pass_move);
 
@@ -507,7 +507,7 @@ MctsNode* MctsNode::_pickupNextNode(bool equally, int32_t width, float temperatu
     _waitingMoves.insert(pass_move_index);
   }
 
-  // Policyの候補が残っていて探索幅に余裕がある場合は、新しい着手を展開候補にする
+  // If there are remaining Policy candidates and search width allows, add a new move as an expansion candidate
   int32_t children_size = static_cast<int32_t>(_children.size() + _waitingMoves.size());
 
   if (children_size < static_cast<int32_t>(_policies.size()) &&
@@ -516,33 +516,33 @@ MctsNode* MctsNode::_pickupNextNode(bool equally, int32_t width, float temperatu
     int32_t max_priority_type = 0;
     float max_priority = 0.0f;
 
-    // 温度パラメータを計算する
+    // Calculate the temperature parameter
     float win_chance = _mctsValue.getValue(_nodeValue) * getNextColor() * 0.5f + 0.5f;
     float temperature_power =
         win_chance + (1.0f / std::max(temperature, 1e-3f)) * (1 - win_chance);
 
-    // ガンベルノイズの生成オブジェクトを作成する
-    // 子ノードの数が4以下の場合はノイズを加えない
+    // Create a Gumbel noise distribution object
+    // Do not add noise if the number of child nodes is 4 or fewer
     float noise_scale = (children_size <= 4) ? 0.0f : noise;
     std::extreme_value_distribution<float> noise_dist(0.0f, noise_scale);
 
-    // 予測確率、温度、ガンベルノイズ、未展開優先の条件から次の候補を選ぶ
+    // Select the next candidate based on predicted probability, temperature, Gumbel noise, and unexpanded-first priority
     for (int32_t i = 0; i < static_cast<int32_t>(_policies.size()); i++) {
       Policy& policy = _policies[i];
       float probability = policy.getProbability();
 
-      // 温度パラメータを反映させる
+      // Apply the temperature parameter
       probability = std::pow(probability, temperature_power);
 
-      // ガンベルノイズを加える
-      // ノイズを加算する対象はロジットとなるため、確率に対してはe^noiseを乗算する
+      // Add Gumbel noise
+      // Since noise is added to logits, multiply the probability by e^noise
       probability *= std::exp(noise_dist(random_engine));
 
-      // 優先度を計算する
+      // Calculate the priority
       int32_t priority_type = 1;
       float priority = probability / (policy.getVisits() + 1);
 
-      // 探索回数を均等にする設定となっている場合は登録済みの候補手の優先度を下げる
+      // If configured to equalize visit counts, lower the priority of already-registered candidates
       if (equally) {
         int32_t policy_index = _getMoveIndex(policy.getMove());
 
@@ -552,7 +552,7 @@ MctsNode* MctsNode::_pickupNextNode(bool equally, int32_t width, float temperatu
         }
       }
 
-      // 優先度の高い候補手を残す
+      // Keep the candidate with the highest priority
       if (priority_type > max_priority_type ||
           (priority_type == max_priority_type && priority > max_priority)) {
         max_index = i;
@@ -561,7 +561,7 @@ MctsNode* MctsNode::_pickupNextNode(bool equally, int32_t width, float temperatu
       }
     }
 
-    // 評価に追加する候補手が未登録状態であれば新たに待機リストに登録する
+    // If the selected candidate is not yet registered, add it to the waiting list
     Policy& max_policy = _policies[max_index];
     int32_t max_policy_index = _getMoveIndex(max_policy.getMove());
 
@@ -574,18 +574,18 @@ MctsNode* MctsNode::_pickupNextNode(bool equally, int32_t width, float temperatu
     _policies[max_index].incrementVisits();
   }
 
-  // 探索幅が指定されていない場合と子ノードの数が指定された探索幅に達していない場合、
-  // 待機リストに候補手が存在する場合は新しい子ノードを作成して次の探索先として返す
+  // If no search width is specified or the number of child nodes has not reached the specified width,
+  // and if there is a candidate in the waiting list, create a new child node and return it as the next search target
   if (_waitingPolicies.size() > 0 && (width <= 0 || _children.size() < width)) {
-    // 最初に登録された待機中の候補手を取得する
+    // Get the first registered candidate from the waiting list
     Policy policy = _waitingPolicies.front();
     int32_t policy_index = _getMoveIndex(policy.getMove());
 
     _waitingPolicies.pop();
     _waitingMoves.erase(policy_index);
 
-    // 未登録の候補手であれば新しい子ノードを作成して次の探索先として返す
-    // 暫定的にノードの評価値には最低評価値を設定する
+    // If this is an unregistered candidate, create a new child node and return it as the next search target
+    // Tentatively set the lowest evaluation value for the node
     if (_children.find(policy_index) == _children.end()) {
       MctsNode* node = _manager->createNode();
 
@@ -603,7 +603,7 @@ MctsNode* MctsNode::_pickupNextNode(bool equally, int32_t width, float temperatu
     }
   }
 
-  // 探索対象とする子ノードの一覧を作成する
+  // Build the list of child nodes to search
   std::vector<std::pair<MctsNode*, float>> children;
 
   for (std::pair<int32_t, MctsNode*> child : _children) {
@@ -615,7 +615,7 @@ MctsNode* MctsNode::_pickupNextNode(bool equally, int32_t width, float temperatu
     return nullptr;
   }
 
-  // 探索幅が指定されている場合は探索対象とする子ノードの数を制限する
+  // If a search width is specified, limit the number of child nodes to search
   if (width > 0 && children.size() > static_cast<size_t>(width)) {
     std::sort(children.begin(), children.end(), [](auto a, auto b) {
       return a.second > b.second;
@@ -624,37 +624,37 @@ MctsNode* MctsNode::_pickupNextNode(bool equally, int32_t width, float temperatu
     children.resize(width);
   }
 
-  // 最も優先度が高いノードを次の探索先として返す
+  // Return the node with the highest priority as the next search target
   MctsNode* max_node = nullptr;
   float max_priority = -std::numeric_limits<float>::infinity();
 
   for (std::pair<MctsNode*, float> child : children) {
     float priority;
 
-    // パスのノードは探索しない
+    // Do not search pass nodes
     if (child.first->_move.isPass()) {
       continue;
     }
-    // 探索回数を均等にする設定となっている場合は、
-    // 訪問回数に基づいて優先度を計算する（訪問回数が同じならば評価値を考慮する）
+    // If configured to equalize visit counts,
+    // calculate priority based on visit count (consider evaluation value if visit counts are equal)
     else if (equally) {
       float visits = static_cast<float>(child.first->getVisits());
       float value = child.first->getMctsValue() * getNextColor();
       priority = 1.0f / (visits + 1 - value * 0.5f);
     }
-    // そうでない場合はPUCBに基づいて優先度を計算する
+    // Otherwise, calculate priority based on PUCB
     else {
       priority = child.first->getPriorityByPUCB(_visits);
     }
 
-    // 優先度の高いノードを残す
+    // Keep the node with the highest priority
     if (max_priority < priority) {
       max_node = child.first;
       max_priority = priority;
     }
   }
 
-  // 最も優先度の高いノードを次の探索先として返す
+  // Return the node with the highest priority as the next search target
   return max_node;
 }
 

@@ -6,17 +6,17 @@
 namespace deepgo {
 
 /**
- * プレイヤオブジェクトを作成する。
- * @param processor 推論を実行するオブジェクト
- * @param threads スレッドの数
- * @param maxVisits 最大訪問数
- * @param width 盤面の幅
- * @param height 盤面の高さ
- * @param komi コミの目数
- * @param rule 勝敗の判定ルール
- * @param superko スーパーコウルールを適用するならtrue
- * @param pucbConstantInit PUCBの信頼上限に掛ける定数の初期値
- * @param pucbConstantBase PUCBの信頼上限に掛ける定数の変化値
+ * Creates a player object.
+ * @param processor Object that executes inference
+ * @param threads Number of threads
+ * @param maxVisits Maximum number of visits
+ * @param width Board width
+ * @param height Board height
+ * @param komi Komi points
+ * @param rule Win/loss determination rule
+ * @param superko true to apply the superko rule
+ * @param pucbConstantInit Initial value of the constant multiplied by the PUCB confidence upper bound
+ * @param pucbConstantBase Change value of the constant multiplied by the PUCB confidence upper bound
  */
 Player::Player(
     InferenceProcessor* processor, int32_t threads, int32_t maxVisits,
@@ -49,7 +49,7 @@ Player::Player(
 }
 
 /**
- * プレイヤオブジェクトを破棄する。
+ * Destroys the player object.
  */
 Player::~Player() {
   {
@@ -64,56 +64,56 @@ Player::~Player() {
 }
 
 /**
- * プレイヤオブジェクトの状態を初期化する。
+ * Initializes the state of the player object.
  */
 void Player::initialize() {
   std::unique_lock<std::mutex> lock(_mutex);
 
-  // 探索スレッドを一時停止する
+  // Pause the search thread
   _paused = true;
   _stopCondition.wait(lock, [this]() {
     return _runnings == 0 && _evaluatingNodes.empty();
   });
 
-  // 現在の探索木を退避して、新しい初期局面のルートを作成する
+  // Save the current search tree and create a new root for the initial position
   MctsNode* old_root = _root;
 
   _root = _nodeManager.createNode();
   _root->initialize();
 
-  // 古い探索木はノードプールへ戻して再利用できる状態にする
+  // Return the old search tree to the node pool so it can be reused
   _nodeManager.releaseTree(old_root);
 
-  // 探索スレッドを再開する
+  // Resume the search thread
   _paused = false;
   _searchCondition.notify_one();
 }
 
 /**
- * 盤面に石を置く。
- * @param move 着手
- * @return 打ち上げた石の数
+ * Places a stone on the board.
+ * @param move Move to play
+ * @return Number of captured stones
  */
 int32_t Player::play(Move move) {
   std::unique_lock<std::mutex> lock(_mutex);
 
-  // 探索スレッドを一時停止する
+  // Pause the search thread
   _paused = true;
   _stopCondition.wait(lock, [this]() {
     return _runnings == 0 && _evaluatingNodes.empty();
   });
 
-  // 着手先の子ノードを新しいルートにする
+  // Set the child node at the played move as the new root
   MctsNode* old_root = _root;
 
   _root = old_root->getChild(move);
   _root->setAsRootNode();
 
-  // 新しいルートを古い探索木から切り離して、それ以外を解放する
+  // Detach the new root from the old search tree and release the rest
   old_root->removeChild(move);
   _nodeManager.releaseTree(old_root);
 
-  // 探索スレッドを再開する
+  // Resume the search thread
   _paused = false;
   _searchCondition.notify_one();
 
@@ -121,26 +121,26 @@ int32_t Player::play(Move move) {
 }
 
 /**
- * パスの候補手を取得する。
- * @return パスの候補手
+ * Gets the pass candidate move.
+ * @return Pass candidate move
  */
 std::vector<Candidate> Player::getPass() {
   std::unique_lock<std::mutex> lock(_mutex);
 
-  // 探索スレッドを一時停止する
+  // Pause the search thread
   _paused = true;
   _stopCondition.wait(lock, [this]() {
     return _runnings == 0 && _evaluatingNodes.empty();
   });
 
-  // パスの候補手を作成する
+  // Create the pass candidate move
   std::vector<Candidate> candidates;
 
   candidates.emplace_back(
       Move::createPassMove(_root->getNextColor()), 0, 0, 1.0f,
       _root->getMctsValue(), std::vector<Move>(), _root->getTerritories());
 
-  // 探索スレッドを再開する
+  // Resume the search thread
   _paused = false;
   _searchCondition.notify_one();
 
@@ -148,47 +148,47 @@ std::vector<Candidate> Player::getPass() {
 }
 
 /**
- * 盤面評価を開始する。
- * @param equally 探索回数を均等にするならtrue
- * @param width 候補手の探索幅
- * @param temperature 探索の温度パラメータ
- * @param noise ガンベルノイズの強さ
+ * Starts board evaluation.
+ * @param equally true to distribute search counts equally
+ * @param width Search width for candidate moves
+ * @param temperature Temperature parameter for search
+ * @param noise Strength of Gumbel noise
  */
 void Player::startEvaluation(
     bool equally, int32_t width, float temperature, float noise) {
   std::unique_lock<std::mutex> lock(_mutex);
 
-  // 探索条件をまとめて変更するため、実行中の探索をいったん止める
+  // Pause the running search to update all search conditions at once
   _paused = true;
   _stopCondition.wait(lock, [this]() {
     return _runnings == 0 && _evaluatingNodes.empty();
   });
 
-  // 以降の探索で使用する条件を更新する
+  // Update the conditions to be used in subsequent searches
   _searchEqually = equally;
   _searchCandidateWidth = width;
   _searchTemperature = temperature;
   _searchNoise = noise;
 
-  // 探索スレッドを動作状態にする
+  // Set the search thread to active state
   _stopped = false;
 
-  // 探索スレッドを再開する
+  // Resume the search thread
   _paused = false;
   _searchCondition.notify_one();
 }
 
 /**
- * 指定された訪問数とプレイアウト数になるまで待機する。
- * @param visits 訪問数
- * @param playouts プレイアウト数
- * @param timelimit 時間制限
- * @param stop 探索を停止するならtrue
+ * Waits until the specified visit count and playout count are reached.
+ * @param visits Number of visits
+ * @param playouts Number of playouts
+ * @param timelimit Time limit
+ * @param stop true to stop the search
  */
 void Player::waitEvaluation(int32_t visits, int32_t playouts, float timelimit, bool stop) {
   std::unique_lock<std::mutex> lock(_mutex);
 
-  // 最初の評価を待機する
+  // Wait for the first evaluation
   if (visits > 0 || playouts > 0) {
     _stopCondition.wait(lock, [this]() {
       return _root->getVisits() > 0;
@@ -197,36 +197,36 @@ void Player::waitEvaluation(int32_t visits, int32_t playouts, float timelimit, b
 
   std::chrono::milliseconds timeout(static_cast<int32_t>(timelimit * 1000.0f));
 
-  // 指定回数に到達するか、時間制限に達するまで待機する
+  // Wait until the specified count is reached or the time limit expires
   _stopCondition.wait_for(lock, timeout, [this, visits, playouts]() {
     return _root->getVisits() >= visits && _root->getPlayouts() >= playouts;
   });
 
-  // 停止状態が要求されている場合は停止フラグを設定する
+  // Set the stop flag if a stop state has been requested
   _stopped = _stopped || stop;
 }
 
 /**
- * 候補手の一覧を取得する。
- * @return 候補手の一覧
+ * Gets the list of candidate moves.
+ * @return List of candidate moves
  */
 std::vector<Candidate> Player::getCandidates() {
   std::unique_lock<std::mutex> lock(_mutex);
 
-  // スレッドを一時停止する
+  // Pause the thread
   _paused = true;
   _stopCondition.wait(lock, [this]() {
     return _runnings == 0 && _evaluatingNodes.empty();
   });
 
-  // 候補手の一覧を作成する
+  // Create the list of candidate moves
   std::vector<Candidate> candidates;
 
   for (MctsNode* node : _root->getChildren()) {
     candidates.emplace_back(node);
   }
 
-  // 候補手がない場合はPolicyNetworkによる着手を追加する
+  // If there are no candidates, add a move from the Policy Network
   if (candidates.empty()) {
     Move move = _root->getPolicyMove();
 
@@ -244,8 +244,8 @@ std::vector<Candidate> Player::getCandidates() {
 }
 
 /**
- * 次の石の色を取得する。
- * @return 石の色
+ * Gets the color of the next stone.
+ * @return Stone color
  */
 int32_t Player::getColor() {
   std::lock_guard<std::mutex> lock(_mutex);
@@ -253,32 +253,32 @@ int32_t Player::getColor() {
 }
 
 /**
- * 盤面の状態を取得する。
- * @return 盤面の状態
+ * Gets the board state.
+ * @return Board state
  */
 std::vector<int32_t> Player::getBoardState() {
   return _root->getBoardState();
 }
 
 /**
- * プレイヤオブジェクトの文字列表現を取得する。
- * @return プレイヤオブジェクトの文字列表現
+ * Gets the string representation of the player object.
+ * @return String representation of the player object
  */
 std::string Player::toString() {
   std::unique_lock<std::mutex> lock(_mutex);
   std::stringstream ss;
 
-  // スレッドを一時停止する
+  // Pause the thread
   _paused = true;
   _stopCondition.wait(lock, [this]() {
     return _runnings == 0 && _evaluatingNodes.empty();
   });
 
-  // 盤面の状態を文字列に変換する
+  // Convert the board state to a string
   ss << "--- Board ---" << std::endl
      << _root->getBoard() << std::endl;
 
-  // 探索木を深さ優先で辿りながら現在の状態を文字列に変換する
+  // Convert the current state to a string by traversing the search tree depth-first
   std::vector<std::pair<MctsNode*, std::string>> stack = {{_root, ""}};
 
   while (!stack.empty()) {
@@ -297,13 +297,13 @@ std::string Player::toString() {
 
     std::vector<MctsNode*> children = current->getChildren();
 
-    // 深さ優先で出力し、子ノードはインデントで親子関係を表現する
+    // Output in depth-first order, representing parent-child relationships with indentation
     for (auto it = children.rbegin(); it != children.rend(); ++it) {
       stack.emplace_back(*it, prefix + "  ");
     }
   }
 
-  // スレッドを再開する
+  // Resume the thread
   _paused = false;
   _searchCondition.notify_one();
 
@@ -311,10 +311,10 @@ std::string Player::toString() {
 }
 
 /**
- * 探索処理を起動する。
+ * Launches the search process.
  */
 void Player::_runSearch() {
-  // 評価ノード数の最大数を計算する
+  // Calculate the maximum number of evaluating nodes
   const int32_t max_evaluating_size =
       _processor->getBatchSize() * _processor->getThreadSize() * 10;
 
@@ -322,12 +322,12 @@ void Player::_runSearch() {
     {
       std::unique_lock<std::mutex> lock(_mutex);
 
-      // 探索処理が実行可能になるまで待機する
-      // 探索処理が実行可能になる条件は以下のいずれか
-      // - [停止] 終了が要求されていて、実行中のスレッドがなくて、評価中のノードがない
-      // - [手順探索] 終了が要求、探索が停止要求、一時停止要求のいずれもなくて、
-      //   実行スレッド数がスレッドプールのスレッド数未満で、
-      //   評価中のノードの数が最大評価ノード数未満で、探索回数が最大訪問回数未満
+      // Wait until the search process becomes executable
+      // Conditions for the search process to become executable are one of the following:
+      // - [Stop] Termination is requested, no running threads, and no nodes being evaluated
+      // - [Search] Neither termination, stop request, nor pause request is active,
+      //   the number of running threads is less than the thread pool size,
+      //   the number of evaluating nodes is less than the maximum, and visits are below the maximum
       _searchCondition.wait(lock, [this, max_evaluating_size]() {
         if (_terminated && _runnings == 0 && _evaluatingNodes.empty()) {
           return true;
@@ -342,16 +342,16 @@ void Player::_runSearch() {
         }
       });
 
-      // 停止条件を満たしているならばループを抜ける
+      // If the stop condition is met, exit the loop
       if (_terminated && _runnings == 0 && _evaluatingNodes.empty()) {
         break;
       }
 
-      // そうでない場合は探索処理を実行する
+      // Otherwise, execute the search process
       _runnings += 1;
     }
 
-    // 探索木の展開処理をスレッドプールに登録する
+    // Submit the search tree expansion process to the thread pool
     _threadPool.submit([this]() {
       _runExpand();
 
@@ -368,48 +368,48 @@ void Player::_runSearch() {
 }
 
 /**
- * 探索木を展開する。
+ * Expands the search tree.
  */
 void Player::_runExpand() {
-  // 探索の設定をローカル変数にコピーする
+  // Copy the search settings to local variables
   bool search_equally = _searchEqually;
   int32_t search_width = _searchCandidateWidth;
   float search_temperature = _searchTemperature;
   float search_noise = _searchNoise;
 
-  // ルートノードから探索を開始する
-  // 次に評価するノードを取得しながら探索木を辿る
+  // Start the search from the root node
+  // Traverse the search tree while getting the next node to evaluate
   MctsNode* node = nullptr;
   MctsNode* next_node = _root;
 
   while (true) {
-    // 次に評価するノードを取得する
+    // Get the next node to evaluate
     node = next_node;
     next_node = node->pickupNextNode(
         search_equally, search_width, search_temperature, search_noise);
 
-    // 次に評価するノードが存在しない場合は探索を終了する
+    // If there is no next node to evaluate, end the search
     if (next_node == nullptr) {
       break;
     }
 
-    // 探索の設定を更新する
+    // Update the search settings
     search_equally = false;
     search_width = 0;
     search_temperature = 1.0f;
     search_noise = 0.0f;
   }
 
-  // 未評価の場合
+  // If not yet evaluated
   if (!node->isEvaluated()) {
-    // 盤面評価の推論モデルに評価対象としてノードを登録する
+    // Register the node as an evaluation target in the board evaluation inference model
     _processor->submit(node, [this](MctsNode*) {
       std::unique_lock<std::mutex> lock(_mutex);
       _updateCondition.notify_one();
     });
   }
 
-  // 評価中のノードの一覧にノードを追加する
+  // Add the node to the list of nodes being evaluated
   {
     std::unique_lock<std::mutex> lock(_mutex);
     _evaluatingNodes.push(node);
@@ -418,7 +418,7 @@ void Player::_runExpand() {
 }
 
 /**
- * ノードの状態を更新する。
+ * Updates node states.
  */
 void Player::_runUpdate() {
   while (true) {
@@ -427,10 +427,10 @@ void Player::_runUpdate() {
     {
       std::unique_lock<std::mutex> lock(_mutex);
 
-      // 更新処理が実行可能になるまで待機する
-      // 更新処理が実行可能になる条件は以下のいずれか
-      // - [停止] 終了が要求されていて、実行中のスレッドがなくて、評価中のノードがない。
-      // - [評価] 評価中のノードがあって、そのノードの評価が完了している
+      // Wait until the update process becomes executable
+      // Conditions for the update process to become executable are one of the following:
+      // - [Stop] Termination is requested, no running threads, and no nodes being evaluated.
+      // - [Evaluate] There are nodes being evaluated and the evaluation of the front node is complete
       _updateCondition.wait(lock, [this]() {
         if (_terminated && _runnings == 0 && _evaluatingNodes.empty()) {
           return true;
@@ -441,20 +441,20 @@ void Player::_runUpdate() {
         }
       });
 
-      // 停止条件を満たしているならばループを抜ける
+      // If the stop condition is met, exit the loop
       if (_terminated && _runnings == 0 && _evaluatingNodes.empty()) {
         break;
       }
 
-      // 評価済みのノードを取り出す
+      // Retrieve evaluated nodes
       while (!_evaluatingNodes.empty() && _evaluatingNodes.front()->isEvaluated()) {
         finished_nodes.push_back(_evaluatingNodes.front());
         _evaluatingNodes.pop();
       }
     }
 
-    // 評価済みのノードの統計情報を更新する
-    // 詰み手順が見つかっているノードで評価値をNodeValueに設定する
+    // Update the statistics of evaluated nodes
+    // For nodes where a tsume-go sequence has been found, set the value to NodeValue
     for (MctsNode* node : finished_nodes) {
       float mcts_value = node->getNodeValue();
       MctsNode* current_node = node;
@@ -465,7 +465,7 @@ void Player::_runUpdate() {
       }
     }
 
-    // 探索処理に通知する
+    // Notify the search process
     _searchCondition.notify_one();
     _stopCondition.notify_all();
   }

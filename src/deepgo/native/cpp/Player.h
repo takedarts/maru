@@ -17,22 +17,22 @@
 namespace deepgo {
 
 /**
- * ゲームを進行するプレイヤを表すクラス。
+ * A class representing a player that manages game progression.
  */
 class Player {
  public:
   /**
-   * プレイヤオブジェクトを作成する。
-   * @param processor 推論を実行するオブジェクト
-   * @param threads スレッドの数
-   * @param maxVisits 最大訪問数
-   * @param width 盤面の幅
-   * @param height 盤面の高さ
-   * @param komi コミの目数
-   * @param rule 勝敗の判定ルール
-   * @param superko スーパーコウルールを適用するならtrue
-   * @param pucbConstantInit PUCBの信頼上限に掛ける定数の初期値
-   * @param pucbConstantBase PUCBの信頼上限に掛ける定数の変化値
+   * Creates a player object.
+   * @param processor Object that executes inference
+   * @param threads Number of threads
+   * @param maxVisits Maximum number of visits
+   * @param width Board width
+   * @param height Board height
+   * @param komi Komi points
+   * @param rule Win/loss determination rule
+   * @param superko true to apply the superko rule
+   * @param pucbConstantInit Initial value of the constant multiplied by the PUCB confidence upper bound
+   * @param pucbConstantBase Change value of the constant multiplied by the PUCB confidence upper bound
    */
   Player(
       InferenceProcessor* processor, int32_t threads, int32_t maxVisits,
@@ -40,183 +40,183 @@ class Player {
       float pucbConstantInit, float pucbConstantBase);
 
   /**
-   * プレイヤオブジェクトを破棄する。
+   * Destroys the player object.
    */
   virtual ~Player();
 
   /**
-   * プレイヤオブジェクトの状態を初期化する。
+   * Initializes the state of the player object.
    */
   void initialize();
 
   /**
-   * 盤面に石を置く。
-   * @param move 着手
-   * @return 打ち上げた石の数
+   * Places a stone on the board.
+   * @param move Move to play
+   * @return Number of captured stones
    */
   int32_t play(Move move);
 
   /**
-   * パスの候補手を取得する。
-   * @return パスの候補手
+   * Gets the pass candidate move.
+   * @return Pass candidate move
    */
   std::vector<Candidate> getPass();
 
   /**
-   * 盤面評価を開始する。
-   * @param equally 探索回数を均等にするならtrue
-   * @param width 候補手の探索幅
-   * @param temperature 探索の温度パラメータ
-   * @param noise ガンベルノイズの強さ
+   * Starts board evaluation.
+   * @param equally true to distribute search counts equally
+   * @param width Search width for candidate moves
+   * @param temperature Temperature parameter for search
+   * @param noise Strength of Gumbel noise
    */
   void startEvaluation(bool equally, int32_t width, float temperature, float noise);
 
   /**
-   * 指定された訪問数とプレイアウト数になるまで待機する。
-   * @param visits 訪問数
-   * @param playouts プレイアウト数
-   * @param timelimit 時間制限
-   * @param stop 探索を停止するならtrue
+   * Waits until the specified visit count and playout count are reached.
+   * @param visits Number of visits
+   * @param playouts Number of playouts
+   * @param timelimit Time limit
+   * @param stop true to stop the search
    */
   void waitEvaluation(int32_t visits, int32_t playouts, float timelimit, bool stop);
 
   /**
-   * 候補手の一覧を取得する。
-   * @return 候補手の一覧
+   * Gets the list of candidate moves.
+   * @return List of candidate moves
    */
   std::vector<Candidate> getCandidates();
 
   /**
-   * 次の石の色を取得する。
-   * @return 石の色
+   * Gets the color of the next stone.
+   * @return Stone color
    */
   int32_t getColor();
 
   /**
-   * 盤面の状態を取得する。
-   * @return 盤面の状態
+   * Gets the board state.
+   * @return Board state
    */
   std::vector<int32_t> getBoardState();
 
   /**
-   * プレイヤオブジェクトの文字列表現を取得する。
-   * @return プレイヤオブジェクトの文字列表現
+   * Gets the string representation of the player object.
+   * @return String representation of the player object
    */
   std::string toString();
 
  private:
   /**
-   * 同期オブジェクト。
+   * Synchronization object.
    */
   std::mutex _mutex;
 
   /**
-   * 探索条件変数。
+   * Search condition variable.
    */
   std::condition_variable _searchCondition;
 
   /**
-   * 更新条件変数。
+   * Update condition variable.
    */
   std::condition_variable _updateCondition;
 
   /**
-   * 停止待機条件変数。
+   * Stop-wait condition variable.
    */
   std::condition_variable _stopCondition;
 
   /**
-   * 推論を実行するオブジェクト。
+   * Object that executes inference.
    */
   InferenceProcessor* _processor;
 
   /**
-   * スレッド管理オブジェクト。
+   * Thread management object.
    */
   ThreadPool _threadPool;
 
   /**
-   * 探索管理スレッド。
+   * Search management thread.
    */
   std::thread _searchThread;
 
   /**
-   * 更新管理スレッド。
+   * Update management thread.
    */
   std::thread _updateThread;
 
   /**
-   * 探索ノードを管理するオブジェクト。
+   * Object that manages search nodes.
    */
   MctsManager _nodeManager;
 
   /**
-   * ルートノード。
+   * Root node.
    */
   MctsNode* _root;
 
   /**
-   * 最大訪問数。
+   * Maximum number of visits.
    */
   int32_t _maxVisits;
 
   /**
-   * 探索回数を均等にするならtrue。
+   * true to distribute search counts equally.
    */
   bool _searchEqually;
 
   /**
-   * 候補手の探索幅。
+   * Search width for candidate moves.
    */
   int32_t _searchCandidateWidth;
 
   /**
-   * 探索の温度パラメータ。
+   * Temperature parameter for search.
    */
   float _searchTemperature;
 
   /**
-   * 探索のガンベルノイズの強さ。
+   * Strength of Gumbel noise for search.
    */
   float _searchNoise;
 
   /**
-   * 実行中のスレッド数。
+   * Number of running threads.
    */
   int32_t _runnings;
 
   /**
-   * 探索を一時停止しているならtrue。
+   * true if search is paused.
    */
   bool _paused;
 
   /**
-   * 探索を停止しているならtrue。
+   * true if search is stopped.
    */
   bool _stopped;
 
   /**
-   * 探索を終了しているならtrue。
+   * true if search has terminated.
    */
   bool _terminated;
 
   /**
-   * 評価待ちノード。
+   * Nodes awaiting evaluation.
    */
   std::queue<MctsNode*> _evaluatingNodes;
 
   /**
-   * 探索処理を起動する。
+   * Launches the search process.
    */
   void _runSearch();
 
   /**
-   * 探索木を展開する。
+   * Expands the search tree.
    */
   void _runExpand();
 
   /**
-   * ノードの状態を更新する。
+   * Updates node states.
    */
   void _runUpdate();
 };

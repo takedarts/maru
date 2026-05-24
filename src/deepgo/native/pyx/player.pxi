@@ -30,18 +30,18 @@ cdef class NativePlayer:
         pucb_constant_init: float,
         pucb_constant_base: float,
     )->None:
-        '''プレイヤオブジェクトを初期化する。
+        '''Initialize the player object.
         Args:
-            processor (NativeInferenceProcessor): 推論プロセッサオブジェクト
-            threads (int): スレッド数
-            max_visits (int): 最大訪問数
-            width (int): 盤面の幅
-            height (int): 盤面の高さ
-            komi (float): コミの目数
-            rule (int): 勝敗の判定ルール
-            superko (bool): スーパーコウルールを適用するならTrue
-            pucb_constant_init (float): PUCBの信頼上限に掛ける定数の初期値
-            pucb_constant_base (float): PUCBの信頼上限に掛ける定数の変化値
+            processor (NativeInferenceProcessor): Inference processor object
+            threads (int): Number of threads
+            max_visits (int): Maximum number of visits
+            width (int): Width of the board
+            height (int): Height of the board
+            komi (float): Komi value
+            rule (int): Scoring rule
+            superko (bool): True to apply the superko rule
+            pucb_constant_init (float): Initial value of the constant multiplied by the PUCB confidence upper bound
+            pucb_constant_base (float): Base value for the change in the constant multiplied by the PUCB confidence upper bound
         '''
         self.player = new Player(
             processor.processor, threads, max_visits,
@@ -54,16 +54,16 @@ cdef class NativePlayer:
         del self.player
 
     def initialize(self) -> None:
-        '''対戦の状態を初期状態に戻す。'''
+        '''Reset the game state to the initial state.'''
         self.player.initialize()
 
     def play(self, pos: Tuple[int, int], color: int) -> int:
-        '''指定された座標に石を打つ。
+        '''Play a stone at the specified coordinate.
         Args:
-            pos (Tuple[int, int]): 石を打つ座標
-            color (int): 石の色
+            pos (Tuple[int, int]): Coordinate to play the stone
+            color (int): Color of the stone
         Returns:
-            int: 打ち上げた石の数
+            int: Number of captured stones
         '''
         return self.player.play(Move(pos[0], pos[1], color))
 
@@ -72,10 +72,10 @@ cdef class NativePlayer:
     ) -> Tuple[
             Tuple[int, int], int, int, int, float, float,
             List[Tuple[Tuple[int, int], int]], np.ndarray]:
-        '''パスの候補手を取得する。
+        '''Get the pass candidate move.
         Returns:
             Tuple[Tuple[int, int], int, int, int, float, float,
-                  List[Tuple[Tuple[int, int], int]], np.ndarray]: 候補手
+                  List[Tuple[Tuple[int, int], int]], np.ndarray]: Candidate move
         '''
         cdef vector[Candidate] candidates
         cdef Candidate candidate
@@ -111,22 +111,22 @@ cdef class NativePlayer:
         temperature: float,
         noise: float,
     ) -> None:
-        '''評価を開始する。
+        '''Start the evaluation.
         Args:
-            equally (bool): 探索回数を均等にするならTrue
-            candidate_width (int): 候補手の探索幅
-            temperature (float): 探索の温度パラメータ
-            noise (float): 探索のガンベルノイズの強さ
+            equally (bool): True to equalize the number of search visits
+            candidate_width (int): Search width for candidate moves
+            temperature (float): Temperature parameter for search
+            noise (float): Strength of Gumbel noise for search
         '''
         self.player.startEvaluation(equally, candidate_width, temperature, noise)
 
     def wait_evaluation(self, visits: int, playouts: int, timelimit: float, stop: bool) -> None:
-        '''指定された訪問数とプレイアウト数になるまで待機する。
+        '''Wait until the specified number of visits and playouts is reached.
         Args:
-            visits (int): 訪問数
-            playouts (int): プレイアウト数
-            timelimit (float): 時間制限（秒）
-            stop (bool): 探索を停止するならばTrue
+            visits (int): Number of visits
+            playouts (int): Number of playouts
+            timelimit (float): Time limit (seconds)
+            stop (bool): True to stop the search
         '''
         cdef int32_t visits_int = visits
         cdef int32_t playouts_int = playouts
@@ -141,10 +141,10 @@ cdef class NativePlayer:
     ) -> List[Tuple[
             Tuple[int, int], int, int, int, float, float,
             List[Tuple[Tuple[int, int], int]], np.ndarray]]:
-        '''候補手の一覧を取得する。
+        '''Get the list of candidate moves.
         Returns:
             List[Tuple[Tuple[int, int], int, int, int, float, float,
-                 List[Tuple[Tuple[int, int], int]], np.ndarray]]: 候補手
+                 List[Tuple[Tuple[int, int], int]], np.ndarray]]: Candidate moves
         '''
         cdef vector[Candidate] candidates
         cdef np.ndarray[np.float32_t, ndim=1, mode='c'] territories
@@ -176,22 +176,22 @@ cdef class NativePlayer:
         return results
 
     def get_color(self) -> int:
-        '''次に打つ石の色を取得する。
+        '''Get the color of the next stone to play.
         Returns:
-            int: 石の色
+            int: Color of the stone
         '''
         return self.player.getColor()
 
     def get_board_state(self) -> List[int]:
-        '''盤面の状態を取得する。
+        '''Get the board state.
         Returns:
-            List[int]: 盤面の状態
+            List[int]: Board state
         '''
         return self.player.getBoardState()
 
     def to_string(self) -> str:
-        '''探索木の文字列表現を取得する。
+        '''Get the string representation of the search tree.
         Returns:
-            str: 文字列表現
+            str: String representation
         '''
         return self.player.toString().decode('utf-8')

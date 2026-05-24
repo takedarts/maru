@@ -5,10 +5,10 @@
 namespace deepgo {
 
 /**
- * 着手オブジェクトを作成する。
- * @param x 置いた石のX座標
- * @param y 置いた石のY座標
- * @param color 置いた石の色
+ * Creates a move object.
+ * @param x x coordinate of the placed stone
+ * @param y y coordinate of the placed stone
+ * @param color color of the placed stone
  */
 Move::Move(int8_t x, int8_t y, int8_t color)
     : _x(x),
@@ -17,8 +17,8 @@ Move::Move(int8_t x, int8_t y, int8_t color)
 }
 
 /**
- * 着手オブジェクトを作成する。
- * 不正な着手を表すオブジェクトを作成する。
+ * Creates a move object.
+ * Creates an object representing an invalid move.
  */
 Move::Move()
     : _x(-2),
@@ -27,8 +27,8 @@ Move::Move()
 }
 
 /**
- * 着手オブジェクトの文字列表現を取得する。
- * @return 着手オブジェクトの文字列表現
+ * Returns the string representation of the move object.
+ * @return string representation of the move object
  */
 std::string Move::toString() const {
   std::stringstream ss;

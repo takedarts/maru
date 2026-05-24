@@ -12,59 +12,59 @@
 namespace deepgo {
 
 /**
- * 推論モデルを表すクラス。
+ * A class representing an inference model.
  */
 class InferenceModel {
  public:
   /**
-   * 利用可能なGPU番号を取得する。
-   * @return GPU番号の一覧
+   * Gets the available GPU numbers.
+   * @return List of GPU numbers
    */
   static std::vector<std::int32_t> getAvailableGPUs();
 
   /**
-   * 実行デバイスを取得する。
-   * @param gpu GPU番号
-   * @return 実行デバイス
+   * Gets the execution device.
+   * @param gpu GPU number
+   * @return Execution device
    */
   static at::Device getDevice(int32_t gpu);
 
   /**
-   * 実行データ型を取得する。
-   * @param gpu GPU番号
-   * @param fp16 半精度を使用するならtrue
-   * @return 実行データ型
+   * Gets the execution data type.
+   * @param gpu GPU number
+   * @param fp16 true to use half precision
+   * @return Execution data type
    */
   static at::ScalarType getScalarType(int32_t gpu, bool fp16);
 
   /**
-   * 推論モデルを作成する。
-   * @param filename モデルファイル
-   * @param gpu GPU番号
-   * @param fp16 半精度を使用するならtrue
-   * @param deterministic 決定論的に実行するならtrue
+   * Creates an inference model.
+   * @param filename Model file
+   * @param gpu GPU number
+   * @param fp16 true to use half precision
+   * @param deterministic true to run deterministically
    */
   InferenceModel(std::string filename, int32_t gpu, bool fp16, bool deterministic);
 
   /**
-   * 推論を実行する。
-   * @param inputs 入力データ
-   * @param outputs 出力データ
-   * @param size 評価データの数
+   * Executes inference.
+   * @param inputs Input data
+   * @param outputs Output data
+   * @param size Number of data samples to evaluate
    */
   void forward(int32_t* inputs, float* outputs, int32_t size);
 
   /**
-   * CUDAを使用しているならtrueを返す。
-   * @return CUDAを使用しているならtrue
+   * Returns true if using CUDA.
+   * @return true if using CUDA
    */
   inline bool isCuda() const {
     return _device.is_cuda();
   }
 
   /**
-   * CPUを使用しているならtrueを返す。
-   * @return CPUを使用しているならtrue
+   * Returns true if using CPU.
+   * @return true if using CPU
    */
   inline bool isCpu() const {
     return _cpu;
@@ -72,37 +72,37 @@ class InferenceModel {
 
  private:
   /**
-   * 入出力転送の同期用ミューテックス。
+   * Mutex for synchronizing input/output transfers.
    */
   std::mutex _ioMutex;
 
   /**
-   * 推論実行の同期用ミューテックス。
+   * Mutex for synchronizing inference execution.
    */
   std::mutex _computeMutex;
 
   /**
-   * モデル。
+   * Model.
    */
   torch::jit::script::Module _model;
 
   /**
-   * 実行デバイス。
+   * Execution device.
    */
   at::Device _device;
 
   /**
-   * 実行データ型。
+   * Execution data type.
    */
   at::ScalarType _dtype;
 
   /**
-   * ビットシフト用テンソル。
+   * Tensor for bit shifting.
    */
   torch::Tensor _bitShift;
 
   /**
-   * CPUで実行するならtrue。
+   * true if executing on CPU.
    */
   bool _cpu;
 };

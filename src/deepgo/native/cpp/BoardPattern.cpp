@@ -7,9 +7,9 @@
 namespace deepgo {
 
 /**
- * 盤面パターンのオブジェクトを作成する。
- * @param width 盤面の幅
- * @param height 盤面の高さ
+ * Creates a board pattern object.
+ * @param width Board width
+ * @param height Board height
  */
 BoardPattern::BoardPattern(int width, int height)
     : _width(width),
@@ -19,8 +19,8 @@ BoardPattern::BoardPattern(int width, int height)
 }
 
 /**
- * コピーした盤面パターンのオブジェクトを作成する。
- * @param pattern コピー元の盤面パターンのオブジェクト
+ * Creates a copy of the board pattern object.
+ * @param pattern Source board pattern object
  */
 BoardPattern::BoardPattern(const BoardPattern& pattern)
     : _width(pattern._width),
@@ -30,17 +30,17 @@ BoardPattern::BoardPattern(const BoardPattern& pattern)
 }
 
 /**
- * 石の並びの表現値を初期化する。
+ * Initializes the stone arrangement representation value.
  */
 void BoardPattern::clear() {
   std::fill(_values.begin(), _values.end(), 0);
 }
 
 /**
- * 指定された座標に石を置いた状態に更新する。
- * @param x X座標
- * @param y Y座標
- * @param color 石の色
+ * Updates the state with a stone placed at the specified position.
+ * @param x X coordinate
+ * @param y Y coordinate
+ * @param color Stone color
  */
 void BoardPattern::put(int32_t x, int32_t y, int32_t color) {
   int32_t index = (y * _width + x) / 16;
@@ -50,10 +50,10 @@ void BoardPattern::put(int32_t x, int32_t y, int32_t color) {
 }
 
 /**
- * 指定された座標の石を取り除いた状態に更新する。
- * @param x X座標
- * @param y Y座標
- * @param color 石の色
+ * Updates the state with a stone removed from the specified position.
+ * @param x X coordinate
+ * @param y Y coordinate
+ * @param color Stone color
  */
 void BoardPattern::remove(int32_t x, int32_t y, int32_t color) {
   int32_t index = (y * _width + x) / 16;
@@ -63,8 +63,8 @@ void BoardPattern::remove(int32_t x, int32_t y, int32_t color) {
 }
 
 /**
- * パターンを表現する値を取得する。
- * @return パターンを表現する値
+ * Returns the values representing the pattern.
+ * @return Values representing the pattern
  */
 std::vector<int32_t> BoardPattern::values() {
   std::vector<int32_t> values;
@@ -77,8 +77,8 @@ std::vector<int32_t> BoardPattern::values() {
 }
 
 /**
- * パターンを表現する値をコピーする。
- * @param pattern コピー元のパターン
+ * Copies the values representing the pattern.
+ * @param pattern Source pattern to copy from
  */
 void BoardPattern::copyFrom(const BoardPattern& pattern) {
   std::copy(pattern._values.begin(), pattern._values.end(), _values.begin());

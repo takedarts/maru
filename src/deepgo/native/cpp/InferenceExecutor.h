@@ -19,112 +19,112 @@ using InferenceExecutorCallback =
     std::function<void(MctsNode*, const InferenceResult&)>;
 
 /**
- * 推論実行を非同期に処理するクラス。
+ * A class that asynchronously processes inference execution.
  */
 class InferenceExecutor {
  public:
   /**
-   * 推論実行オブジェクトを作成する。
-   * @param model モデルファイル
-   * @param gpu GPU番号
-   * @param fp16 半精度を使用するならtrue
-   * @param deterministic 決定論的に実行するならtrue
-   * @param batchSize バッチサイズ
-   * @param threads 実行スレッド数
+   * Creates an inference executor object.
+   * @param model Model file
+   * @param gpu GPU number
+   * @param fp16 true to use half precision
+   * @param deterministic true to run deterministically
+   * @param batchSize Batch size
+   * @param threads Number of execution threads
    */
   InferenceExecutor(
       std::string model, int32_t gpu, bool fp16, bool deterministic,
       int32_t batchSize, int32_t threads);
 
   /**
-   * 推論実行オブジェクトを破棄する。
+   * Destroys the inference executor object.
    */
   virtual ~InferenceExecutor();
 
   /**
-   * 推論実行を予約する。
-   * @param node 推論対象ノード
-   * @param callback 推論完了時のコールバック
+   * Submits an inference execution request.
+   * @param node Node to perform inference on
+   * @param callback Callback invoked when inference completes
    */
   void submit(MctsNode* node, InferenceExecutorCallback callback);
 
   /**
-   * 推論を同期実行する。
-   * @param inputs 入力データ
-   * @param outputs 出力データ
-   * @param size 評価データの数
+   * Executes inference synchronously.
+   * @param inputs Input data
+   * @param outputs Output data
+   * @param size Number of data samples to evaluate
    */
   void execute(int32_t* inputs, float* outputs, int32_t size);
 
   /**
-   * 待機中の推論数を取得する。
-   * @return 待機中の推論数
+   * Gets the number of pending inference requests.
+   * @return Number of pending inference requests
    */
   int32_t getQueueSize();
 
  private:
   /**
-   * モデル同期用ミューテックス。
+   * Mutex for model synchronization.
    */
   std::mutex _modelMutex;
 
   /**
-   * スレッド同期用ミューテックス。
+   * Mutex for thread synchronization.
    */
   std::mutex _threadMutex;
 
   /**
-   * 条件変数。
+   * Condition variable.
    */
   std::condition_variable _condition;
 
   /**
-   * 推論モデル。
+   * Inference model.
    */
   InferenceModel* _model;
 
   /**
-   * モデルファイル。
+   * Model file.
    */
   std::string _modelFile;
 
   /**
-   * GPU番号。
+   * GPU number.
    */
   int32_t _gpu;
 
   /**
-   * 半精度を使用するならtrue。
+   * true to use half precision.
    */
   bool _fp16;
 
   /**
-   * 決定論的に実行するならtrue。
+   * true to run deterministically.
    */
   bool _deterministic;
 
   /**
-   * バッチサイズ。
+   * Batch size.
    */
   int32_t _batchSize;
 
   /**
-   * 推論スレッド。
+   * Inference threads.
    */
   std::vector<std::thread> _threads;
 
   /**
-   * 終了するならtrue。
+   * true if terminating.
    */
   bool _terminated;
 
   /**
-   * 推論待ちキュー。
+   * Queue of pending inference requests.
    */
   std::vector<std::pair<MctsNode*, InferenceExecutorCallback>> _queue;
 
   /**
-   * 推論スレッドで実行される処理。
+   * Processing executed in the inference thread.
    */
   void _run();
 };

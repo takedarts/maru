@@ -7,8 +7,8 @@
 namespace deepgo {
 
 /**
- * ノード管理オブジェクトを作成する。
- * @param parameter ノード生成パラメータ
+ * Creates a node management object.
+ * @param parameter Node creation parameter
  */
 MctsManager::MctsManager(const MctsParameter& parameter)
     : _mutex(),
@@ -19,14 +19,14 @@ MctsManager::MctsManager(const MctsParameter& parameter)
 }
 
 /**
- * ノードオブジェクトを作成する。
- * @return ノードオブジェクト
+ * Creates a node object.
+ * @return Node object
  */
 MctsNode* MctsManager::createNode() {
   std::lock_guard<std::mutex> lock(_mutex);
 
-  // ノードオブジェクトを作成する
-  // 未使用のノードオブジェクトがあればそれを利用する
+  // Create a node object
+  // Reuse an unused node object if available
   MctsNode* node;
 
   if (_poolNodes.empty()) {
@@ -37,38 +37,38 @@ MctsNode* MctsManager::createNode() {
     _poolNodes.pop_back();
   }
 
-  // 使用中のノードオブジェクトとして登録する
+  // Register as an in-use node object
   _usedNodes.insert(node);
 
-  // ノードオブジェクトを返す
+  // Return the node object
   return node;
 }
 
 /**
- * ノードオブジェクトを未使用状態にする。
- * @param node ノードオブジェクト
+ * Releases a node object back to the unused pool.
+ * @param node Node object
  */
 void MctsManager::releaseNode(MctsNode* node) {
   std::lock_guard<std::mutex> lock(_mutex);
 
-  // すでに未使用状態なら何もしない
+  // Do nothing if already in the unused pool
   if (_usedNodes.find(node) == _usedNodes.end()) {
     return;
   }
 
-  // ノードオブジェクトを未使用状態にする
+  // Release the node object to the unused pool
   _usedNodes.erase(node);
   _poolNodes.push_back(node);
 }
 
 /**
- * ノードとその子孫を未使用状態にする。
- * @param root 解放する探索木のルート
+ * Releases a node and all its descendants.
+ * @param root Root of the search tree to release
  */
 void MctsManager::releaseTree(MctsNode* root) {
   std::vector<MctsNode*> stack = {root};
 
-  // 深さ優先で探索して、ノードを未使用状態にする
+  // Traverse depth-first and release each node
   while (!stack.empty()) {
     MctsNode* current = stack.back();
     stack.pop_back();
@@ -82,8 +82,8 @@ void MctsManager::releaseTree(MctsNode* root) {
 }
 
 /**
- * MCTSの探索ノード管理オブジェクトの状態を文字列として取得する。
- * @return 状態を表す文字列
+ * Returns the state of the MCTS search node manager as a string.
+ * @return String representing the state
  */
 std::string MctsManager::toString() {
   std::lock_guard<std::mutex> lock(_mutex);

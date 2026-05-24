@@ -9,14 +9,14 @@
 namespace deepgo {
 
 /**
- * 指定された座標のPolicyインデックスを取得する。
- * @param board 盤面
- * @param x X座標
- * @param y Y座標
- * @return Policyインデックス
+ * Gets the policy index for the specified coordinates.
+ * @param board Board
+ * @param x X coordinate
+ * @param y Y coordinate
+ * @return Policy index
  */
 static int32_t getPolicyIndex(const Board* board, int32_t x, int32_t y) {
-  // 可変サイズの盤面をモデル入力の中央へ配置したときのインデックスを計算する
+  // Calculates the index when placing a variable-size board at the center of the model input
   int32_t offset_x = (MODEL_SIZE - board->getWidth()) / 2;
   int32_t offset_y = (MODEL_SIZE - board->getHeight()) / 2;
 
@@ -24,13 +24,13 @@ static int32_t getPolicyIndex(const Board* board, int32_t x, int32_t y) {
 }
 
 /**
- * 推論実行オブジェクトを作成する。
- * @param model モデルファイル
- * @param gpu GPU番号
- * @param fp16 半精度を使用するならtrue
- * @param deterministic 決定論的に実行するならtrue
- * @param batchSize バッチサイズ
- * @param threads 実行スレッド数
+ * Creates an inference executor object.
+ * @param model Model file
+ * @param gpu GPU number
+ * @param fp16 true to use half precision
+ * @param deterministic true to run deterministically
+ * @param batchSize Batch size
+ * @param threads Number of execution threads
  */
 InferenceExecutor::InferenceExecutor(
     std::string model, int32_t gpu, bool fp16, bool deterministic,
@@ -53,10 +53,10 @@ InferenceExecutor::InferenceExecutor(
 }
 
 /**
- * 推論実行オブジェクトを破棄する。
+ * Destroys the inference executor object.
  */
 InferenceExecutor::~InferenceExecutor() {
-  // 推論処理を終了する
+  // Terminates the inference processing
   {
     std::lock_guard<std::mutex> lock(_threadMutex);
     _terminated = true;
@@ -64,12 +64,12 @@ InferenceExecutor::~InferenceExecutor() {
 
   _condition.notify_all();
 
-  // スレッドの終了を待機する
+  // Waits for threads to finish
   for (auto& thread : _threads) {
     thread.join();
   }
 
-  // 推論モデルオブジェクトを破棄する
+  // Destroys the inference model object
   {
     std::lock_guard<std::mutex> lock(_modelMutex);
 
@@ -81,9 +81,9 @@ InferenceExecutor::~InferenceExecutor() {
 }
 
 /**
- * 推論実行を予約する。
- * @param node 推論対象ノード
- * @param callback 推論完了時のコールバック
+ * Submits an inference execution request.
+ * @param node Node to perform inference on
+ * @param callback Callback invoked when inference completes
  */
 void InferenceExecutor::submit(MctsNode* node, InferenceExecutorCallback callback) {
   std::lock_guard<std::mutex> lock(_threadMutex);
@@ -92,23 +92,23 @@ void InferenceExecutor::submit(MctsNode* node, InferenceExecutorCallback callbac
 }
 
 /**
- * 推論を同期実行する。
- * @param inputs 入力データ
- * @param outputs 出力データ
- * @param size 評価データの数
+ * Executes inference synchronously.
+ * @param inputs Input data
+ * @param outputs Output data
+ * @param size Number of data samples to evaluate
  */
 void InferenceExecutor::execute(int32_t* inputs, float* outputs, int32_t size) {
-  // 使用するデバイスを設定する
+  // Sets the device to use
   torch::DeviceGuard device_guard(InferenceModel::getDevice(_gpu));
 
-  // モデルオブジェクトを取得する
-  // モデルオブジェクトが作成されていない場合は作成する
+  // Gets the model object
+  // Creates the model object if it has not been created
   InferenceModel* model = nullptr;
 
   {
     std::lock_guard<std::mutex> lock(_modelMutex);
 
-    // モデルは初回実行時に遅延ロードし、以降の推論で共有する
+    // The model is lazily loaded on the first execution and shared for subsequent inference
     if (_model == nullptr) {
       _model = new InferenceModel(_modelFile, _gpu, _fp16, _deterministic);
     }
@@ -116,7 +116,7 @@ void InferenceExecutor::execute(int32_t* inputs, float* outputs, int32_t size) {
     model = _model;
   }
 
-  // CPU以外で実行する場合は指定されたバッチサイズで推論を実行する
+  // When running on non-CPU devices, executes inference with the specified batch size
   if (!_model->isCpu()) {
     std::vector<int32_t> input_buffer(_batchSize * MODEL_INPUT_PACK_SIZE);
     std::vector<float> output_buffer(_batchSize * MODEL_OUTPUT_SIZE);
@@ -130,8 +130,8 @@ void InferenceExecutor::execute(int32_t* inputs, float* outputs, int32_t size) {
 }
 
 /**
- * 待機中の推論数を取得する。
- * @return 待機中の推論数
+ * Gets the number of pending inference requests.
+ * @return Number of pending inference requests
  */
 int32_t InferenceExecutor::getQueueSize() {
   std::lock_guard<std::mutex> lock(_threadMutex);
@@ -139,17 +139,17 @@ int32_t InferenceExecutor::getQueueSize() {
 }
 
 /**
- * 推論スレッドで実行される処理。
+ * Processing executed in the inference thread.
  */
 void InferenceExecutor::_run() {
-  // 使用するデバイスを設定する
+  // Sets the device to use
   torch::DeviceGuard device_guard(InferenceModel::getDevice(_gpu));
 
-  // 入力データとマスクデータと出力データのバッファを作成する
+  // Creates buffers for input data, mask data, and output data
   std::vector<int32_t> input_buffer(_batchSize * MODEL_INPUT_PACK_SIZE);
   std::vector<float> output_buffer(_batchSize * MODEL_OUTPUT_SIZE);
 
-  // モデルオブジェクトが作成されていない場合は作成する
+  // Creates the model object if it has not been created
   {
     std::lock_guard<std::mutex> lock(_modelMutex);
 
@@ -158,19 +158,19 @@ void InferenceExecutor::_run() {
     }
   }
 
-  // キューから推論実行の予約を取り出してバッチを作成し、
-  // 推論を実行して結果をノードに適用する処理を繰り返す
+  // Repeatedly fetches inference requests from the queue, creates a batch,
+  // executes inference, and applies results to nodes
   while (true) {
-    // キューから推論実行の予約を取り出してバッチを作成する
+    // Fetches inference requests from the queue and creates a batch
     std::vector<std::pair<MctsNode*, InferenceExecutorCallback>> batch;
 
     {
-      // 同期処理を行うためのロックを取得する
+      // Acquires a lock for synchronization
       std::unique_lock<std::mutex> lock(_threadMutex);
 
-      // 推論実行の予約がない場合は待機する
-      // [停止] 停止要求があり、キューが空である場合は待機を終了する
-      // [推論実行] 推論実行の予約がある場合は待機を終了する
+      // Waits if there are no pending inference requests
+      // [Stop] Ends waiting if a stop request exists and the queue is empty
+      // [Inference] Ends waiting if there are pending inference requests
       _condition.wait(lock, [this] {
         if (_terminated && _queue.empty()) {
           return true;
@@ -181,22 +181,22 @@ void InferenceExecutor::_run() {
         }
       });
 
-      // 推論処理を終了するならばループを抜ける
+      // Breaks out of the loop if inference should be terminated
       if (_terminated && _queue.empty()) {
         break;
       }
 
-      // キューから最大バッチサイズ分を取り出して推論バッチを作る
+      // Pops up to the maximum batch size from the queue to form an inference batch
       while (!_queue.empty() && batch.size() < static_cast<size_t>(_batchSize)) {
         batch.push_back(_queue.back());
         _queue.pop_back();
       }
     }
 
-    // 入力データのバッファを初期化する
+    // Initializes the input data buffer
     std::fill(input_buffer.begin(), input_buffer.end(), 0);
 
-    // 各ノードの局面をモデル入力へ変換する
+    // Converts each node's board state to model input
     for (size_t i = 0; i < batch.size(); i++) {
       MctsNode* node = batch[i].first;
       int32_t* inputs = input_buffer.data() + (i * MODEL_INPUT_PACK_SIZE);
@@ -206,14 +206,14 @@ void InferenceExecutor::_run() {
       board.getInputs(inputs, color, node->getKomi(), node->getRule(), node->getSuperko());
     }
 
-    // 推論を実行する
-    // CPUで実行する場合はバッチサイズを実際のバッチサイズに合わせる
-    // CPU以外で実行する場合は指定されたバッチサイズで推論を実行する
+    // Executes inference
+    // When running on CPU, adjusts the batch size to the actual batch size
+    // When running on non-CPU devices, executes inference with the specified batch size
     int32_t batch_size = (_model->isCpu()) ? static_cast<int32_t>(batch.size()) : _batchSize;
 
     _model->forward(input_buffer.data(), output_buffer.data(), batch_size);
 
-    // 推論結果をノードに適用してコールバック関数を呼び出す
+    // Applies inference results to nodes and invokes the callback functions
     for (size_t i = 0; i < batch.size(); i++) {
       float* outputs = output_buffer.data() + (i * MODEL_OUTPUT_SIZE);
       MctsNode* node = batch[i].first;
@@ -223,21 +223,21 @@ void InferenceExecutor::_run() {
       int32_t width = board.getWidth();
       int32_t height = board.getHeight();
 
-      // Valueの推論結果を作成する
+      // Creates the Value inference result
       float value = outputs[MODEL_PREDICTIONS * MODEL_SIZE * MODEL_SIZE] * 2.0f - 1.0f;
 
       if (color == WHITE) {
         value = -value;
       }
 
-      // 着手の対象となる座標を取得する
+      // Gets the coordinates eligible for moves
       std::vector<int32_t> enableds(width * height);
       std::vector<int32_t> territories(width * height);
 
       board.getEnableds(enableds.data(), color, true);
       board.getTerritories(territories.data(), color);
 
-      // Policyの確率の合計を計算する
+      // Calculates the total probability of policies
       float total_probability = 0.0f;
 
       for (int32_t y = 0; y < height; y++) {
@@ -250,7 +250,7 @@ void InferenceExecutor::_run() {
         }
       }
 
-      // Policyの推論結果を作成する
+      // Creates the Policy inference result
       std::vector<Policy> policies;
 
       for (int32_t y = 0; y < height; y++) {
@@ -266,8 +266,8 @@ void InferenceExecutor::_run() {
         }
       }
 
-      // Territoryの推論結果を作成する
-      // 手番が白の場合は0番目と2番目の推論結果を入れ替える
+      // Creates the Territory inference result
+      // Swaps the 0th and 2nd inference results when it is White's turn
       std::array<float, 3 * MODEL_SIZE * MODEL_SIZE> territory_probs;
       const int8_t black_index = (color == BLACK) ? 2 : 4;
       const int8_t seki_index = 3;
@@ -288,7 +288,7 @@ void InferenceExecutor::_run() {
           outputs + (white_index + 1) * MODEL_SIZE * MODEL_SIZE,
           territory_probs.begin() + 2 * MODEL_SIZE * MODEL_SIZE);
 
-      // コールバック関数を呼び出す
+      // Invokes the callback function
       callback(node, InferenceResult(value, policies, territory_probs));
     }
   }

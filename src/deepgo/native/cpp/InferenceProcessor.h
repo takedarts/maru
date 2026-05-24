@@ -17,61 +17,61 @@
 namespace deepgo {
 
 /**
- * 推論実行を管理するクラス。
+ * A class that manages inference execution.
  */
 class InferenceProcessor {
  public:
   /**
-   * 推論管理オブジェクトを作成する。
-   * @param model モデルファイル
-   * @param gpus GPU番号の一覧
-   * @param fp16 半精度を使用するならtrue
-   * @param deterministic 決定論的に実行するならtrue
-   * @param batchSize バッチサイズ
-   * @param threadsPerGpu GPUごとのスレッド数
-   * @param cacheSize 推論結果のキャッシュサイズ
+   * Creates an inference processor object.
+   * @param model Model file
+   * @param gpus List of GPU numbers
+   * @param fp16 true to use half precision
+   * @param deterministic true to run deterministically
+   * @param batchSize Batch size
+   * @param threadsPerGpu Number of threads per GPU
+   * @param cacheSize Cache size for inference results
    */
   InferenceProcessor(
       std::string model, std::vector<int32_t> gpus, bool fp16, bool deterministic,
       int32_t batchSize, int32_t threadsPerGpu, int32_t cacheSize);
 
   /**
-   * 推論実行を予約する。
-   * @param node 推論対象ノード
-   * @param callback 推論完了時のコールバック
+   * Submits an inference execution request.
+   * @param node Node to perform inference on
+   * @param callback Callback invoked when inference completes
    */
   void submit(MctsNode* node, std::function<void(MctsNode*)> callback);
 
   /**
-   * 指定された盤面の評価値を取得する。
-   * @param board 盤面
-   * @param color 次に打つ石の色
-   * @param komi コミ
-   * @param rule ルール
-   * @param superko スーパーコウルールを使うならtrue
-   * @return 評価値
+   * Gets the evaluation value for the specified board.
+   * @param board Board
+   * @param color Color of the stone to play next
+   * @param komi Komi
+   * @param rule Rule
+   * @param superko true to use the super ko rule
+   * @return Evaluation value
    */
   float predict(Board* board, int32_t color, float komi, int32_t rule, bool superko);
 
   /**
-   * 推論を同期実行する。
-   * @param inputs 入力データ
-   * @param outputs 出力データ
-   * @param size 評価データの数
+   * Executes inference synchronously.
+   * @param inputs Input data
+   * @param outputs Output data
+   * @param size Number of data samples to evaluate
    */
   void execute(int32_t* inputs, float* outputs, int32_t size);
 
   /**
-   * 推論スレッド数を取得する。
-   * @return 推論スレッド数
+   * Gets the number of inference threads.
+   * @return Number of inference threads
    */
   inline int32_t getThreadSize() const {
     return _threadSize;
   }
 
   /**
-   * バッチサイズを取得する。
-   * @return バッチサイズ
+   * Gets the batch size.
+   * @return Batch size
    */
   inline int32_t getBatchSize() const {
     return _batchSize;
@@ -79,37 +79,37 @@ class InferenceProcessor {
 
  private:
   /**
-   * 同期用ミューテックス。
+   * Mutex for synchronization.
    */
   std::mutex _mutex;
 
   /**
-   * 推論実行オブジェクト。
+   * Inference executor objects.
    */
   std::vector<std::unique_ptr<InferenceExecutor>> _executors;
 
   /**
-   * 推論スレッド数。
+   * Number of inference threads.
    */
   int32_t _threadSize;
 
   /**
-   * キャッシュサイズ。
+   * Cache size.
    */
   int32_t _cacheSize;
 
   /**
-   * キャッシュキーのキュー。
+   * Queue of cache keys.
    */
   std::queue<BoardHash> _cacheKeys;
 
   /**
-   * 推論結果キャッシュ。
+   * Inference result cache.
    */
   std::map<BoardHash, InferenceResult> _cacheResults;
 
   /**
-   * バッチサイズ。
+   * Batch size.
    */
   int32_t _batchSize;
 };

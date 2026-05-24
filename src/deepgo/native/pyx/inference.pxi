@@ -15,19 +15,19 @@ cdef class NativeInferenceModel:
 
     @staticmethod
     def get_available_gpus() -> List[int]:
-        '''利用可能なGPUの番号を取得する。
+        '''Get the IDs of available GPUs.
         Returns:
-            list[int]: GPUの番号のリスト
+            list[int]: List of available GPU IDs
         '''
         return InferenceModel.getAvailableGPUs()
 
     def __cinit__(self, model: str, gpu: int, fp16: bool, deterministic: bool) -> None:
-        '''モデルオブジェクトを作成する。
+        '''Create a model object.
         Args:
-            model (str): モデルファイルのパス
-            gpu (int): 使用するGPUのID
-            fp16 (bool): FP16で計算を行うならTrue
-            deterministic (bool): 計算結果を再現可能にするならTrue
+            model (str): Path to the model file
+            gpu (int): ID of the GPU to use
+            fp16 (bool): True to perform computation in FP16
+            deterministic (bool): True to make computation results reproducible
         '''
         self.model = new InferenceModel(model.encode('utf-8'), gpu, fp16, deterministic)
 
@@ -35,11 +35,11 @@ cdef class NativeInferenceModel:
         del self.model
 
     def forward(self, inputs: numpy.ndarray) -> numpy.ndarray:
-        '''推論を実行する。
+        '''Run inference.
         Args:
-            inputs (numpy.ndarray): 入力データ
+            inputs (numpy.ndarray): Input data
         Returns:
-            numpy.ndarray: 出力データ
+            numpy.ndarray: Output data
         '''
         cdef numpy.ndarray[numpy.float32_t, ndim=2, mode="c"] outputs = numpy.zeros(
             (inputs.shape[0], MODEL_OUTPUT_SIZE), dtype=numpy.float32)
@@ -53,9 +53,9 @@ cdef class NativeInferenceModel:
         return outputs
 
     def is_cuda(self) -> bool:
-        '''CUDAを使用しているかどうかを取得する。
+        '''Check whether CUDA is being used.
         Returns:
-            bool: CUDAを使用しているならTrue
+            bool: True if CUDA is being used
         '''
         return self.model.isCuda()
 
@@ -73,15 +73,15 @@ cdef class NativeInferenceProcessor:
         threads_per_gpu: int,
         cache_size: int,
     ) -> None:
-        '''推論プロセッサオブジェクトを作成する。
+        '''Create an inference processor object.
         Args:
-            model (str): モデルファイルのパス
-            gpus (List[int]): 使用するGPUのIDのリスト
-            fp16 (bool): FP16で計算を行うならTrue
-            deterministic (bool): 計算結果を再現可能にするならTrue
-            batch_size (int): 推論のバッチサイズ
-            threads_per_gpu (int): GPUごとのスレッド数
-            cache_size (int): 推論結果のキャッシュサイズ
+            model (str): Path to the model file
+            gpus (List[int]): List of GPU IDs to use
+            fp16 (bool): True to perform computation in FP16
+            deterministic (bool): True to make computation results reproducible
+            batch_size (int): Batch size for inference
+            threads_per_gpu (int): Number of threads per GPU
+            cache_size (int): Cache size for inference results
         '''
         cdef vector[int32_t] gpu_vector
 
@@ -103,24 +103,24 @@ cdef class NativeInferenceProcessor:
         rule: int,
         superko: bool,
     ) -> float:
-        '''盤面に対する推論を実行する。
+        '''Run inference on the board.
         Args:
-            board (NativeBoard): 盤面オブジェクト
-            color (int): 次に打つ石の色
-            komi (float): コミの目数
-            rule (int): ルール
-            superko (bool): スーパーコウルールを使用するならTrue
+            board (NativeBoard): Board object
+            color (int): Color of the next stone to play
+            komi (float): Komi value
+            rule (int): Rule
+            superko (bool): True to use the superko rule
         Returns:
-            float: 評価値
+            float: Evaluation value
         '''
         return self.processor.predict(board.board, color, komi, rule, superko)
 
     def execute(self, inputs: numpy.ndarray) -> numpy.ndarray:
-        '''推論を同期実行する。
+        '''Run inference synchronously.
         Args:
-            inputs (numpy.ndarray): 入力データ
+            inputs (numpy.ndarray): Input data
         Returns:
-            numpy.ndarray: 出力データ
+            numpy.ndarray: Output data
         '''
         cdef numpy.ndarray[numpy.float32_t, ndim=2, mode="c"] outputs = numpy.zeros(
             (inputs.shape[0], MODEL_OUTPUT_SIZE), dtype=numpy.float32)

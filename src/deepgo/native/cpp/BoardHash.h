@@ -7,31 +7,31 @@
 namespace deepgo {
 
 /**
- * 盤面オブジェクトのハッシュ値を管理するクラス。
+ * Class that manages the hash value of a board object.
  */
 class BoardHash {
  public:
   /**
-   * 盤面オブジェクトのハッシュ値を管理するオブジェクトを作成する。
-   * @param board 盤面オブジェクト
+   * Creates an object that manages the hash value of a board object.
+   * @param board Board object
    */
   BoardHash(const Board* board, int32_t color = EMPTY);
 
   /**
-   * コピーした盤面オブジェクトのハッシュ値を管理するオブジェクトを作成する。
-   * @param boardHash コピー元の盤面オブジェクトのハッシュ値を管理するオブジェクト
+   * Creates a copy of the object that manages the hash value of a board object.
+   * @param boardHash Source object managing the board hash value
    */
   BoardHash(const BoardHash& boardHash) = default;
 
   /**
-   * 盤面オブジェクトのハッシュ値を管理するオブジェクトを破棄する。
+   * Destroys the object that manages the hash value of a board object.
    */
   virtual ~BoardHash() = default;
 
   /**
-   * 盤面オブジェクトのハッシュ値を管理するオブジェクトを比較する。
-   * @param other 比較対象の盤面オブジェクトのハッシュ値を管理するオブジェクト
-   * @return 盤面オブジェクトのハッシュ値を管理するオブジェクトがotherより小さいならtrue
+   * Compares two objects that manage board hash values.
+   * @param other The other board hash object to compare against
+   * @return true if this object is less than other
    */
   inline bool operator<(const BoardHash& other) const {
     if (_hash != other._hash) {
@@ -57,27 +57,27 @@ class BoardHash {
 
  private:
   /**
-   * 盤面のハッシュ値。
+   * Hash value of the board.
    */
   uint64_t _hash;
 
   /**
-   * 石が置かれている場所を表すビットボード。
+   * Bitboard representing where stones are placed.
    */
   uint64_t _bitBoard[BITBOARD_SIZE];
 
   /**
-   * コウが発生している場所。
+   * Position where ko is in effect.
    */
   int32_t _koIndex;
 
   /**
-   * コウの対象となる色。
+   * Color subject to the ko restriction.
    */
   int32_t _koColor;
 
   /**
-   * 手番。
+   * Current turn.
    */
   int32_t _color;
 };

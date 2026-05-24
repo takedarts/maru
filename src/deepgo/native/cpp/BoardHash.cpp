@@ -3,9 +3,9 @@
 namespace deepgo {
 
 /**
- * 盤面オブジェクトのハッシュ値を管理するオブジェクトを作成する。
- * @param board 盤面オブジェクト
- * @param color 手番
+ * Creates an object that manages the hash value of a board object.
+ * @param board Board object
+ * @param color Current turn
  */
 BoardHash::BoardHash(const Board* board, int32_t color) {
   _hash = board->_hash;

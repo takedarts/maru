@@ -10,55 +10,55 @@
 namespace deepgo {
 
 /**
- * 推論結果を表す構造体。
+ * A class representing an inference result.
  */
 class InferenceResult {
  public:
   /**
-   * 推論結果を作成する。
-   * @param value 評価値
-   * @param policies 候補手の予測確率
-   * @param territories 地の予測確率
+   * Creates an inference result.
+   * @param value Evaluation value
+   * @param policies Predicted probabilities of candidate moves
+   * @param territories Predicted probabilities of territories
    */
   InferenceResult(
       float value, const std::vector<Policy>& policies,
       const std::array<float, 3 * MODEL_SIZE * MODEL_SIZE>& territories);
 
   /**
-   * 推論結果をコピーする。
-   * @param other コピー元の推論結果
+   * Copies an inference result.
+   * @param other Inference result to copy from
    */
   InferenceResult(const InferenceResult& other);
 
   /**
-   * 推論結果を作成する。
+   * Creates an inference result.
    */
   InferenceResult();
 
   /**
-   * 推論結果を破棄する。
+   * Destroys the inference result.
    */
   virtual ~InferenceResult() = default;
 
   /**
-   * 評価値を返す。
-   * @return 評価値
+   * Returns the evaluation value.
+   * @return Evaluation value
    */
   inline float getValue() const {
     return _value;
   }
 
   /**
-   * 候補手の予測確率を返す。
-   * @return 候補手の予測確率
+   * Returns the predicted probabilities of candidate moves.
+   * @return Predicted probabilities of candidate moves
    */
   inline const std::vector<Policy>& getPolicies() const {
     return _policies;
   }
 
   /**
-   * 地の予測確率を返す。
-   * @return 地の予測確率
+   * Returns the predicted probabilities of territories.
+   * @return Predicted probabilities of territories
    */
   inline const std::array<float, 3 * MODEL_SIZE * MODEL_SIZE>& getTerritories() const {
     return _territories;
@@ -66,17 +66,17 @@ class InferenceResult {
 
  private:
   /**
-   * 評価値。
+   * Evaluation value.
    */
   float _value;
 
   /**
-   * 候補手の予測確率。
+   * Predicted probabilities of candidate moves.
    */
   std::vector<Policy> _policies;
 
   /**
-   * 地の予測確率。
+   * Predicted probabilities of territories.
    */
   std::array<float, 3 * MODEL_SIZE * MODEL_SIZE> _territories;
 };

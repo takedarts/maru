@@ -5,7 +5,7 @@
 namespace deepgo {
 
 /**
- * 連のオブジェクトを生成する。
+ * Creates a group object.
  */
 BoardRen::BoardRen()
     : color(EMPTY),

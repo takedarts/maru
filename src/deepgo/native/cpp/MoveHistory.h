@@ -8,52 +8,52 @@
 namespace deepgo {
 
 /**
- * 着手履歴を保持するクラス。
- * 着手履歴は、直近の3手分を保持する。
+ * Class that holds the move history.
+ * The move history retains the last 3 moves.
  */
 class MoveHistory {
  public:
   /**
-   * 着手履歴を保持するオブジェクトを生成する。
+   * Creates an object that holds the move history.
    */
   MoveHistory();
 
   /**
-   * コピーした着手履歴を保持するオブジェクトを生成する。
-   * @param history コピー元の着手履歴
+   * Creates an object that holds a copy of the move history.
+   * @param history source move history to copy from
    */
   MoveHistory(const MoveHistory& history);
 
   /**
-   * オブジェクトを破棄する。
+   * Destructor.
    */
   virtual ~MoveHistory() = default;
 
   /**
-   * 履歴を初期化する。
+   * Clears the history.
    */
   void clearMoves();
 
   /**
-   * 着手座標を追加する。
-   * @param move 着手座標
+   * Adds a move.
+   * @param move move to add
    */
   void addMove(Move move);
 
   /**
-   * 着手履歴を取得する。
-   * @return 着手履歴
+   * Returns the move history.
+   * @return move history
    */
   std::vector<Move> getMoves() const;
 
  private:
   /**
-   * 値を追加する位置。
+   * Index position for the next entry.
    */
   int32_t _index;
 
   /**
-   * 着手座標の一覧
+   * List of moves.
    */
   Move _moves[3];
 };

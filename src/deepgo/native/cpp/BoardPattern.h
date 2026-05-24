@@ -6,79 +6,79 @@
 namespace deepgo {
 
 /**
- * 盤面のパターンの情報を保持するクラス。
+ * Class that holds the pattern information of the board arrangement.
  */
 class BoardPattern {
  public:
   /**
-   * 盤面パターンのオブジェクトを作成する。
-   * @param width 盤面の幅
-   * @param height 盤面の高さ
+   * Creates a board pattern object.
+   * @param width Board width
+   * @param height Board height
    */
   BoardPattern(int width, int height);
 
   /**
-   * コピーした盤面パターンのオブジェクトを作成する。
-   * @param pattern コピー元の盤面パターンのオブジェクト
+   * Creates a copy of the board pattern object.
+   * @param pattern Source board pattern object
    */
   BoardPattern(const BoardPattern& pattern);
 
   /**
-   * 盤面パターンのオブジェクトを破棄する。
+   * Destroys the board pattern object.
    */
   virtual ~BoardPattern() = default;
 
   /**
-   * 石の並びの表現値を初期化する。
+   * Initializes the stone arrangement representation value.
    */
   void clear();
 
   /**
-   * 指定された座標に石を置いた状態に更新する。
-   * @param x X座標
-   * @param y Y座標
-   * @param color 石の色
+   * Updates the state with a stone placed at the specified position.
+   * @param x X coordinate
+   * @param y Y coordinate
+   * @param color Stone color
    */
   void put(int32_t x, int32_t y, int32_t color);
 
   /**
-   * 指定された座標の石を取り除いた状態に更新する。
-   * @param x X座標
-   * @param y Y座標
-   * @param color 石の色
+   * Updates the state with a stone removed from the specified position.
+   * @param x X coordinate
+   * @param y Y coordinate
+   * @param color Stone color
    */
   void remove(int32_t x, int32_t y, int32_t color);
 
   /**
-   * パターンを表現する値を取得する。
-   * @return パターンを表現する値
+   * Returns the values representing the pattern.
+   * @return Values representing the pattern
    */
   std::vector<int32_t> values();
 
   /**
-   * パターンを表現する値をコピーする。
-   * @param pattern コピー元のパターン
+   * Copies the values representing the pattern.
+   * @param pattern Source pattern to copy from
    */
   void copyFrom(const BoardPattern& pattern);
 
  private:
   /**
-   * 盤面の幅。
+   * Board width.
    */
   int32_t _width;
 
   /**
-   * 盤面の高さ。
+   * Board height.
    */
   int32_t _height;
 
   /**
-   * データの長さ。
+   * Data length.
    */
   int32_t _length;
 
   /**
-   * 盤面のデータ。
+   * Board data.
    */
   std::vector<int32_t> _values;
 };

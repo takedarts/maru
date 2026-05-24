@@ -22,210 +22,210 @@ namespace deepgo {
 class MctsManager;
 
 /**
- * 探索ノードクラス。
+ * Search node class.
  */
 class MctsNode {
  public:
   /**
-   * 探索ノードオブジェクトを作成する。
-   * @param manager ノード管理オブジェクト
+   * Creates a search node object.
+   * @param manager Node management object
    */
   explicit MctsNode(MctsManager* manager);
 
   /**
-   * 初期盤面ノードとして設定する。
+   * Initializes this as an initial board node.
    */
   void initialize();
 
   /**
-   * 初期盤面ノードとして設定する。
-   * @param board 盤面
-   * @param x 着手座標のX座標
-   * @param y 着手座標のY座標
-   * @param previousColor 直前に打った石の色
-   * @param captured 打ち上げた石の数
+   * Initializes this as an initial board node.
+   * @param board Board state
+   * @param x X coordinate of the move
+   * @param y Y coordinate of the move
+   * @param previousColor Color of the last played stone
+   * @param captured Number of captured stones
    */
   void initialize(
       const Board* board, int x, int y, int32_t previousColor, int32_t captured);
 
   /**
-   * 推論結果を適用する。
-   * @param result 推論結果
+   * Applies an inference result.
+   * @param result Inference result
    */
   void applyInferenceResult(const InferenceResult& result);
 
   /**
-   * 次に評価するノードを取得する。
-   * @param equally 探索回数を均等にする場合はtrue
-   * @param width 探索幅
-   * @param temperature 探索の温度パラメータ
-   * @param noise ガンベルノイズの強さ
-   * @return 次に評価するノード
+   * Gets the next node to evaluate.
+   * @param equally True if search count should be equally distributed
+   * @param width Search width
+   * @param temperature Temperature parameter for search
+   * @param noise Strength of Gumbel noise
+   * @return Next node to evaluate
    */
   MctsNode* pickupNextNode(bool equally, int32_t width, float temperature, float noise);
 
   /**
-   * ルートノードとして設定する。
+   * Sets this node as the root node.
    */
   void setAsRootNode();
 
   /**
-   * 評価済みならtrueを返す。
-   * @return 評価済みならtrue
+   * Returns true if this node has been evaluated.
+   * @return True if evaluated
    */
   bool isEvaluated();
 
   /**
-   * 盤面評価値を取得する。
-   * @return 盤面評価値
+   * Returns the board evaluation value.
+   * @return Board evaluation value
    */
   float getNodeValue();
 
   /**
-   * 直前に打った石の色を設定する。
-   * @param color 直前に打った石の色
+   * Sets the color of the previously played stone.
+   * @param color Color of the previously played stone
    */
   void setPreviousColor(int32_t color);
 
   /**
-   * コミを取得する。
-   * @return コミ
+   * Returns the komi.
+   * @return Komi
    */
   float getKomi() const;
 
   /**
-   * ルールを取得する。
-   * @return ルール
+   * Returns the rule.
+   * @return Rule
    */
   int32_t getRule() const;
 
   /**
-   * スーパーコウルールを適用するならtrueを返す。
-   * @return スーパーコウルールを適用するならtrue
+   * Returns true if the superko rule is applied.
+   * @return True if the superko rule is applied
    */
   bool getSuperko() const;
 
   /**
-   * PolicyNetworkの評価値が最も高い候補手を取得する。
-   * @return 候補手
+   * Returns the candidate move with the highest PolicyNetwork evaluation value.
+   * @return Candidate move
    */
   Move getPolicyMove();
 
   /**
-   * 子ノードの一覧を取得する。
-   * @return 子ノードの一覧
+   * Returns the list of child nodes.
+   * @return List of child nodes
    */
   std::vector<MctsNode*> getChildren();
 
   /**
-   * 親ノードを取得する。
-   * @return 親ノード
+   * Returns the parent node.
+   * @return Parent node
    */
   MctsNode* getParent();
 
   /**
-   * 指定した着手に対応するノードを取得する。
-   * @param move 着手
-   * @return ノード
+   * Returns the node corresponding to the specified move.
+   * @param move Move
+   * @return Node
    */
   MctsNode* getChild(Move move);
 
   /**
-   * 指定した着手に対応する子ノードを削除する。
-   * @param move 着手
+   * Removes the child node corresponding to the specified move.
+   * @param move Move
    */
   void removeChild(Move move);
 
   /**
-   * このノードの探索回数を取得する。
-   * @return 探索回数
+   * Returns the visit count of this node.
+   * @return Visit count
    */
   int32_t getVisits();
 
   /**
-   * プレイアウト数を取得する。
-   * @return プレイアウト数
+   * Returns the playout count.
+   * @return Playout count
    */
   int32_t getPlayouts();
 
   /**
-   * MCTS評価値を更新する。
-   * @param value 評価値
+   * Updates the MCTS evaluation value.
+   * @param value Evaluation value
    */
   void updateMctsValue(float value);
 
   /**
-   * MCTS評価値を取得する。
-   * @return MCTS評価値
+   * Returns the MCTS evaluation value.
+   * @return MCTS evaluation value
    */
   float getMctsValue();
 
   /**
-   * MCTS評価値の信頼区間の下限を取得する。
-   * @return 信頼区間の下限
+   * Returns the lower confidence bound of the MCTS evaluation value.
+   * @return Lower confidence bound
    */
   float getMctsValueLCB();
 
   /**
-   * PUCBに基づいて優先度を取得する。
-   * @param totalVisits 探索回数の合計
-   * @return 優先度
+   * Returns the priority based on PUCB.
+   * @param totalVisits Total visit count
+   * @return Priority
    */
   float getPriorityByPUCB(int32_t totalVisits);
 
   /**
-   * このノードの予想進行を取得する。
-   * @return 予想進行
+   * Returns the predicted variation from this node.
+   * @return Predicted variation
    */
   std::vector<Move> getVariations();
 
   /**
-   * 領域の予測確率を取得する。
-   * @return 領域の予測確率
+   * Returns the predicted territory probabilities.
+   * @return Predicted territory probabilities
    */
   std::array<float, 3 * MODEL_SIZE * MODEL_SIZE> getTerritories();
 
   /**
-   * 盤面の状態を取得する。
-   * @return 盤面の状態
+   * Returns the board state.
+   * @return Board state
    */
   std::vector<int32_t> getBoardState();
 
   /**
-   * 盤面を取得する。
-   * @return 盤面
+   * Returns the board.
+   * @return Board
    */
   inline const Board& getBoard() {
     return _board;
   }
 
   /**
-   * 着手情報を取得する。
-   * @return 着手情報
+   * Returns the move information.
+   * @return Move information
    */
   inline const Move& getMove() {
     return _move;
   }
 
   /**
-   * 次に打つ石の色を取得する。
-   * @return 次に打つ石の色
+   * Returns the color of the next stone to play.
+   * @return Color of the next stone to play
    */
   inline int32_t getNextColor() const {
     return OPPOSITE(_move.getColor());
   }
 
   /**
-   * このノードで打ち上げた石の数を取得する。
-   * @return 打ち上げた石の数
+   * Returns the number of stones captured at this node.
+   * @return Number of captured stones
    */
   inline int32_t getCaptured() const {
     return _captured;
   }
 
   /**
-   * このノードの予想着手確率を取得する。
-   * @return 予想着手確率
+   * Returns the predicted move probability of this node.
+   * @return Predicted move probability
    */
   inline float getProbability() const {
     return _probability;
@@ -233,124 +233,124 @@ class MctsNode {
 
  private:
   /**
-   * 同期用ミューテックス。
+   * Mutex for synchronization.
    */
   std::shared_mutex _mutex;
 
   /**
-   * 評価完了待機用の条件変数。
+   * Condition variable for waiting on evaluation completion.
    */
   std::condition_variable_any _condition;
 
   /**
-   * ノード管理オブジェクト。
+   * Node management object.
    */
   MctsManager* _manager;
 
   /**
-   * このノードで評価する盤面。
+   * Board to be evaluated at this node.
    */
   Board _board;
 
   /**
-   * 着手。
+   * Move.
    */
   Move _move;
 
   /**
-   * 打ち上げた石の数。
+   * Number of captured stones.
    */
   int32_t _captured;
 
   /**
-   * 予想着手確率。
+   * Predicted move probability.
    */
   float _probability;
 
   /**
-   * 最初に作成された子ノードならtrue。
+   * True if this is the first created child node.
    */
   bool _firstChild;
 
   /**
-   * 評価中ならtrue。
+   * True if currently being evaluated.
    */
   bool _evaluating;
 
   /**
-   * 評価済みならtrue。
+   * True if already evaluated.
    */
   bool _evaluated;
 
   /**
-   * 盤面評価値。
+   * Board evaluation value.
    */
   float _nodeValue;
 
   /**
-   * 次の着手確率の一覧。
+   * List of next move probabilities.
    */
   std::vector<Policy> _policies;
 
   /**
-   * 親ノード。
+   * Parent node.
    */
   MctsNode* _parent;
 
   /**
-   * 子ノードの一覧。
+   * List of child nodes.
    */
   std::map<int32_t, MctsNode*> _children;
 
   /**
-   * 探索回数。
+   * Visit count.
    */
   int32_t _visits;
 
   /**
-   * プレイアウト数。
+   * Playout count.
    */
   std::atomic<int32_t> _playouts;
 
   /**
-   * MCTS評価値。
+   * MCTS evaluation value.
    */
   MctsValue _mctsValue;
 
   /**
-   * 領域の予測確率の一覧。
+   * List of predicted territory probabilities.
    */
   std::array<float, 3 * MODEL_SIZE * MODEL_SIZE> _territories;
 
   /**
-   * 子ノードへの登録を待機している候補手の一覧。
+   * Queue of candidate moves waiting to be registered as child nodes.
    */
   std::queue<Policy> _waitingPolicies;
 
   /**
-   * 子ノードへの登録を待機している候補手のセット。
+   * Set of candidate moves waiting to be registered as child nodes.
    */
   std::set<int32_t> _waitingMoves;
 
   /**
-   * 盤面以外の状態を初期化する。
+   * Initializes all state except the board.
    */
   void _resetNode();
 
   /**
-   * 次に評価するノードを取得する。
-   * @param equally 探索回数を均等にする場合はtrue
-   * @param width 探索幅
-   * @param temperature 探索の温度パラメータ
-   * @param noise ガンベルノイズの強さ
-   * @return 次に評価するノード
+   * Returns the next node to evaluate.
+   * @param equally True to equalize the visit count
+   * @param width Search width
+   * @param temperature Temperature parameter for search
+   * @param noise Gumbel noise strength
+   * @return Next node to evaluate
    */
   MctsNode* _pickupNextNode(bool equally, int32_t width, float temperature, float noise);
 
   /**
-   * 着手に対応するインデックスを取得する。
-   * @param move 着手
-   * @return インデックス
+   * Returns the index corresponding to the move.
+   * @param move Move
+   * @return Index
    */
   inline int32_t _getMoveIndex(Move move) const {
     return (move.getY() * _board.getWidth() + move.getX()) * 3 + move.getColor();

@@ -579,10 +579,10 @@ class GTPEngine(object):
 
         # Get candidate move
         LOGGER.debug('Random: color=%s', gtp_color_to_string(color))
-        candiate = self.player.get_random()
+        candidate = self.player.get_random()
 
         # Return candidate move
-        return candiate
+        return candidate
 
     def _evaluate(
         self,
@@ -667,8 +667,8 @@ class GTPEngine(object):
         # In Japanese rule, if all candidate moves have the same predicted territory, pass as move
         if self.rule == RULE_JP and len(candidates) > 1:
             board = self.player.get_board()
-            fixed_territories = territories.argmax(axis=0)
-            fixed_territories += (fixed_territories == EMPTY) * board.get_colors()
+            fixed_territories = territories.argmax(axis=0) - 1
+            fixed_territories += (fixed_territories == EMPTY) * board.get_owners()
             candidate_pass = None
             all_equals = True
 
@@ -677,8 +677,8 @@ class GTPEngine(object):
                     candidate_pass = candidate
 
                 terrs = candidate.territories
-                fixed_terrs = terrs.argmax(axis=0)
-                fixed_terrs += (fixed_terrs == EMPTY) * board.get_colors()
+                fixed_terrs = terrs.argmax(axis=0) - 1
+                fixed_terrs += (fixed_terrs == EMPTY) * board.get_owners()
 
                 if not np.array_equal(fixed_territories, fixed_terrs):
                     all_equals = False
@@ -716,7 +716,7 @@ class GTPEngine(object):
         if pos == PASS:
             board = self.player.get_board()
             fixed_territories = territories.argmax(axis=0) - 1
-            fixed_territories += (fixed_territories == EMPTY) * board.get_colors()
+            fixed_territories += (fixed_territories == EMPTY) * board.get_owners()
             score = fixed_territories.sum() - self.komi
 
             return pos, score, territories

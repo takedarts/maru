@@ -5,10 +5,10 @@
 namespace deepgo {
 
 /**
- * 予測着手確率のオブジェクトを作成する。
- * @param move 着手座標
- * @param probability 予測着手確率
- * @param visits 探索回数
+ * Creates a predicted move probability object.
+ * @param move move coordinate
+ * @param probability predicted move probability
+ * @param visits number of searches
  */
 Policy::Policy(Move move, float probability, int32_t visits)
     : _move(move),
@@ -17,7 +17,7 @@ Policy::Policy(Move move, float probability, int32_t visits)
 }
 
 /**
- * 予測着手確率のオブジェクトを作成する。
+ * Creates a predicted move probability object.
  */
 Policy::Policy()
     : _move(Move()),
@@ -26,8 +26,8 @@ Policy::Policy()
 }
 
 /**
- * 予測着手確率オブジェクトの文字列表現を取得する。
- * @return 予測着手確率オブジェクトの文字列表現
+ * Returns the string representation of the predicted move probability object.
+ * @return string representation of the predicted move probability object
  */
 std::string Policy::toString() const {
   std::stringstream ss;

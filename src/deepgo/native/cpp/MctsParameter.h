@@ -5,99 +5,99 @@
 namespace deepgo {
 
 /**
- * 探索ノードを作成するときに使用するパラメータクラス。
+ * Parameter class used when creating search nodes.
  */
 class MctsParameter {
  public:
   /**
-   * パラメータオブジェクトを作成する。
-   * @param width 盤面の幅
-   * @param height 盤面の高さ
-   * @param komi コミの目数
-   * @param rule 勝敗判定ルール
-   * @param superko スーパーコウルールを適用するならtrue
-   * @param pucbConstantInit PUCBの信頼上限に掛ける定数の初期値
-   * @param pucbConstantBase PUCBの信頼上限に掛ける定数の変化値
+   * Creates a parameter object.
+   * @param width Board width
+   * @param height Board height
+   * @param komi Komi value
+   * @param rule Win/loss determination rule
+   * @param superko True if the superko rule is applied
+   * @param pucbConstantInit Initial value of the constant multiplied by the PUCB confidence bound
+   * @param pucbConstantBase Incremental value of the constant multiplied by the PUCB confidence bound
    */
   MctsParameter(
       int32_t width, int32_t height, float komi, int32_t rule, bool superko,
       float pucbConstantInit, float pucbConstantBase);
 
   /**
-   * 盤面の幅を返す。
-   * @return 盤面の幅
+   * Returns the board width.
+   * @return Board width
    */
   int32_t getWidth() const;
 
   /**
-   * 盤面の高さを返す。
-   * @return 盤面の高さ
+   * Returns the board height.
+   * @return Board height
    */
   int32_t getHeight() const;
 
   /**
-   * コミの目数を返す。
-   * @return コミの目数
+   * Returns the komi value.
+   * @return Komi value
    */
   float getKomi() const;
 
   /**
-   * 勝敗判定ルールを返す。
-   * @return 勝敗判定ルール
+   * Returns the win/loss determination rule.
+   * @return Win/loss determination rule
    */
   int32_t getRule() const;
 
   /**
-   * スーパーコウルールを適用するならtrueを返す。
-   * @return スーパーコウルールを適用するならtrue
+   * Returns true if the superko rule is applied.
+   * @return True if the superko rule is applied
    */
   bool getSuperko() const;
 
   /**
-   * PUCBの信頼上限に掛ける定数の初期値を返す。
-   * @return PUCBの信頼上限に掛ける定数の初期値
+   * Returns the initial value of the constant multiplied by the PUCB confidence bound.
+   * @return Initial value of the constant multiplied by the PUCB confidence bound
    */
   float getPucbConstantInit() const;
 
   /**
-   * PUCBの信頼上限に掛ける定数の変化値を返す。
-   * @return PUCBの信頼上限に掛ける定数の変化値
+   * Returns the incremental value of the constant multiplied by the PUCB confidence bound.
+   * @return Incremental value of the constant multiplied by the PUCB confidence bound
    */
   float getPucbConstantBase() const;
 
  private:
   /**
-   * 盤面の幅。
+   * Board width.
    */
   int32_t _width;
 
   /**
-   * 盤面の高さ。
+   * Board height.
    */
   int32_t _height;
 
   /**
-   * コミの目数。
+   * Komi value.
    */
   float _komi;
 
   /**
-   * 勝敗判定ルール。
+   * Win/loss determination rule.
    */
   int32_t _rule;
 
   /**
-   * スーパーコウルールを適用するならtrue。
+   * True if the superko rule is applied.
    */
   bool _superko;
 
   /**
-   * PUCBの信頼上限に掛ける定数の初期値。
+   * Initial value of the constant multiplied by the PUCB confidence bound.
    */
   float _pucbConstantInit;
 
   /**
-   * PUCBの信頼上限に掛ける定数の変化値。
+   * Incremental value of the constant multiplied by the PUCB confidence bound.
    */
   float _pucbConstantBase;
 };

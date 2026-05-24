@@ -3,10 +3,10 @@
 namespace deepgo {
 
 /**
- * 推論結果を作成する。
- * @param value 評価値
- * @param policies 候補手の予測確率
- * @param territories 地の予測確率
+ * Creates an inference result.
+ * @param value Evaluation value
+ * @param policies Predicted probabilities of candidate moves
+ * @param territories Predicted probabilities of territories
  */
 InferenceResult::InferenceResult(
     float value, const std::vector<Policy>& policies,
@@ -17,8 +17,8 @@ InferenceResult::InferenceResult(
 }
 
 /**
- * 推論結果をコピーする。
- * @param other コピー元の推論結果
+ * Copies an inference result.
+ * @param other Inference result to copy from
  */
 InferenceResult::InferenceResult(const InferenceResult& other)
     : _value(other._value),
@@ -27,7 +27,7 @@ InferenceResult::InferenceResult(const InferenceResult& other)
 }
 
 /**
- * 推論結果を作成する。
+ * Creates an inference result.
  */
 InferenceResult::InferenceResult()
     : _value(0.0f),

@@ -2,8 +2,8 @@
 
 namespace deepgo {
 
-// 盤面のハッシュ値を計算するための定数
-// 手番、位置に対してランダムな64ビット整数値を格納している
+// Constants for computing board hash values
+// Stores random 64-bit integer values indexed by turn and position
 const uint64_t BOARD_HASH_VALUES[4][361] = {
     {0x0cf32068ab74c73aULL, 0xd6159ef562476b43ULL, 0xe04cc1d9c1323723ULL, 0x22e59eb4c08d9ac4ULL,
      0xee7e5d3871565771ULL, 0x5fb53699d6ffc9adULL, 0x139680836535ce6cULL, 0x8c64487ad3da8f7cULL,
