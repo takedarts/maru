@@ -3,8 +3,8 @@
 namespace deepgo {
 
 /**
- * Create thread management object.
- * @param threads Number of threads
+ * スレッド管理オブジェクトを作成する。
+ * @param threads スレッド数
  */
 ThreadPool::ThreadPool(int32_t threads)
     : _mutex(),
@@ -18,7 +18,7 @@ ThreadPool::ThreadPool(int32_t threads)
 }
 
 /**
- * Destroy thread management object.
+ * スレッド管理オブジェクトを破棄する。
  */
 ThreadPool::~ThreadPool() {
   {
@@ -33,8 +33,8 @@ ThreadPool::~ThreadPool() {
 }
 
 /**
- * Register a task to execute.
- * @param task Task
+ * 実行対象のタスクを登録する。
+ * @param task タスク
  */
 void ThreadPool::submit(std::function<void()> task) {
   {
@@ -46,7 +46,7 @@ void ThreadPool::submit(std::function<void()> task) {
 }
 
 /**
- * Execute search.
+ * 探索を実行する。
  */
 void ThreadPool::_run() {
   while (true) {
@@ -69,11 +69,11 @@ void ThreadPool::_run() {
 }
 
 /**
- * Return the number of threads.
- * @return Number of threads
+ * スレッド数を返す。
+ * @return スレッド数
  */
 int32_t ThreadPool::getSize() {
-  return _threads.size();
+  return static_cast<int32_t>(_threads.size());
 }
 
 }  // namespace deepgo

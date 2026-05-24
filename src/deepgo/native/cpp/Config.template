@@ -1,38 +1,35 @@
 #pragma once
 
-// Values assigned to board coordinates
+// 盤面の座標に割り当てる値
 #define BLACK (${BLACK})
 #define WHITE (${WHITE})
 #define EMPTY (${EMPTY})
 #define EDGE (${EDGE})
 
-// Calculation rules
+// 計算ルール
 #define RULE_CH (${RULE_CH})
 #define RULE_JP (${RULE_JP})
 #define RULE_COM (${RULE_COM})
 
-// Macro to get the color of the opponent's stone
+// 相手の石の色を取得するマクロ
 #define OPPOSITE(c)  (-c)
 
-// Board feature size input to the model (board size)
+// モデルに入力する盤面特徴量の大きさ(盤面の大きさ)
 #define MODEL_SIZE (${MODEL_SIZE})
-// Number of board features input to the model
+// モデルに入力する盤面特徴量の数
 #define MODEL_FEATURES (${MODEL_FEATURES})
-// Number of game features input to the model
+// モデルに入力するゲーム特徴量の数
 #define MODEL_INFOS (${MODEL_INFOS})
-// Number of board prediction values output by the model
+// モデルが出力する盤面予測値の数
 #define MODEL_PREDICTIONS (${MODEL_PREDICTIONS})
-// Number of game prediction values output by the model
+// モデルが出力するゲーム予測値の数
 #define MODEL_VALUES (${MODEL_VALUES})
 
-// Size of data input to the inference model
+// 推論モデルに入力するデータの大きさ
 #define MODEL_INPUT_SIZE (${MODEL_INPUT_SIZE})
-// Size of input data embedded as int32 for the model
+// モデルへの入力データをint32に埋め込んだときの大きさ
 #define MODEL_INPUT_PACK_SIZE (${MODEL_INPUT_PACK_SIZE})
-// Size of data output by the inference model
+// 推論モデルが出力するデータの大きさ
 #define MODEL_OUTPUT_SIZE (${MODEL_OUTPUT_SIZE})
-
-// Search algorithm: UCB
-#define SEARCH_UCB (${SEARCH_UCB})
-// Search algorithm: PUCB
-#define SEARCH_PUCB (${SEARCH_PUCB})
+// モデルの出力マスクをint32に埋め込んだときの大きさ
+#define MODEL_OUTPUT_PACK_SIZE (${MODEL_OUTPUT_PACK_SIZE})

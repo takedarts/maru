@@ -217,7 +217,8 @@ class Board(object):
         captured = self.native.play(pos, color)
 
         if captured < 0:
-            raise GoException(f'Invalid move: {pos} {get_color_name(color)}')
+            raise GoException(
+                f'Invalid move: {pos} {get_color_name(color)}\n{get_board_string(self)}')
 
         return captured
 
@@ -377,13 +378,6 @@ class Board(object):
             np.ndarray: Input data
         '''
         return self.native.get_inputs(color, komi, rule, superko)
-
-    def get_hash(self) -> int:
-        '''Get the hash value of the board.
-        Returns:
-            int: Hash value of the board
-        '''
-        return self.native.get_hash()
 
     def get_state(self) -> List[int]:
         '''Return the serialized value of the board state.

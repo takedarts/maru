@@ -1,135 +1,165 @@
 #pragma once
 
 #include <cstdint>
+#include <ostream>
 #include <vector>
+
+#include "MctsNode.h"
+#include "Move.h"
 
 namespace deepgo {
 
 /**
- * Candidate move class.
+ * 候補手クラス。
  */
 class Candidate {
  public:
   /**
-   * Creates candidate move data.
-   * @param x x coordinate
-   * @param y y coordinate
-   * @param color Stone color
-   * @param visits Number of visits
-   * @param playouts Number of playouts
-   * @param policy Predicted move probability
-   * @param value Evaluation value
-   * @param minimax Minimax value
-   * @param variations Predicted sequence
+   * 候補手データを作成する。
+   * @param move 着手
+   * @param visits 訪問回数
+   * @param playouts プレイアウト数
+   * @param policy 予想着手確率
+   * @param value 評価値
+   * @param variations 予想進行
+   * @param territories 予測領域確率
    */
   Candidate(
-      int32_t x, int32_t y, int32_t color, int32_t visits, int32_t playouts,
-      float policy, float value, float minimax,
-      std::vector<std::pair<int32_t, int32_t>> variations);
+      Move move, int32_t visits, int32_t playouts,
+      float policy, float value, const std::vector<Move> variations,
+      const std::array<float, 3 * MODEL_SIZE * MODEL_SIZE>& territories);
 
   /**
-   * Destroys the instance.
+   * ノードオブジェクトから候補手データを作成する。
+   * @param node ノードオブジェクト
+   */
+  Candidate(MctsNode* node);
+
+  /**
+   * 候補手オブジェクトをコピーする。
+   * @param other コピー元の候補手オブジェクト
+   */
+  Candidate(const Candidate& other);
+
+  /**
+   * 候補手オブジェクトを作成する。
+   * 不正な候補手を表すオブジェクトを作成する。
+   */
+  Candidate();
+
+  /**
+   * 候補手の文字列表現を取得する。
+   * @return 候補手の文字列表現
+   */
+  std::string toString() const;
+
+  /**
+   * インスタンスを破棄する。
    */
   virtual ~Candidate() = default;
 
   /**
-   * Gets the x coordinate.
-   * @return x coordinate
+   * 着手を取得する。
+   * @return 着手
    */
-  int32_t getX() const;
+  inline Move getMove() const {
+    return _move;
+  }
 
   /**
-   * Gets the y coordinate.
-   * @return y coordinate
+   * 訪問回数を取得する。
+   * @return 訪問回数
    */
-  int32_t getY() const;
+  inline int32_t getVisits() const {
+    return _visits;
+  }
 
   /**
-   * Gets the stone color.
-   * @return Stone color
+   * プレイアウト数を取得する。
+   * @return プレイアウト数
    */
-  int32_t getColor() const;
+  inline int32_t getPlayouts() const {
+    return _playouts;
+  }
 
   /**
-   * Gets the number of visits.
-   * @return Number of visits
+   * 予想着手確率を取得する。
+   * @return 予想着手確率
    */
-  int32_t getVisits() const;
+  inline float getPolicy() const {
+    return _policy;
+  }
 
   /**
-   * Gets the number of playouts.
-   * @return Number of playouts
+   * 評価値を取得する。
+   * @return 評価値
    */
-  int32_t getPlayouts() const;
+  inline float getValue() const {
+    return _value;
+  }
 
   /**
-   * Gets the predicted move probability.
-   * @return Predicted move probability
+   * 予想進行を取得する。
+   * @return 予想進行
    */
-  float getPolicy() const;
+  inline std::vector<Move> getVariations() const {
+    return _variations;
+  }
 
   /**
-   * Gets the evaluation value.
-   * @return Evaluation value
+   * 予測領域確率を取得する。
+   * @param territories 予測領域確率を格納する配列
    */
-  float getValue() const;
+  inline void getTerritories(float* territories) const {
+    std::copy(std::begin(_territories), std::end(_territories), territories);
+  }
 
   /**
-   * Gets the minimax evaluation value.
-   * @return Minimax evaluation value
+   * 候補手の文字列表現を出力ストリームに書き込む。
+   * @param os 出力ストリーム
+   * @param candidate 候補手オブジェクト
+   * @return 出力ストリーム
    */
-  float getMinimax() const;
-
-  /**
-   * Gets the predicted sequence.
-   * @return Predicted sequence
-   */
-  std::vector<std::pair<int32_t, int32_t>> getVariations() const;
+  friend std::ostream& operator<<(std::ostream& os, const Candidate& candidate) {
+    os << candidate.toString();
+    return os;
+  }
 
  private:
   /**
-   * x coordinate.
+   * 着手。
    */
-  int32_t _x;
-  /**
-   * y coordinate.
-   */
-  int32_t _y;
+  Move _move;
 
   /**
-   * Stone color.
-   */
-  int32_t _color;
-
-  /**
-   * Number of visits.
+   * 訪問回数。
    */
   int32_t _visits;
 
   /**
-   * Number of playouts.
+   * プレイアウト数。
    */
   int32_t _playouts;
 
   /**
-   * Predicted move probability.
+   * 予想着手確率。
    */
   float _policy;
 
   /**
-   * Evaluation value.
+   * 評価値。
    */
   float _value;
 
   /**
-   * Minimax value.
+   * 予想進行。
    */
-  float _minimax;
+  std::vector<Move> _variations;
 
   /**
-   * Predicted sequence.
+   * 予測領域確率。
    */
-  std::vector<std::pair<int32_t, int32_t>> _variations;
+  std::array<float, 3 * MODEL_SIZE * MODEL_SIZE> _territories;
 };
 
 }  // namespace deepgo

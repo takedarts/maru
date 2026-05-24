@@ -41,7 +41,7 @@ def get_default_gpus(
             new_gpus = [0]
         # Otherwise, exclude GPU IDs other than 0
         else:
-            new_gpus = [gpu for gpu in gpus if gpu == 0]
+            new_gpus = [gpu for gpu in gpus if gpu <= 0]
             # If GPU IDs other than 0 are included, show a warning
             if len(new_gpus) != len(gpus):
                 LOGGER.warning(

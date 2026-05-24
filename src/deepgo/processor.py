@@ -3,7 +3,8 @@ from typing import List
 
 import numpy as np
 
-from .native import NativeProcessor
+from .config import DEFAULT_BATCH_SIZE, DEFAULT_THREADS_PER_GPU
+from .native import NativeInferenceProcessor
 
 
 class Processor(object):
@@ -11,10 +12,11 @@ class Processor(object):
         self,
         model: str | Path,
         gpus: List[int] = [-1],
-        batch_size: int = 2048,
+        batch_size: int = DEFAULT_BATCH_SIZE,
         fp16: bool = False,
         deterministic: bool = False,
-        threads_per_gpu: int = 1,
+        threads_per_gpu: int = DEFAULT_THREADS_PER_GPU,
+        cache_size: int = 0,
     ) -> None:
         '''Initialize computation management object.
         Args:
@@ -24,12 +26,13 @@ class Processor(object):
             fp16 (bool): True to use FP16
             deterministic (bool): True to make results reproducible
             threads_per_gpu (int): Number of threads per GPU
+            cache_size (int): Cache size for board evaluation
         '''
         if not Path(model).exists():
             raise FileNotFoundError(f'File not found: {model}')
 
-        self.native = NativeProcessor(
-            str(model), gpus, batch_size, fp16, deterministic, threads_per_gpu)
+        self.native = NativeInferenceProcessor(
+            str(model), gpus, fp16, deterministic, batch_size, threads_per_gpu, cache_size)
 
     def execute(self, inputs: np.ndarray) -> np.ndarray:
         '''Execute inference.

@@ -12,11 +12,10 @@ import numpy as np
 from deepgo.record import Record
 
 from .board import (Board, get_array_string, get_color_name,
-                    get_handicap_positions, is_valid_position)
+                    get_handicap_positions, get_opposite_color, is_valid_position)
 from .config import (BLACK, DEFAULT_KOMI, DEFAULT_PUCB_CONSTANT_BASE,
-                     DEFAULT_PUCB_CONSTANT_INIT, DEFAULT_SIZE,
-                     DEFAULT_UCB_CONSTANT, EMPTY, MODEL_SIZE, NAME, PASS,
-                     RULE_CH, RULE_JP, VERSION, WHITE)
+                     DEFAULT_PUCB_CONSTANT_INIT, DEFAULT_SIZE, EMPTY,
+                     MODEL_SIZE, NAME, PASS, RULE_CH, RULE_JP, VERSION, WHITE)
 from .exception import GoException
 from .player import Candidate, Player
 from .processor import Processor
@@ -127,7 +126,6 @@ def gtp_args_to_color(args: List[str]) -> int | None:
 def lz_candidate_to_string(
     order: int,
     candidate: Candidate,
-    criterion: str,
     width: int,
     height: int
 ) -> str:
@@ -135,7 +133,6 @@ def lz_candidate_to_string(
     Args:
         order (int): Priority
         candidate (Candidate): Candidate move
-        criterion (str): Criterion ('value', 'minimax', or 'visits')
         width (int): Board width
         height (int): Board height
     Returns:
@@ -144,14 +141,14 @@ def lz_candidate_to_string(
     candidate_text = (
         f'info move {gtp_position_to_string(candidate.pos, width, height)}'
         f' visits {candidate.visits}'
-        f' winrate {int(candidate.get_win_chance(criterion) * 10000)}'
-        f' lcb {int(candidate.get_win_chance_lcb(criterion) * 10000)}'
+        f' winrate {int(candidate.get_win_chance() * 10000)}'
+        f' lcb {int(candidate.get_win_chance_lcb() * 10000)}'
         f' prior {int(candidate.policy * 10000)}'
         f' order {order}')
 
     if len(candidate.variations) != 0:
         variations = ' '.join(
-            gtp_position_to_string(p, width, height) for p in candidate.variations)
+            gtp_position_to_string(p[0], width, height) for p in candidate.variations)
         candidate_text += f' pv {variations}'
 
     return candidate_text.strip()
@@ -159,7 +156,6 @@ def lz_candidate_to_string(
 
 def lz_candidates_to_string(
     candidates: List[Candidate],
-    criterion: str,
     territories: np.ndarray,
     score: float,
     width: int,
@@ -168,7 +164,6 @@ def lz_candidates_to_string(
     '''Convert list of candidate moves to LeelaZero string representation.
     Args:
         candidates (List[Candidate]): List of candidate moves
-        criterion (str): Criterion ('value', 'minimax', or 'visits')
         territories (np.ndarray): Territory data (not used here)
         score (float): Predicted score difference
         width (int): Board width
@@ -177,14 +172,13 @@ def lz_candidates_to_string(
         str: LeelaZero string representation
     '''
     return ' '.join(
-        lz_candidate_to_string(o, c, criterion, width, height)
+        lz_candidate_to_string(o, c, width, height)
         for o, c in enumerate(candidates))
 
 
 def kata_candidate_to_string(
     order: int,
     candidate: Candidate,
-    criterion: str,
     width: int,
     height: int
 ) -> str:
@@ -192,7 +186,6 @@ def kata_candidate_to_string(
     Args:
         order (int): Priority
         candidate (Candidate): Candidate move
-        criterion (str): Criterion ('value', 'minimax', or 'visits')
         width (int): Board width
         height (int): Board height
     Returns:
@@ -201,14 +194,14 @@ def kata_candidate_to_string(
     candidate_text = (
         f'info move {gtp_position_to_string(candidate.pos, width, height)}'
         f' visits {candidate.visits}'
-        f' winrate {candidate.get_win_chance(criterion):.4f}'
-        f' lcb {candidate.get_win_chance_lcb(criterion):.4f}'
+        f' winrate {candidate.get_win_chance():.4f}'
+        f' lcb {candidate.get_win_chance_lcb():.4f}'
         f' prior {candidate.policy:.4f}'
         f' order {order}')
 
     if len(candidate.variations) != 0:
         variations = ' '.join(
-            gtp_position_to_string(p, width, height) for p in candidate.variations)
+            gtp_position_to_string(p[0], width, height) for p in candidate.variations)
         candidate_text += f' pv {variations}'
 
     return candidate_text.strip()
@@ -216,7 +209,6 @@ def kata_candidate_to_string(
 
 def kata_candidates_to_string(
     candidates: List[Candidate],
-    criterion: str,
     territories: np.ndarray,
     score: float,
     width: int,
@@ -225,7 +217,6 @@ def kata_candidates_to_string(
     '''Convert list of candidate moves to KataGo string representation.
     Args:
         candidates (List[Candidate]): List of candidate moves
-        criterion (str): Criterion ('value', 'minimax', or 'visits')
         territories (np.ndarray): Territory data
         score (float): Predicted score difference
         width (int): Board width
@@ -235,11 +226,11 @@ def kata_candidates_to_string(
     '''
     # Create candidate move string
     candidates_text = ' '.join(
-        kata_candidate_to_string(o, c, criterion, width, height)
+        kata_candidate_to_string(o, c, width, height)
         for o, c in enumerate(candidates))
 
     # Create rootInfo string
-    win_chance = candidates[0].get_win_chance(criterion)
+    win_chance = candidates[0].get_win_chance()
     visits = sum(c.visits for c in candidates)
     score = score if candidates[0].color == BLACK else -score
     root_text = (f'rootInfo winrate {win_chance:.4f} visits {visits} scoreLead {score:.1f}')
@@ -258,7 +249,6 @@ def kata_candidates_to_string(
 
 def cgos_candidates_to_string(
     candidates: List[Candidate],
-    criterion: str,
     territories: np.ndarray,
     score: float,
     width: int,
@@ -267,7 +257,6 @@ def cgos_candidates_to_string(
     '''Convert list of candidate moves to CGOS string representation.
     Args:
         candidates (List[Candidate]): List of candidate moves
-        criterion (str): Criterion ('value', 'minimax', or 'visits')
         territories (np.ndarray): Territory data
         score (float): Predicted score difference
         width (int): Board width
@@ -279,7 +268,7 @@ def cgos_candidates_to_string(
     root_values: Dict[str, Any] = {}
 
     # Set rootInfo values
-    root_values['winrate'] = candidates[0].get_win_chance(criterion)
+    root_values['winrate'] = candidates[0].get_win_chance()
     root_values['score'] = score if candidates[0].color == BLACK else -score
     root_values['visits'] = sum(c.visits for c in candidates)
 
@@ -288,11 +277,11 @@ def cgos_candidates_to_string(
 
     for candidate in candidates:
         variations = ' '.join(
-            gtp_position_to_string(p, width, height) for p in candidate.variations)
+            gtp_position_to_string(p[0], width, height) for p in candidate.variations)
 
         move_values.append({
             'move': gtp_position_to_string(candidate.pos, width, height),
-            'winrate': candidate.get_win_chance(criterion),
+            'winrate': candidate.get_win_chance(),
             'prior': candidate.policy,
             'pv': variations,
             'visits': candidate.visits,
@@ -384,7 +373,6 @@ class GTPEngine(object):
         threads: int,
         visits: int,
         playouts: int = 0,
-        algorithm: str = 'pucb',
         criterion: str = 'value',
         temperature: float = 1.0,
         randomness: float = 0.0,
@@ -392,10 +380,8 @@ class GTPEngine(object):
         boardsize: int = DEFAULT_SIZE,
         komi: float = DEFAULT_KOMI,
         superko: bool = False,
-        ucb_constant: float = DEFAULT_UCB_CONSTANT,
         pucb_constant_init: float = DEFAULT_PUCB_CONSTANT_INIT,
         pucb_constant_base: float = DEFAULT_PUCB_CONSTANT_BASE,
-        eval_leaf_only: bool = False,
         timelimit: float = 10,
         ponder: bool = False,
         resign_threshold: float = 0.0,
@@ -414,17 +400,14 @@ class GTPEngine(object):
             threads (int): Number of threads to use
             visits (int): Target number of visits
             playouts (int): Target number of playouts
-            algorithm (str): Search algorithm ('ucb' or 'pucb')
-            criterion (str): Candidate move priority criterion ('value', 'minimax', or 'visits')
+            criterion (str): Candidate move priority criterion ('value' or 'visits')
             temperature (float): Search temperature parameter
             randomness (float): Randomness of search visits
             rule (int): Game rule
             komi: float: Komi value
             superko (bool): True to apply superko rule
-            ucb_constant (float): Constant multiplied to UCB upper confidence bound
             pucb_constant_init (float): Initial value applied to PUCB upper confidence bound
             pucb_constant_base (float): Base value applied to PUCB upper confidence bound
-            eval_leaf_only (bool): True to evaluate only leaf nodes
             timelimit (float): Maximum thinking time
             ponder (bool): True to continue analysis during opponent's turn
             resign_threshold (float): Win rate for resignation
@@ -444,7 +427,6 @@ class GTPEngine(object):
 
         self.visits = visits
         self.playouts = playouts
-        self.algorithm = algorithm
         self.criterion = criterion
         self.temperature = temperature
         self.randomness = randomness
@@ -453,10 +435,8 @@ class GTPEngine(object):
         self.size = boardsize
         self.komi = komi
         self.superko = superko
-        self.ucb_constant = ucb_constant
         self.pucb_constant_init = pucb_constant_init
         self.pucb_constant_base = pucb_constant_base
-        self.eval_leaf_only = eval_leaf_only
         self.timelimit = timelimit
         self.ponder = ponder
         self.remain_times = [-1, -1]
@@ -567,22 +547,19 @@ class GTPEngine(object):
         '''
         LOGGER.debug(
             'Create player: '
-            'width=%d, height=%d, komi=%.1f, rule=%d, superko=%s, eval_leaf_only=%s',
-            self.size, self.size, self.komi, self.rule, self.superko, self.eval_leaf_only)
+            'width=%d, height=%d, komi=%.1f, rule=%d, superko=%s',
+            self.size, self.size, self.komi, self.rule, self.superko)
 
         return Player(
             processor=self.processor,
             threads=self.threads,
-            cache_size=max(self.visits, self.playouts * 2) * 2,
             width=self.size,
             height=self.size,
             komi=self.komi,
             rule=self.rule,
             superko=self.superko,
-            ucb_constant=self.ucb_constant,
             pucb_constant_init=self.pucb_constant_init,
             pucb_constant_base=self.pucb_constant_base,
-            eval_leaf_only=self.eval_leaf_only
         )
 
     def _random_move(self, color: int) -> Candidate:
@@ -653,7 +630,6 @@ class GTPEngine(object):
         candidates = self.player.evaluate(
             visits=visits,
             playouts=playouts,
-            algorithm=self.algorithm,
             criterion=self.criterion,
             timelimit=timelimit,
             temperature=self.temperature,
@@ -664,89 +640,102 @@ class GTPEngine(object):
 
     def _get_move(
         self,
-        candidate: Candidate,
+        candidates: List[Candidate],
     ) -> Tuple[Tuple[int, int] | None, float, np.ndarray]:
         '''Get move coordinates.
+        Candidate moves are expected to be ordered by priority (highest first).
         Returns None as coordinates in case of resignation.
         Args:
-            candidate (Candidate): Candidate move
+            candidates (List[Candidate]): List of candidate moves
         Returns:
             Tuple[int, int]: Move coordinates, predicted score difference, predicted territory
         '''
-        # playerオブジェクトを確認する
         # Check player object
         if self.player is None:
             raise GoException('Game has not started yet')
 
-        # 着手した後の予想領域を取得する
-        # Get predicted territory after move
-        board = self.player.get_board()
-        territories = self.player.get_territories(
-            pos=candidate.pos, color=candidate.color, raw=True)
-        score = territories[2].sum() - territories[0].sum()
-        score += (board.get_colors() * territories[1]).sum()
-        score -= self.komi
+        # Check number of candidate moves
+        if len(candidates) == 0:
+            raise GoException('No candidates')
 
-        # In Japanese rule, consider passing if all boundary territories have been fixed
-        # If predicted score difference does not change between passing and playing, pass
-        # However, if a pass has already occurred, do not check boundary territories
-        if self.rule == RULE_JP:
-            boundary_fixed = True
+        # Get the move coordinates of the first candidate
+        pos = candidates[0].pos
+        score = candidates[0].get_score(self.player.get_board()) - self.komi
+        territories = candidates[0].territories
+        win_chance = candidates[0].get_win_chance()
 
-            # If no pass has occurred, check if all boundary territories are fixed
-            if PASS not in [m[0] for m in self.moves]:
-                owners = territories.argmax(axis=0) - 1
-                colors = board.get_colors()
+        # In Japanese rule, if all candidate moves have the same predicted territory, pass as move
+        if self.rule == RULE_JP and len(candidates) > 1:
+            board = self.player.get_board()
+            fixed_territories = territories.argmax(axis=0)
+            fixed_territories += (fixed_territories == EMPTY) * board.get_colors()
+            candidate_pass = None
+            all_equals = True
 
-                for x, y in np.ndindex(self.size, self.size):
-                    if colors[y, x] != EMPTY:
+            for candidate in candidates[1:]:
+                if candidate.pos == PASS:
+                    candidate_pass = candidate
+
+                terrs = candidate.territories
+                fixed_terrs = terrs.argmax(axis=0)
+                fixed_terrs += (fixed_terrs == EMPTY) * board.get_colors()
+
+                if not np.array_equal(fixed_territories, fixed_terrs):
+                    all_equals = False
+                    break
+
+            if all_equals and candidate_pass is not None:
+                pos = PASS
+                score = candidate_pass.get_score(board) - self.komi
+                territories = candidate_pass.territories
+                win_chance = candidate_pass.get_win_chance()
+
+        # In Chinese rule, if passing, prioritize capturing opponent stones in territory
+        if self.rule == RULE_CH and pos == PASS:
+            my_color = candidates[0].color
+            op_color = get_opposite_color(my_color)
+
+            board = self.player.get_board()
+            board_enableds = board.get_enableds(my_color)
+            board_targets = (
+                (board.get_territories() == my_color)
+                & (board.get_colors() == op_color))
+
+            for y, x in np.argwhere(board_targets):
+                for ny, nx in [(y - 1, x), (y + 1, x), (y, x - 1), (y, x + 1)]:
+                    if not board.is_valid_position((nx, ny)):
                         continue
-
-                    for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
-                        nx = x + dx
-                        ny = y + dy
-
-                        if not is_valid_position((nx, ny), self.size, self.size):
-                            continue
-                        elif owners[y, x] != owners[ny, nx]:
-                            boundary_fixed = False
-                            break
-
-                    if not boundary_fixed:
+                    elif board_enableds[ny, nx]:
+                        pos = (nx, ny)
                         break
 
-            # If all boundary territories are fixed, check predicted score difference for passing
-            # If predicted score difference is below threshold (0.8), pass
-            # (stop search if pondering)
-            if boundary_fixed:
-                pass_territories = self.player.get_territories(
-                    pos=PASS, color=candidate.color, raw=True)
-                pass_score = pass_territories[2].sum() - pass_territories[0].sum()
-                pass_score += (board.get_colors() * pass_territories[1]).sum()
-                pass_score -= self.komi
+                if pos != PASS:
+                    break
 
-                score_diff = score - pass_score
-                score_diff = score_diff if candidate.color == BLACK else -score_diff
+        # If pass, calculate score with all territories confirmed
+        if pos == PASS:
+            board = self.player.get_board()
+            fixed_territories = territories.argmax(axis=0) - 1
+            fixed_territories += (fixed_territories == EMPTY) * board.get_colors()
+            score = fixed_territories.sum() - self.komi
 
-                if score_diff < 0.8:
-                    self.player.stop_evaluation()
-                    return PASS, pass_score, pass_territories
+            return pos, score, territories
 
-        # Do not resign before specified turn
+        # Do not resign if turn is less than specified
         if self.player.turn < self.resign_turn:
-            return candidate.pos, score, territories
+            return pos, score, territories
 
-        # Do not resign if score difference is below threshold
+        # Do not resign if score difference is less than threshold
         if abs(score) < self.resign_score:
-            return candidate.pos, score, territories
+            return pos, score, territories
 
-        # Resign if win rate is below threshold (stop search if pondering)
-        if candidate.get_win_chance(self.criterion) < self.resign_threshold:
+        # Resign if win chance is less than threshold (stop search if pondering)
+        if win_chance < self.resign_threshold:
             self.player.stop_evaluation()
             return None, score, territories
 
         # If not resigning, return move coordinates
-        return candidate.pos, score, territories
+        return pos, score, territories
 
     def _perform(self, number: str, command: str) -> None:
         '''Execute command.
@@ -942,11 +931,10 @@ class GTPEngine(object):
         # Output log
         if LOGGER.isEnabledFor(logging.DEBUG):
             colors = self.player.get_board().get_colors()
-            territories = self.player.get_territories()
             LOGGER.debug(
                 'Played: color=%s, pos=%s\n%s',
                 gtp_color_to_string(color), pos,
-                get_array_string(colors, territories, pos=pos))
+                get_array_string(colors, pos=pos))
 
         return (True, '', False)
 
@@ -986,12 +974,12 @@ class GTPEngine(object):
 
         # Calculate move
         if len(self.moves) < self.initial_turn:
-            candidate = self._random_move(color)
+            candidates = [self._random_move(color)]
         else:
-            candidate = self._evaluate(color)[0]
+            candidates = self._evaluate(color)
 
         # Get move coordinates
-        pos, score, territories = self._get_move(candidate)
+        pos, score, territories = self._get_move(candidates)
 
         # If resigning or not advancing the board, return response
         if pos is None or not play:
@@ -1007,11 +995,10 @@ class GTPEngine(object):
         # Output log
         if LOGGER.isEnabledFor(logging.DEBUG):
             colors = self.player.get_board().get_colors()
-            territories = self.player.get_territories()
             LOGGER.debug(
                 'Played: color=%s, pos=%s, score=%.1f\n%s',
                 gtp_color_to_string(color), pos, score,
-                get_array_string(colors, territories, pos=pos))
+                get_array_string(colors, territories.argmax(axis=0) - 1, pos=pos))
 
         # Return string representing move coordinates
         return (True, gtp_position_to_string(pos, self.size, self.size), False)
@@ -1023,7 +1010,7 @@ class GTPEngine(object):
         self,
         args: List[str],
         analyze_func: Callable[
-            [List[Candidate], str, np.ndarray, float, int, int], str] = lz_candidates_to_string,
+            [List[Candidate], np.ndarray, float, int, int], str] = lz_candidates_to_string,
         play: bool = True,
     ) -> Tuple[bool, str, bool]:
         '''Execute genmove_analyze command.
@@ -1060,15 +1047,14 @@ class GTPEngine(object):
             candidates = self._evaluate(color, visits=100_000, timelimit=interval)
 
         # Create move coordinates
-        pos, score, territories = self._get_move(candidates[0])
+        pos, score, territories = self._get_move(candidates)
 
         # If pass, set final predicted score
         if pos == PASS:
             score = self.player.get_final_score()
 
         # Create analysis result string
-        analyze_line = analyze_func(
-            candidates, self.criterion, territories, score, self.size, self.size)
+        analyze_line = analyze_func(candidates, territories, score, self.size, self.size)
 
         # If not advancing the board, return only analysis result
         if not play:

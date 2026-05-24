@@ -1,4 +1,5 @@
 from typing import List, Tuple
+
 from libc.stdint cimport int32_t
 from libcpp.pair cimport pair
 from libcpp.vector cimport vector
@@ -8,86 +9,87 @@ cimport numpy
 
 from deepgo.config import MODEL_INPUT_PACK_SIZE
 from pyx.board cimport Board
+from pyx.move cimport Move
 
 
 cdef class NativeBoard:
     cdef Board *board
 
     def __cinit__(self, width: int, height: int) -> None:
-        '''Create a board object.
+        '''盤面オブジェクトを作成する。
         Args:
-            width (int): Board width
-            height (int): Board height
+            width (int): 盤面の幅
+            height (int): 盤面の高さ
         '''
         self.board = new Board(width, height)
 
     def __dealloc__(self) -> None:
-        '''Destroy the board object.'''
+        '''盤面オブジェクトを破棄する。'''
         del self.board
 
     def get_width(self) -> int:
-        '''Get the board width.
+        '''盤面の幅を取得する。
         Returns:
-            int: Board width
+            int: 盤面の幅
         '''
         return self.board.getWidth()
 
     def get_height(self) -> int:
-        '''Get the board height.
+        '''盤面の高さを取得する。
         Returns:
-            int: Board height
+            int: 盤面の高さ
         '''
         return self.board.getHeight()
 
     def play(self, pos: Tuple[int, int], color: int) -> int:
-        '''Place a stone at the specified position.
+        '''指定した位置に石を置く。
         Args:
-            pos (Tuple[int, int]): Position to place the stone
-            color (int): Stone color
+            pos (Tuple[int, int]): 石を置く位置
+            color (int): 石の色
         Returns:
-            int: Number of captured stones (-1 if not allowed)
+            int: 取り上げた石の数（おけない場合は-1）
         '''
-        return self.board.play(pos[0], pos[1], color)
+        return self.board.play(Move(pos[0], pos[1], color))
 
     def get_ko(self, color: int) -> Tuple[int, int]:
-        '''Get the ko position.
+        '''コウの位置を取得する。
         Args:
-            color (int): Color of the stone for ko
+            color (int): コウの対象となる石の色
         Returns:
-            Tuple[int, int]: Ko position
+            Tuple[int, int]: コウの位置
         '''
         cdef pair[int32_t, int32_t] ko = self.board.getKo(color)
         return (ko.first, ko.second)
 
     def get_histories(self, color: int) -> List[Tuple[int, int]]:
-        '''Get the move history for the specified color.
+        '''指定した色の着手履歴を取得する。
         Args:
-            color (int): Stone color
+            color (int): 石の色
         Returns:
-            List[Tuple[int, int]]: Move history
+            List[Tuple[int, int]]: 着手履歴
         '''
-        cdef vector[pair[int32_t, int32_t]] moves = self.board.getHistories(color)
-        return [(move.first, move.second) for move in moves]
+        cdef vector[Move] moves = self.board.getHistories(color)
+        return [(move.getX(), move.getY()) for move in moves]
 
     def get_color(self, pos: Tuple[int, int]) -> int:
-        '''Get the color of the stone at the specified position.
+        '''指定した位置の石の色を取得する。
         Args:
-            pos (Tuple[int, int]): Position to get the stone color
+            pos (Tuple[int, int]): 石の色を取得する位置
         Returns:
-            int: Stone color
+            int: 石の色
         '''
         return self.board.getColor(pos[0], pos[1])
 
     def get_colors(self, color: int) -> numpy.ndarray:
-        '''Get the color of all stones.
+        '''全体の石の色を取得する。
         Args:
-            color (int): Reference stone color (specify WHITE to invert colors)
+            color (int): 基準とする石の色（WHITEを指定すると色を反転する）
         Returns:
-            numpy.ndarray: All stone colors
+            numpy.ndarray: 全体の石の色
         '''
         cdef width = self.board.getWidth()
         cdef height = self.board.getHeight()
-        cdef numpy.ndarray[numpy.int32_t, ndim=1, mode="c"] data = numpy.zeros(
+        cdef numpy.ndarray[numpy.int32_t, ndim=1, mode='c'] data = numpy.zeros(
             (height * width,), dtype=numpy.int32)
 
         self.board.getColors(<int32_t*> &data[0], color)
@@ -95,29 +97,29 @@ cdef class NativeBoard:
         return data.reshape((height, width))
 
     def get_ren_size(self, pos: Tuple[int, int]) -> int:
-        '''Get the size of the group at the specified position.
+        '''指定した位置の連の大きさを取得する。
         Args:
-            pos (Tuple[int, int]): Position to get the group size
+            pos (Tuple[int, int]): 連の大きさを取得する位置
         Returns:
-            int: Group size
+            int: 連の大きさ
         '''
         return self.board.getRenSize(pos[0], pos[1])
 
     def get_ren_space(self, pos: Tuple[int, int]) -> int:
-        '''Get the number of liberties of the group at the specified position.
+        '''指定した位置の連のダメの数を取得する。
         Args:
-            pos (Tuple[int, int]): Position to get the group liberties
+            pos (Tuple[int, int]): 連の空きを取得する位置
         Returns:
-            int: Number of liberties
+            int: 連のダメの数
         '''
         return self.board.getRenSpace(pos[0], pos[1])
 
     def is_shicho(self, pos: Tuple[int, int]) -> bool:
-        '''Check if the specified position is a ladder (shicho).
+        '''指定した位置がシチョウかどうかを取得する。
         Args:
-            pos (Tuple[int, int]): Position to check for ladder
+            pos (Tuple[int, int]): シチョウかどうかを取得する位置
         Returns:
-            bool: True if ladder
+            bool: シチョウならtrue
         '''
         return self.board.isShicho(pos[0], pos[1])
 
@@ -127,27 +129,27 @@ cdef class NativeBoard:
         color: int,
         check_seki: bool,
     ) -> bool:
-        '''Check if a stone can be placed at the specified position.
+        '''指定した位置に石を置けるかどうかを取得する。
         Args:
-            pos (Tuple[int, int]): Position to place the stone
-            color (int): Stone color
-            check_seki (bool): Whether to check for seki
+            pos (Tuple[int, int]): 石を置く位置
+            color (int): 石の色
+            check_seki (bool): セキを確認するかどうか
         Returns:
-            bool: True if stone can be placed
+            bool: 石を置けるならtrue
         '''
         return self.board.isEnabled(pos[0], pos[1], color, check_seki)
 
     def get_enableds(self, color: int, check_seki: bool) -> numpy.ndarray:
-        '''Get whether stones can be placed at all positions.
+        '''全体の石を置けるかどうかを取得する。
         Args:
-            color (int): Stone color
-            check_seki (bool): Whether to check for seki
+            color (int): 石の色
+            check_seki (bool): セキを確認するかどうか
         Returns:
-            numpy.ndarray: Whether stones can be placed at all positions
+            numpy.ndarray: 全体の石を置けるかどうか
         '''
         cdef width = self.board.getWidth()
         cdef height = self.board.getHeight()
-        cdef numpy.ndarray[numpy.int32_t, ndim=1, mode="c"] data = numpy.zeros(
+        cdef numpy.ndarray[numpy.int32_t, ndim=1, mode='c'] data = numpy.zeros(
             (height * width,), dtype=numpy.int32)
 
         self.board.getEnableds(<int32_t*> &data[0], color, check_seki)
@@ -155,15 +157,15 @@ cdef class NativeBoard:
         return data.reshape((height, width))
 
     def get_territories(self, color: int) -> numpy.ndarray:
-        '''Get the list of confirmed territories.
+        '''確定地の一覧を取得する。
         Args:
-            color (int): Reference stone color (specify WHITE to invert colors)
+            color (int): 基準とする石の色（WHITEを指定すると色を反転する）
         Returns:
-            numpy.ndarray: List of confirmed territories
+            numpy.ndarray: 確定地の一覧
         '''
         cdef width = self.board.getWidth()
         cdef height = self.board.getHeight()
-        cdef numpy.ndarray[numpy.int32_t, ndim=1, mode="c"] data = numpy.zeros(
+        cdef numpy.ndarray[numpy.int32_t, ndim=1, mode='c'] data = numpy.zeros(
             (height * width,), dtype=numpy.int32)
 
         self.board.getTerritories(<int32_t*> &data[0], color)
@@ -171,16 +173,16 @@ cdef class NativeBoard:
         return data.reshape((height, width))
 
     def get_owners(self, color: int, rule: int) -> numpy.ndarray:
-        '''Get the list of owners for each coordinate.
+        '''各座標の所有者の一覧を取得する。
         Args:
-            color (int): Reference stone color (specify WHITE to invert colors)
-            rule (int): Calculation rule
+            color (int): 基準とする石の色（WHITEを指定すると色を反転する）
+            rule (int): 計算ルール
         Returns:
-            numpy.ndarray: List of owners
+            numpy.ndarray: 所有者の一覧
         '''
         cdef width = self.board.getWidth()
         cdef height = self.board.getHeight()
-        cdef numpy.ndarray[numpy.int32_t, ndim=1, mode="c"] data = numpy.zeros(
+        cdef numpy.ndarray[numpy.int32_t, ndim=1, mode='c'] data = numpy.zeros(
             (height * width,), dtype=numpy.int32)
 
         self.board.getOwners(<int32_t*> &data[0], color, rule)
@@ -188,54 +190,47 @@ cdef class NativeBoard:
         return data.reshape((height, width))
 
     def get_patterns(self) -> List[int]:
-        '''Get values representing the arrangement of stones.
+        '''石の並びを表現した値を取得する。
         Returns:
-            List[int]: Values representing the arrangement of stones
+            List[int: 石の並びを表現した値
         '''
         return self.board.getPatterns()
 
     def get_inputs(self, color: int, komi: float, rule: int, superko: bool) -> numpy.ndarray:
-        '''Get board data to input to the inference model.
+        '''推論モデルに入力する盤面データを取得する。
         Args:
-            color (int): Stone color to play
-            komi (float): Komi value
-            rule (int): Rule for determining winner
-            superko (bool): True to apply superko rule
+            color (int): 着手する石の色
+            komi (float): コミの目数
+            rule (int): 勝敗の判定ルール
+            superko (bool): スーパーコウルールを適用するならTrue
         Returns:
-            numpy.ndarray: Board data
+            numpy.ndarray: 盤面データ
         '''
-        cdef numpy.ndarray[numpy.int32_t, ndim=1, mode="c"] inputs = numpy.zeros(
+        cdef numpy.ndarray[numpy.int32_t, ndim=1, mode='c'] inputs = numpy.zeros(
             (MODEL_INPUT_PACK_SIZE,), dtype=numpy.int32)
 
         self.board.getInputs(<int32_t*> &inputs[0], color, komi, rule, superko)
 
         return inputs
 
-    def get_hash(self) -> int:
-        '''Get the hash value of the board.
-        Returns:
-            int: Hash value of the board
-        '''
-        return self.board.getHash()
-
     def get_state(self) -> List[int]:
-        '''Get the board state.
+        '''盤面の状態を取得する。
         Returns:
-            List[int]: Board state
+            List[int]: 盤面の状態
         '''
         return self.board.getState()
 
     def load_state(self, state: List[int]) -> None:
-        '''Set the board state.
+        '''盤面の状態を設定する。
         Args:
-            state (List[int]): Board state
+            state (List[int]): 盤面の状態
         '''
         self.board.loadState(state)
 
     def copy_from(self, board: NativeBoard) -> None:
         '''
-        Copy the board.
+        盤面をコピーする。
         Args:
-            board (NativeBoard): Source board to copy from
+            board (NativeBoard): コピー元の盤面
         '''
         self.board.copyFrom(board.board)

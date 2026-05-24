@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cstring>
+#include <iomanip>
+#include <sstream>
 
 #include "Config.h"
 #include "Constant.h"
@@ -11,25 +13,25 @@ namespace deepgo {
 #define AROUNDS {-1, -_width, 1, _width}
 
 /**
- * Set the specified bit.
- * @param inputs Bit sequence
- * @param index Position of the bit to set
+ * 指定されたビットを立てる。
+ * @param inputs ビット列
+ * @param index 立てるビットの位置
  */
 inline void setInputBit(int32_t* inputs, int32_t index, int32_t value = 1) {
   inputs[index / 32] |= (value << (index % 32));
 }
 
 /**
- * Create a board object.
- * @param width Board width
- * @param height Board height
+ * 盤面オブジェクトを作成する。
+ * @param width 盤面の幅
+ * @param height 盤面の高さ
  */
 Board::Board(int width, int height)
     : _width(width + 2),
       _height(height + 2),
       _length(_width * _height),
-      _renIds(new int32_t[_length]),
-      _renObjs(new Ren[_length]),
+      _renIds(_length, -1),
+      _renObjs(_length),
       _areaIds(),
       _areaFlags(),
       _koIndex(-1),
@@ -38,19 +40,15 @@ Board::Board(int width, int height)
       _pattern(width, height),
       _areaUpdated(false),
       _shichoUpdated(false),
-      _hash(0) {
-  // Create arrays to store data
-  _areaIds[0].reset(new int32_t[_length]);
-  _areaIds[1].reset(new int32_t[_length]);
-  _areaFlags[0].reset(new bool[_length]);
-  _areaFlags[1].reset(new bool[_length]);
+      _hash(0),
+      _bitBoard() {
+  // データを格納する配列を作成する
+  _areaIds[0].resize(_length);
+  _areaIds[1].resize(_length);
+  _areaFlags[0].resize(_length);
+  _areaFlags[1].resize(_length);
 
-  // Initialize ren data
-  for (int32_t i = 0; i < _length; i++) {
-    _renIds[i] = -1;
-  }
-
-  // Set boundary data on the outside of the board
+  // 盤面の外側に境界データを設定する
   _renObjs[0].color = EDGE;
   _renObjs[0].spaces.insert(-1);
   _renObjs[0].shicho = false;
@@ -64,18 +62,21 @@ Board::Board(int width, int height)
     _renIds[_width * i] = 0;
     _renIds[_width * i + _width - 1] = 0;
   }
+
+  // ビットボードを初期化する
+  std::fill(std::begin(_bitBoard), std::end(_bitBoard), 0);
 }
 
 /**
- * Create a copied board object.
- * @param board Source board object to copy from
+ * コピーした盤面オブジェクトを作成する。
+ * @param board コピー元の盤面オブジェクト
  */
 Board::Board(const Board& board)
     : _width(board._width),
       _height(board._height),
       _length(board._length),
-      _renIds(new int32_t[_length]),
-      _renObjs(new Ren[_length]),
+      _renIds(board._renIds),
+      _renObjs(board._renObjs),
       _areaIds(),
       _areaFlags(),
       _koIndex(board._koIndex),
@@ -84,22 +85,23 @@ Board::Board(const Board& board)
       _pattern(board._pattern),
       _areaUpdated(false),
       _shichoUpdated(false),
-      _hash(0) {
-  // Create arrays to store data
-  _areaIds[0].reset(new int32_t[_length]);
-  _areaIds[1].reset(new int32_t[_length]);
-  _areaFlags[0].reset(new bool[_length]);
-  _areaFlags[1].reset(new bool[_length]);
+      _hash(0),
+      _bitBoard() {
+  // データを格納する配列を作成する
+  _areaIds[0].resize(_length);
+  _areaIds[1].resize(_length);
+  _areaFlags[0].resize(_length);
+  _areaFlags[1].resize(_length);
 
-  // Duplicate the board
+  // 盤面を複製する
   copyFrom(&board);
 }
 
 /**
- * Initialize the board state.
+ * 盤面の状態を初期化する。
  */
 void Board::clear() {
-  // Initialize group information
+  // 連の情報を初期化する
   for (int32_t y = 0; y < _height - 2; y++) {
     for (int32_t x = 0; x < _width - 2; x++) {
       int32_t index = _getIndex(x, y);
@@ -110,100 +112,101 @@ void Board::clear() {
     }
   }
 
-  // Set flags
+  // フラグを設定する
   _areaUpdated = false;
   _shichoUpdated = false;
 
-  // Initialize ko
+  // コウを初期化する
   _koIndex = -1;
   _koColor = EMPTY;
 
-  // Initialize history
-  _histories[0].clear();
-  _histories[1].clear();
+  // 履歴を初期化する
+  _histories[0].clearMoves();
+  _histories[1].clearMoves();
 
-  // Initialize stone arrangement information
+  // 石の並びの情報を初期化する
   _pattern.clear();
 
-  // Initialize the hash value of the board
+  // 盤面のハッシュ値を初期化する
   _hash = 0;
+
+  // ビットボードを初期化する
+  std::fill(std::begin(_bitBoard), std::end(_bitBoard), 0);
 }
 
 /**
- * Get the board width.
- * @return Board width
+ * 盤面の幅を取得する。
+ * @return 盤面の幅
  */
-int32_t Board::getWidth() {
+int32_t Board::getWidth() const {
   return _width - 2;
 }
 
 /**
- * Get the board height.
- * @return Board height
+ * 盤面の高さを取得する。
+ * @return 盤面の高さ
  */
-int32_t Board::getHeight() {
+int32_t Board::getHeight() const {
   return _height - 2;
 }
 
 /**
- * Place a stone.
- * @param x X coordinate to place the stone
- * @param y Y coordinate to place the stone
- * @param color Stone color
- * @return Number of captured stones (-1 if not allowed)
+ * 石を置く。
+ * @param move 着手情報
+ * @return 取り上げた石の数（おけない場合は-1）
  */
-int32_t Board::play(int32_t x, int32_t y, int32_t color) {
-  // Reset ko information if pass
-  if (!_isValidPosition(x, y)) {
+int32_t Board::play(Move move) {
+  // パスの場合はコウの情報をリセットする
+  if (!move.isValid(_width - 2, _height - 2)) {
     _koIndex = -1;
     _koColor = EMPTY;
     return 0;
   }
 
-  // Check if the specified coordinates are a valid move
-  int32_t index = _getIndex(x, y);
-  int32_t op_color = OPPOSITE(color);
+  // 確認
+  int32_t index = _getIndex(move.getX(), move.getY());
+  int8_t my_color = move.getColor();
+  int8_t op_color = OPPOSITE(my_color);
 
-  if (!_isEnabled(index, color, false)) {
+  if (!_isEnabled(index, my_color, false)) {
     return -1;
   }
 
-  // Place the stone
-  _put(index, color);
+  // 石を置く
+  _put(index, my_color);
 
-  // Add move coordinates to history
-  if (color == BLACK) {
-    _histories[0].add(index);
-  } else if (color == WHITE) {
-    _histories[1].add(index);
+  // 履歴に着手座標を追加する
+  if (my_color == BLACK) {
+    _histories[0].addMove(move);
+  } else if (my_color == WHITE) {
+    _histories[1].addMove(move);
   }
 
-  // Update the state around the move coordinates
+  // 着手座標の周囲の状態を更新する
   int32_t remove_size = 0;
 
   for (auto a : AROUNDS) {
     int32_t ren_id = _renIds[index + a];
 
-    // Do nothing if empty coordinate
+    // 空き座標の場合は何もしない
     if (ren_id == -1) {
       continue;
     }
-    // Merge if own group exists
-    else if (_renObjs[ren_id].color == color && ren_id != _renIds[index]) {
+    // 自分の連がある場合は連結する
+    else if (_renObjs[ren_id].color == my_color && ren_id != _renIds[index]) {
       _mergeRen(index, index + a);
     }
-    // Remove if opponent's group exists and has no liberties
+    // 相手の連があってダメが無くなっている場合は削除する
     else if (_renObjs[ren_id].color == op_color && _renObjs[ren_id].spaces.empty()) {
-      remove_size += _renObjs[ren_id].positions.size();
+      remove_size += static_cast<int32_t>(_renObjs[ren_id].positions.size());
       _removeRen(index + a);
       _koIndex = index + a;
     }
   }
 
-  // If two or more are removed, or the placed stone's group has two or more,
-  // or the placed stone has two or more liberties, clear ko judgment
-  int32_t position_size = _renObjs[_renIds[index]].positions.size();
-  int32_t space_size = _renObjs[_renIds[index]].spaces.size();
+  // 2個以上削除 or 置いた石の連が2個以上 or 置いた石のダメが2個以上の場合はコウ判定を消去
+  int32_t position_size = static_cast<int32_t>(_renObjs[_renIds[index]].positions.size());
+  int32_t space_size = static_cast<int32_t>(_renObjs[_renIds[index]].spaces.size());
 
   if (remove_size != 1 || position_size > 1 || space_size > 1) {
     _koIndex = -1;
@@ -212,7 +215,7 @@ int32_t Board::play(int32_t x, int32_t y, int32_t color) {
     _koColor = op_color;
   }
 
-  // Reset flags for territory and ladder information
+  // 領域情報とシチョウ情報のフラグをリセットする
   _areaUpdated = false;
   _shichoUpdated = false;
 
@@ -220,12 +223,12 @@ int32_t Board::play(int32_t x, int32_t y, int32_t color) {
 }
 
 /**
- * Get the ko coordinates.
- * If ko has not occurred, returns (-1, -1).
- * @param color Target stone color
- * @return Ko coordinates
+ * コウの座標を取得する。
+ * コウが発生していないなら(-1, -1)を返す。
+ * @param color 対象の石の色
+ * @return コウの座標
  */
-std::pair<int32_t, int32_t> Board::getKo(int32_t color) {
+std::pair<int32_t, int32_t> Board::getKo(int32_t color) const {
   if (_koIndex != -1 && color == _koColor) {
     return std::make_pair(_getPosX(_koIndex), _getPosY(_koIndex));
   } else {
@@ -234,20 +237,17 @@ std::pair<int32_t, int32_t> Board::getKo(int32_t color) {
 }
 
 /**
- * Return the list of most recent move coordinates.
- * @param color Stone color
- * @return List of move coordinates
+ * 最も最近の着手座標の一覧を返す。
+ * @param color 石の色
+ * @return 着手座標の一覧
  */
-std::vector<std::pair<int32_t, int32_t>> Board::getHistories(int color) {
-  std::vector<std::pair<int32_t, int32_t>> moves;
+std::vector<Move> Board::getHistories(int color) const {
   int32_t history_index = (color == BLACK) ? 0 : 1;
+  std::vector<Move> moves;
 
-  for (int32_t index : _histories[history_index].get()) {
-    int32_t x = _getPosX(index);
-    int32_t y = _getPosY(index);
-
-    if (_isValidPosition(x, y)) {
-      moves.push_back(std::make_pair(x, y));
+  for (const Move& move : _histories[history_index].getMoves()) {
+    if (move.isValid(_width - 2, _height - 2)) {
+      moves.push_back(move);
     }
   }
 
@@ -255,19 +255,19 @@ std::vector<std::pair<int32_t, int32_t>> Board::getHistories(int color) {
 }
 
 /**
- * Get the color of the stone at the specified coordinates.
- * @param x X coordinate
- * @param y Y coordinate
- * @return Stone color
+ * 指定した座標の石の色を取得する。
+ * @param x X座標
+ * @param y Y座標
+ * @return 石の色
  */
-int32_t Board::getColor(int32_t x, int32_t y) {
+int32_t Board::getColor(int32_t x, int32_t y) const {
   return _getColor(_getIndex(x, y));
 }
 
 /**
- * Return the list of stone colors.
- * @param colors Stone color data
- * @param color Stone color
+ * 石の色の一覧を返す。
+ * @param colors 石の色のデータ
+ * @param color 石の色
  */
 void Board::getColors(int32_t* colors, int32_t color) {
   for (int32_t y = 0; y < _height - 2; y++) {
@@ -278,10 +278,10 @@ void Board::getColors(int32_t* colors, int32_t color) {
 }
 
 /**
- * Get the size of the group at the specified coordinates.
- * @param x X coordinate
- * @param y Y coordinate
- * @return Group size
+ * 指定した座標の連の大きさを取得する。
+ * @param x X座標
+ * @param y Y座標
+ * @return 連の大きさ
  */
 int32_t Board::getRenSize(int32_t x, int32_t y) {
   int32_t ren_id = _renIds[_getIndex(x, y)];
@@ -289,15 +289,15 @@ int32_t Board::getRenSize(int32_t x, int32_t y) {
   if (ren_id == -1) {
     return 0;
   } else {
-    return _renObjs[ren_id].positions.size();
+    return static_cast<int32_t>(_renObjs[ren_id].positions.size());
   }
 }
 
 /**
- * Get the number of dead stones in the group at the specified coordinates.
- * @param x X coordinate
- * @param y Y coordinate
- * @return Number of dead stones
+ * 指定した座標の連のダメの数を取得する。
+ * @param x X座標
+ * @param y Y座標
+ * @return ダメの数
  */
 int32_t Board::getRenSpace(int32_t x, int32_t y) {
   int32_t ren_id = _renIds[_getIndex(x, y)];
@@ -305,15 +305,15 @@ int32_t Board::getRenSpace(int32_t x, int32_t y) {
   if (ren_id == -1) {
     return 0;
   } else {
-    return _renObjs[ren_id].spaces.size();
+    return static_cast<int32_t>(_renObjs[ren_id].spaces.size());
   }
 }
 
 /**
- * Get the presence of a shicho (ladder) at the specified coordinates.
- * @param x X coordinate
- * @param y Y coordinate
- * @return True if shicho exists, false otherwise
+ * 指定した座標の連のシチョウの有無を取得する。
+ * @param x X座標
+ * @param y Y座標
+ * @return シチョウであればtrue
  */
 bool Board::isShicho(int32_t x, int32_t y) {
   _updateShicho();
@@ -328,22 +328,22 @@ bool Board::isShicho(int32_t x, int32_t y) {
 }
 
 /**
- * Return true if a stone can be placed.
- * @param x X coordinate
- * @param y Y coordinate
- * @param color Stone color
- * @param checkSeki True to check for seki
- * @return True if a stone can be placed
+ * 石を置けるならtrueを返す。
+ * @param x X座標
+ * @param y Y座標
+ * @param color 石の色
+ * @param checkSeki セキを判定するならtrue
+ * @return 石を置けるならtrue
  */
 bool Board::isEnabled(int32_t x, int32_t y, int32_t color, bool checkSeki) {
   return _isEnabled(_getIndex(x, y), color, checkSeki);
 }
 
 /**
- * Get the list of places where stones can be placed.
- * @param enableds List of places where stones can be placed
- * @param color Stone color
- * @param checkSeki True to check for seki
+ * 石を置ける場所の一覧を取得する。
+ * @param enableds 石を置ける場所の一覧
+ * @param color 石の色
+ * @param checkSeki セキを判定するならtrue
  */
 void Board::getEnableds(int32_t* enableds, int32_t color, bool checkSeki) {
   for (int32_t y = 0; y < _height - 2; y++) {
@@ -358,33 +358,33 @@ void Board::getEnableds(int32_t* enableds, int32_t color, bool checkSeki) {
 }
 
 /**
- * Return the data of fixed territories.
- * @param territories Data of fixed territories
- * @param color Reference stone color (set WHITE to return data judged for black and white)
+ * 確定地のデータを返す。
+ * @param territories 確定地のデータ
+ * @param color 基準となる石の色（WHITEを設定すると黒白を判定したデータを返す）
  */
 void Board::getTerritories(int32_t* territories, int32_t color) {
-  // Update empty area data
+  // 空き領域データを更新する
   _updateArea();
 
-  // Set data for confirmed territories
+  // 確定地のデータを設定する
   for (int32_t y = 0; y < _height - 2; y++) {
     for (int32_t x = 0; x < _width - 2; x++) {
       int32_t index = _getIndex(x, y);
       int32_t ren_id = _renIds[index];
 
-      // Set fixed group
+      // 確定している連を設定する
       if (ren_id != -1 && _renObjs[ren_id].fixed) {
         territories[y * (_width - 2) + x] = _renObjs[ren_id].color * color;
       }
-      // Set confirmed territory for black
+      // 黒の確定地を設定する
       else if (_areaIds[0][index] != -1 && _areaFlags[0][_areaIds[0][index]]) {
         territories[y * (_width - 2) + x] = BLACK * color;
       }
-      // Set confirmed territory for white
+      // 白の確定地を設定する
       else if (_areaIds[1][index] != -1 && _areaFlags[1][_areaIds[1][index]]) {
         territories[y * (_width - 2) + x] = WHITE * color;
       }
-      // Set unconfirmed territory
+      // 未確定地を設定する
       else {
         territories[y * (_width - 2) + x] = EMPTY;
       }
@@ -393,16 +393,16 @@ void Board::getTerritories(int32_t* territories, int32_t color) {
 }
 
 /**
- * Get the owner data for each coordinate.
- * @param owners Owner data
- * @param color Reference stone color (set WHITE to return data judged for black and white)
- * @param rule Calculation rule (RULE_CH: Chinese rule, RULE_JP: Japanese rule, RULE_COM: Automatic match rule)
+ * それぞれの座標の所有者のデータを返す。
+ * @param owners 所有者のデータ
+ * @param color 基準となる石の色（WHITEを設定すると黒白を判定したデータを返す）
+ * @param rule 計算ルール（RULE_CH:中国ルール, RULE_JP:日本ルール, RULE_COM:自動対戦ルール）
  */
 void Board::getOwners(int32_t* owners, int32_t color, int32_t rule) {
-  // Get data of fixed territories
+  // 確定地のデータを取得する
   getTerritories(owners, color);
 
-  // Set owner of stones in unfixed territories
+  // 未確定地にある石の所有者を設定する
   for (int32_t y = 0; y < _height - 2; y++) {
     for (int32_t x = 0; x < _width - 2; x++) {
       int32_t owner_index = y * (_width - 2) + x;
@@ -413,32 +413,27 @@ void Board::getOwners(int32_t* owners, int32_t color, int32_t rule) {
     }
   }
 
-  // If Japanese rule, finish setting owner list
+  // 日本ルールなら所有者の一覧の設定を終了する
   if (rule == RULE_JP) {
     return;
   }
 
-  // Create area data surrounded by a single color
-  std::unique_ptr<int32_t[]> areas(new int32_t[_length]);
-  std::unique_ptr<bool[]> checks(new bool[_length]);
-
-  for (int32_t i = 0; i < _length; i++) {
-    areas[i] = EMPTY;
-    checks[i] = false;
-  }
+  // 単色に囲まれている領域データを作成する
+  std::vector<int32_t> areas(_length, EMPTY);
+  std::vector<bool> checks(_length, false);
 
   for (int32_t y = 0; y < _height - 2; y++) {
     for (int32_t x = 0; x < _width - 2; x++) {
       int32_t index = _getIndex(x, y);
       int32_t color = getColor(x, y);
 
-      // Do nothing if already checked
-      // Do nothing if empty coordinate
+      // チェック済みなら何もしない
+      // 空き座標なら何もしない
       if (checks[index] || color != EMPTY) {
         continue;
       }
 
-      // Search for empty area
+      // 空き領域を探索する
       std::set<int32_t> positions;
       std::set<int32_t> colors;
       std::vector<int32_t> stack;
@@ -468,7 +463,7 @@ void Board::getOwners(int32_t* owners, int32_t color, int32_t rule) {
         }
       }
 
-      // If surrounded by a single color, set area data
+      // 単色に囲まれている場合は領域データを設定する
       if (colors.size() == 1) {
         for (int32_t pos : positions) {
           areas[pos] = *colors.begin();
@@ -477,7 +472,7 @@ void Board::getOwners(int32_t* owners, int32_t color, int32_t rule) {
     }
   }
 
-  // Reflect area data in owner data
+  // 領域データを所有者のデータに反映する
   for (int32_t y = 0; y < _height - 2; y++) {
     for (int32_t x = 0; x < _width - 2; x++) {
       int32_t index = _getIndex(x, y);
@@ -491,60 +486,61 @@ void Board::getOwners(int32_t* owners, int32_t color, int32_t rule) {
 }
 
 /**
- * Get the pattern representation of the stones.
- * @return Pattern representation of the stones
+ * 石の並びを表現する値を取得する。
+ * @return 石の並びを表現する値
  */
 std::vector<int32_t> Board::getPatterns() {
   return _pattern.values();
 }
 
 /**
- * Get data to input to the model.
- * @param inputs Board data to input to the model
- * @param color Stone color to play
- * @param komi Komi value
- * @param rule Rule for determining winner
- * @param superko True to apply superko rule
+ * モデルに入力するデータを取得する。
+ * @param inputs モデルに入力する盤面データ
+ * @param color 着手する石の色
+ * @param komi コミの目数
+ * @param rule 勝敗の判定ルール
+ * @param superko スーパーコウルールを適用するならtrue
  */
-void Board::getInputs(int32_t* inputs, int32_t color, float komi, int32_t rule, bool superko) {
+void Board::getInputs(
+    int32_t* inputs, int32_t color, float komi, int32_t rule, bool superko) {
   int length = MODEL_SIZE * MODEL_SIZE;
   int32_t offset_x = (MODEL_SIZE - _width + 2) / 2;
   int32_t offset_y = (MODEL_SIZE - _height + 2) / 2;
 
-  // Update ladder (shicho) information
+  // シチョウの情報を更新する
   _updateShicho();
 
-  // Initialize input data
+  // 入力データを初期化する
   for (int32_t i = 0; i < MODEL_INPUT_PACK_SIZE; i++) {
     inputs[i] = 0;
   }
 
-  // Set stone arrangement
+  // 石の並びを設定する
   for (int32_t y = 0; y < _height - 2; y++) {
     for (int32_t x = 0; x < _width - 2; x++) {
       int32_t ren_id = _renIds[_getIndex(x, y)];
       int32_t index = (offset_y + y) * MODEL_SIZE + (offset_x + x);
 
-      // Set mask
+      // マスクを設定する
       setInputBit(inputs, length * MODEL_FEATURES + index);
 
-      // Set value for empty coordinates
+      // 空き座標の場合の値を設定する。
       if (ren_id == -1) {
         setInputBit(inputs, length * 0 + index);
         continue;
       }
 
-      // Set value for coordinates with stones
-      int32_t shicho = (_renObjs[ren_id].shicho) ? 1.0 : 0.0;
-      int32_t size = std::min((int32_t)_renObjs[ren_id].spaces.size(), 8);
+      // 石がおかれている座標の場合の値を設定する。
+      int32_t shicho = (_renObjs[ren_id].shicho) ? 1 : 0;
+      int32_t size = std::min(static_cast<int32_t>(_renObjs[ren_id].spaces.size()), 8);
 
-      // Set value for black stone coordinates
+      // 黒石座標の場合の値を設定する。
       if (_renObjs[ren_id].color * color == BLACK) {
         setInputBit(inputs, length * 1 + index);
         setInputBit(inputs, length * 2 + index, shicho);
         setInputBit(inputs, length * (2 + size) + index);
       }
-      // Set value for white stone coordinates
+      // 白石座標の場合の値を設定する。
       else if (_renObjs[ren_id].color * color == WHITE) {
         setInputBit(inputs, length * 14 + index);
         setInputBit(inputs, length * 15 + index, shicho);
@@ -553,34 +549,34 @@ void Board::getInputs(int32_t* inputs, int32_t color, float komi, int32_t rule, 
     }
   }
 
-  // Set move history
-  std::vector<int32_t> black_histotires = _histories[(1 - color) / 2].get();
-  std::vector<int32_t> white_histotires = _histories[(1 + color) / 2].get();
+  // 着手履歴を設定する
+  std::vector<Move> black_moves = _histories[(1 - color) / 2].getMoves();
+  std::vector<Move> white_moves = _histories[(1 + color) / 2].getMoves();
 
-  std::reverse(black_histotires.begin(), black_histotires.end());
-  std::reverse(white_histotires.begin(), white_histotires.end());
+  std::reverse(black_moves.begin(), black_moves.end());
+  std::reverse(white_moves.begin(), white_moves.end());
 
-  for (int32_t i = 0; i < black_histotires.size(); i++) {
-    if (black_histotires[i] > 0) {
-      int32_t x = _getPosX(black_histotires[i]);
-      int32_t y = _getPosY(black_histotires[i]);
+  for (int32_t i = 0; i < black_moves.size(); i++) {
+    if (black_moves[i].isValid(_width - 2, _height - 2)) {
+      int32_t x = black_moves[i].getX();
+      int32_t y = black_moves[i].getY();
       int32_t index = (offset_y + y) * MODEL_SIZE + (offset_x + x);
 
       setInputBit(inputs, length * (11 + i) + index);
     }
   }
 
-  for (int32_t i = 0; i < white_histotires.size(); i++) {
-    if (white_histotires[i] > 0) {
-      int32_t x = _getPosX(white_histotires[i]);
-      int32_t y = _getPosY(white_histotires[i]);
+  for (int32_t i = 0; i < white_moves.size(); i++) {
+    if (white_moves[i].isValid(_width - 2, _height - 2)) {
+      int32_t x = white_moves[i].getX();
+      int32_t y = white_moves[i].getY();
       int32_t index = (offset_y + y) * MODEL_SIZE + (offset_x + x);
 
       setInputBit(inputs, length * (24 + i) + index);
     }
   }
 
-  // Set information for lines 1–4
+  // 1-4線の情報を設定する
   for (int i = 0; i < 4; i++) {
     int32_t begin_x = offset_x + i;
     int32_t end_x = offset_x + _width - 2 - i;
@@ -598,7 +594,7 @@ void Board::getInputs(int32_t* inputs, int32_t color, float komi, int32_t rule, 
     }
   }
 
-  // Set ko information
+  // コウの情報を設定する
   if (_koColor == color && _koIndex > 0) {
     int32_t x = _getPosX(_koIndex);
     int32_t y = _getPosY(_koIndex);
@@ -607,7 +603,7 @@ void Board::getInputs(int32_t* inputs, int32_t color, float komi, int32_t rule, 
     setInputBit(inputs, length * 31 + index);
   }
 
-  // Register turn
+  // 手番を登録する
   int32_t info_offset = (MODEL_FEATURES + 1) * length;
 
   if (color == BLACK) {
@@ -616,20 +612,20 @@ void Board::getInputs(int32_t* inputs, int32_t color, float komi, int32_t rule, 
     setInputBit(inputs, info_offset + 1);
   }
 
-  // Register komi value
+  // コミの目数を登録する
   inputs[MODEL_INPUT_PACK_SIZE - 1] = (int32_t)((komi * color) / 13.0 * 0xfffff);
 
-  // Register whether superko rule is applied
+  // スーパーコウルールの有無を登録する
   if (superko) {
     setInputBit(inputs, info_offset + 3);
   }
 
-  // Register whether ko has occurred
+  // コウ発生の有無を登録する
   if (_koColor == color && _koIndex > 0) {
     setInputBit(inputs, info_offset + 4);
   }
 
-  // Register rule for determining winner
+  // 勝敗判定ルールを登録する
   if (rule != RULE_JP) {
     setInputBit(inputs, info_offset + 5);
   } else {
@@ -638,61 +634,45 @@ void Board::getInputs(int32_t* inputs, int32_t color, float komi, int32_t rule, 
 }
 
 /**
- * Gets the hash value of the board.
- * Returns a value that includes not only the arrangement of stones but also the Ko information.
- * @return Hash value of the board
- */
-uint64_t Board::getHash() const {
-  uint64_t hash = _hash;
-
-  // Include Ko information in the hash value
-  if (_koIndex != -1 && _koColor != EMPTY) {
-    hash ^= BOARD_HASH_VALUES[(_koColor == BLACK) ? 2 : 3][_koIndex];
-  }
-
-  return hash;
-}
-
-/**
- * Get the board state.
- * @return Board state
+ * 盤面の状態を取得する。
+ * @return 盤面の状態
  */
 std::vector<int32_t> Board::getState() {
   std::vector<int32_t> state;
 
-  // Register values representing stone arrangement
+  // 石の並びを表現する値を登録
   for (int32_t v : _pattern.values()) {
     state.push_back(v);
   }
 
-  // Register ko information
+  // コウの情報を登録
   state.push_back((_koIndex + 1) << 2 | (_koColor + 1));
 
-  // Register move history
-  std::vector<int32_t> black_histotires = _histories[0].get();
-  std::vector<int32_t> white_histotires = _histories[1].get();
+  // 着手履歴を登録
+  std::vector<Move> black_moves = _histories[0].getMoves();
+  std::vector<Move> white_moves = _histories[1].getMoves();
 
   state.push_back(
-      (black_histotires[0] + 1) << 20 |
-      (black_histotires[1] + 1) << 10 |
-      (black_histotires[2] + 1));
+      (_getIndex(black_moves[0].getX(), black_moves[0].getY()) + 1) << 20 |
+      (_getIndex(black_moves[1].getX(), black_moves[1].getY()) + 1) << 10 |
+      (_getIndex(black_moves[2].getX(), black_moves[2].getY()) + 1));
   state.push_back(
-      (white_histotires[0] + 1) << 20 |
-      (white_histotires[1] + 1) << 10 |
-      (white_histotires[2] + 1));
+      (_getIndex(white_moves[0].getX(), white_moves[0].getY()) + 1) << 20 |
+      (_getIndex(white_moves[1].getX(), white_moves[1].getY()) + 1) << 10 |
+      (_getIndex(white_moves[2].getX(), white_moves[2].getY()) + 1));
 
   return state;
 }
 
 /**
- * Restore the board state.
- * @param state Board state
+ * 盤面の状態を復元する。
+ * @param state 盤面の状態
  */
 void Board::loadState(std::vector<int32_t> state) {
-  // Initialize the board
+  // 盤面を初期化する
   clear();
 
-  // Place stones
+  // 石を置く
   for (int32_t y = 0; y < _height - 2; y++) {
     for (int32_t x = 0; x < _width - 2; x++) {
       int32_t pos = y * (_width - 2) + x;
@@ -701,144 +681,158 @@ void Board::loadState(std::vector<int32_t> state) {
       int32_t value = state[index] >> shift & 3;
 
       if (value == 1) {
-        play(x, y, BLACK);
+        play(Move(x, y, BLACK));
       } else if (value == 2) {
-        play(x, y, WHITE);
+        play(Move(x, y, WHITE));
       }
     }
   }
 
-  // Restore ko information
+  // コウの情報を復元する
   int32_t ko_info = state[state.size() - 3];
 
   _koIndex = (ko_info >> 2 & 0x3FFFF) - 1;
   _koColor = (ko_info & 3) - 1;
 
-  // Restore history
-  _histories[0].clear();
-  _histories[1].clear();
+  // 履歴を復元する
+  _histories[0].clearMoves();
+  _histories[1].clearMoves();
 
   for (int32_t i = 0; i < 3; i++) {
     int32_t black_history = (state[state.size() - 2] >> (20 - i * 10) & 0x3FF) - 1;
     int32_t white_history = (state[state.size() - 1] >> (20 - i * 10) & 0x3FF) - 1;
 
     if (black_history != -1) {
-      _histories[0].add(black_history);
+      _histories[0].addMove(
+          Move(_getPosX(black_history), _getPosY(black_history), BLACK));
     }
 
     if (white_history != -1) {
-      _histories[1].add(white_history);
+      _histories[1].addMove(
+          Move(_getPosX(white_history), _getPosY(white_history), WHITE));
     }
   }
 
-  // Initialize flags
+  // フラグを初期化する
   _areaUpdated = false;
   _shichoUpdated = false;
 }
 
 /**
- * Copy the board state.
- * @param board Source board
+ * 盤面の状態をコピーする。
+ * @param board コピー元の盤面
  */
 void Board::copyFrom(const Board* board) {
-  // Copy group information
-  memcpy(_renIds.get(), board->_renIds.get(), sizeof(int32_t) * _length);
+  // 連の情報をコピー
+  _renIds = board->_renIds;
 
   for (int32_t i = 0; i < _length; i++) {
     _renObjs[i] = board->_renObjs[i];
   }
 
-  // Copy ko information
+  // コウの情報をコピー
   _koIndex = board->_koIndex;
   _koColor = board->_koColor;
 
-  // Copy board information
+  // 盤面の情報をコピー
   _pattern.copyFrom(board->_pattern);
 
-  // Copy history
+  // 履歴をコピー
   _histories[0] = board->_histories[0];
   _histories[1] = board->_histories[1];
 
-  // Copy the hash value of the board
+  // 盤面のハッシュ値をコピー
   _hash = board->_hash;
 
-  // Initialize flags
+  // ビットボードをコピー
+  for (int i = 0; i < BITBOARD_SIZE; i++) {
+    _bitBoard[i] = board->_bitBoard[i];
+  }
+
+  // フラグを初期化する
   _areaUpdated = false;
   _shichoUpdated = false;
 }
 
 /**
- * Output the board state.
- * @param os Output destination
+ * 盤面の状態を文字列に変換する。
+ * @return 盤面の状態を表す文字列
  */
-void Board::print(std::ostream& os) {
-  os << "   ";
-  for (int32_t x = 0; x < _width - 2; x++) {
-    printf("%2d", x);
-  }
-  os << std::endl;
+std::string Board::toString() const {
+  std::stringstream ss;
 
-  os << "  +";
+  ss << "   ";
   for (int32_t x = 0; x < _width - 2; x++) {
-    os << "--";
+    ss << std::setw(2) << x;
   }
-  os << "-+" << std::endl;
+  ss << std::endl;
+
+  ss << "  +";
+  for (int32_t x = 0; x < _width - 2; x++) {
+    ss << "--";
+  }
+  ss << "-+" << std::endl;
 
   for (int32_t y = 0; y < _height - 2; y++) {
-    printf("%2d|", y);
+    ss << std::setw(2) << y << "|";
     for (int32_t x = 0; x < _width - 2; x++) {
       int32_t index = _getIndex(x, y);
       int32_t color = getColor(x, y);
 
       if (index == _koIndex) {
-        os << " K";
+        ss << " K";
       } else if (color == BLACK) {
-        os << " X";
+        ss << " X";
       } else if (color == WHITE) {
-        os << " O";
+        ss << " O";
       } else {
-        os << " .";
+        ss << " .";
       }
     }
-    os << " |" << std::endl;
+    ss << " |" << std::endl;
   }
 
-  os << "  +";
+  ss << "  +";
   for (int32_t x = 0; x < _width - 2; x++) {
-    os << "--";
+    ss << "--";
   }
-  os << "-+" << std::endl;
+  ss << "-+" << std::endl;
+
+  return ss.str();
 }
 
 /**
- * Place a stone at the specified location.
- * Does not merge or remove groups.
- * @param index Position number
- * @param color Stone color
+ * 指定した場所に石を置く。
+ * 連の統合や削除は行わない。
+ * @param index 位置番号
+ * @param color 石の色
  */
 void Board::_put(int32_t index, int32_t color) {
   int32_t op_color = OPPOSITE(color);
 
-  // Change arrangement representation value
+  // 並びの表現値を変更
   _pattern.put(_getPosX(index), _getPosY(index), color);
 
-  // Update the hash value of the board
+  // ハッシュ値を変更
   _hash ^= BOARD_HASH_VALUES[(color == BLACK) ? 0 : 1][index];
 
-  // Create group information
+  // ビットボードを変更
+  _bitBoard[index / 64] |= (1ULL << (index % 64));
+
+  // 連情報を作成
   _renIds[index] = index;
   _renObjs[index].color = color;
   _renObjs[index].positions.insert(index);
 
-  // Register information to adjacent groups (do not merge)
+  // 近接する連に情報を登録(マージはしない)
   for (auto a : AROUNDS) {
     int32_t ren_id = _renIds[index + a];
 
-    // Register as liberty if there are empty coordinates around
+    // 周りに空き座標がある場合はダメとして登録する
     if (ren_id == -1) {
       _renObjs[index].spaces.insert(index + a);
     }
-    // Remove liberty if there are groups around
+    // 周りに連がある場合はダメを削除する
     else {
       _renObjs[ren_id].spaces.erase(index);
     }
@@ -846,51 +840,54 @@ void Board::_put(int32_t index, int32_t color) {
 }
 
 /**
- * Merge the specified groups.
- * @param srcIndex Source group position number
- * @param dstIndex Destination group position number
+ * 指定された連を統合する。
+ * @param srcIndex 統合元の連の位置番号
+ * @param dstIndex 統合先の連の位置番号
  */
 void Board::_mergeRen(int32_t srcIndex, int32_t dstIndex) {
   int32_t src_id = _renIds[srcIndex];
   int32_t dst_id = _renIds[dstIndex];
 
-  // Merge information
+  // 情報を統合する
   _renObjs[dst_id].positions.insert(
       _renObjs[src_id].positions.begin(), _renObjs[src_id].positions.end());
   _renObjs[dst_id].spaces.insert(
       _renObjs[src_id].spaces.begin(), _renObjs[src_id].spaces.end());
 
-  // Change identification number
+  // 識別番号を変更する
   for (auto pos : _renObjs[src_id].positions) {
     _renIds[pos] = dst_id;
   }
 
-  // Delete unused information
+  // 使わない情報を削除する
   _renObjs[src_id].color = EMPTY;
   _renObjs[src_id].positions.clear();
   _renObjs[src_id].spaces.clear();
 }
 
 /**
- * Remove the specified group.
- * @param index Position number
+ * 指定された連を削除する。
+ * @param index 位置番号
  */
 void Board::_removeRen(int32_t index) {
   int32_t ren_id = _renIds[index];
   int32_t color = _renObjs[ren_id].color;
 
-  // Execute removal process for all coordinates
+  // すべての座標に対して削除処理を実行する
   for (auto pos : _renObjs[ren_id].positions) {
-    // Change identification number
+    // 識別番号を変更する
     _renIds[pos] = -1;
 
-    // Change value
+    // 値を変更する
     _pattern.remove(_getPosX(pos), _getPosY(pos), color);
 
-    // Update the hash value of the board
+    // ハッシュ値を変更する
     _hash ^= BOARD_HASH_VALUES[(color == BLACK) ? 0 : 1][pos];
 
-    // Add liberties to surrounding groups
+    // ビットボードを変更する
+    _bitBoard[pos / 64] &= ~(1ULL << (pos % 64));
+
+    // 周りの連にダメを追加する
     for (auto a : AROUNDS) {
       int32_t target_id = _renIds[pos + a];
 
@@ -900,27 +897,27 @@ void Board::_removeRen(int32_t index) {
     }
   }
 
-  // Delete information
+  // 情報を削除
   _renObjs[ren_id].color = EMPTY;
   _renObjs[ren_id].positions.clear();
   _renObjs[ren_id].spaces.clear();
 }
 
 /**
- * Update empty area information.
+ * 空き領域情報を更新する。
  */
 void Board::_updateArea() {
-  // Do nothing if already updated
+  // 更新済みなら何もしない
   if (_areaUpdated) {
     return;
   }
 
-  // Create area information for both black and white
+  // 黒白両方の領域情報を作成する
   for (int32_t c = 0; c < 2; c++) {
     int32_t color = (c == 0) ? BLACK : WHITE;
     int32_t op_color = OPPOSITE(color);
 
-    // Create list of group IDs
+    // 連のIDの一覧を作成する
     std::set<int32_t> ren_ids;
 
     for (int32_t index = 0; index < _length; index++) {
@@ -931,28 +928,24 @@ void Board::_updateArea() {
       }
     }
 
-    // Initialize adjacent area information for groups
-    // Initialize all groups to confirmed state
+    // 連の隣接領域情報を初期化する
+    // すべての連を確定状態に初期化する
     for (int32_t ren_id : ren_ids) {
       _renObjs[ren_id].areas.clear();
       _renObjs[ren_id].fixed = true;
     }
 
-    // Initialize check state for each coordinate
-    std::unique_ptr<bool[]> checks(new bool[_length]);
+    // 各座標の確認状態を初期化する
+    std::vector<bool> checks(_length, false);
 
+    // 領域情報を作成して連オブジェクトに登録する
     for (int32_t index = 0; index < _length; index++) {
-      checks[index] = false;
-    }
-
-    // Create area information and register to group objects
-    for (int32_t index = 0; index < _length; index++) {
-      // Do nothing if already checked
+      // チェック済みなら何もしない
       if (checks[index]) {
         continue;
       }
 
-      // Do nothing if not empty area
+      // 空き領域でない場合は何もしない
       int32_t index_color = _getColor(index);
 
       if (index_color != EMPTY && index_color != op_color) {
@@ -960,7 +953,7 @@ void Board::_updateArea() {
         continue;
       }
 
-      // Create list of connected group IDs
+      // 接続している連のID一覧を作成する
       std::set<int32_t> connected_ren_ids;
 
       for (auto a : AROUNDS) {
@@ -969,28 +962,28 @@ void Board::_updateArea() {
         }
       }
 
-      // Create area data
+      // 領域データを作成する
       std::vector<int32_t> stack;
 
       stack.push_back(index);
       _areaFlags[c][index] = true;
 
       while (!stack.empty()) {
-        // Get position number
+        // 位置番号を取得する
         int32_t pos = stack.back();
         stack.pop_back();
 
-        // Do nothing if already checked
+        // チェック済みなら何もしない
         if (checks[pos]) {
           continue;
         }
 
         checks[pos] = true;
 
-        // Set area ID
+        // 領域IDを設定する
         _areaIds[c][pos] = index;
 
-        // Get list of surrounding group IDs
+        // 周りの連のID一覧を取得する
         std::set<int32_t> around_ren_ids;
 
         for (auto a : AROUNDS) {
@@ -1001,17 +994,17 @@ void Board::_updateArea() {
           }
         }
 
-        // If there are no surrounding groups, mark as unconfirmed area
+        // 周りに連がない場合は未確定領域とする
         if (around_ren_ids.empty()) {
           _areaFlags[c][pos] = false;
         }
 
-        // If surrounding group IDs and connected group IDs differ, mark as unconfirmed area
+        // 周りの連のID一覧と接続している連のID一覧が異なるなら未確定領域とする
         if (around_ren_ids != connected_ren_ids) {
           _areaFlags[c][index] = false;
         }
 
-        // Add surrounding empty areas to stack
+        // 周りの空き領域をスタックに追加する
         for (auto a : AROUNDS) {
           int32_t around = pos + a;
           int32_t around_color = _getColor(around);
@@ -1022,7 +1015,7 @@ void Board::_updateArea() {
         }
       }
 
-      // Register area information to group objects
+      // 連オブジェクトに領域情報を登録する
       if (_areaFlags[c][index]) {
         for (int32_t ren_id : connected_ren_ids) {
           _renObjs[ren_id].areas.insert(index);
@@ -1030,23 +1023,22 @@ void Board::_updateArea() {
       }
     }
 
-    // Set confirmation information for groups and areas
+    // 連と領域の確定情報を設定する
     bool updated = true;
 
     while (updated) {
       updated = false;
 
-      // Update group information
-      // Only confirm if connected to two or more confirmed areas
-      // If connected confirmed areas are less than two,
-      // mark connected areas as unconfirmed
+      // 連の情報を更新する
+      // 2個以上の確定領域と接続している場合のみ確定とする
+      // 接続している確定領域が2個未満である場合は接続領域も未確定とする
       for (int32_t ren_id : ren_ids) {
-        // Do nothing if group is unconfirmed
+        // 未確定の連の場合は何もしない
         if (!_renObjs[ren_id].fixed) {
           continue;
         }
 
-        // Count connected confirmed areas
+        // 接続している確定領域を数える
         int32_t fixed_count = 0;
 
         for (int32_t area_id : _renObjs[ren_id].areas) {
@@ -1055,14 +1047,12 @@ void Board::_updateArea() {
           }
         }
 
-        // Do nothing if connected confirmed areas are two or more
-        // (group remains confirmed)
+        // 接続している確定領域が2個以上なら何もしない（連は確定状態のまま）
         if (fixed_count >= 2) {
           continue;
         }
 
-        // If connected confirmed areas are less than two,
-        // mark connected areas as unconfirmed
+        // 接続している確定領域が2個未満なら接続領域を未確定にする
         _renObjs[ren_id].fixed = false;
 
         for (int32_t area_id : _renObjs[ren_id].areas) {
@@ -1075,64 +1065,64 @@ void Board::_updateArea() {
     }
   }
 
-  // Set update flag
+  // 更新フラグを設定する
   _areaUpdated = true;
 }
 
 /**
- * Update ladder (shicho) information.
+ * シチョウの情報を更新する。
  */
 void Board::_updateShicho() {
-  // Do nothing if already updated
+  // 更新済みなら何もしない
   if (_shichoUpdated) {
     return;
   }
 
-  // Update ladder (shicho) information
+  // シチョウの情報を更新する
   for (int32_t index = 0; index < _length; index++) {
     int32_t ren_id = _renIds[index];
 
-    // Do nothing if coordinate number and group number differ
-    // One of the coordinate numbers belonging to the group is always the same as the group number
+    // 座標番号と連番号が異なる場合は何もしない
+    // 連に属する座標番号の1つは必ず連番号と同じになる
     if (ren_id != index) {
       continue;
     }
 
-    // Determine ladder (shicho)
+    // シチョウを判定する
     _renObjs[ren_id].shicho = _isShichoRen(index);
   }
 
-  // Set update flag
+  // 更新フラグを設定する
   _shichoUpdated = true;
 }
 
 /**
- * Return True if the specified group is a ladder (shicho).
- * @param index Position number
- * @return True if ladder
+ * 指定された連がシチョウであるならTrueを返す。
+ * @param index 位置番号
+ * @return シチョウであるならTrue
  */
 bool Board::_isShichoRen(int32_t index) {
-  // Not a ladder if number of liberties is not 1
+  // ダメの数が1個でないならシチョウでない
   if (_renObjs[index].spaces.size() > 1) {
     return false;
   }
 
-  // Use depth-first search to check all moves
-  // If the escaping side has one candidate move and the following search is OK, ladder is confirmed
-  // If the chasing side has two candidate moves and the following search is NG, check other branches
+  // 深さ優先探索ですべての着手を検証する
+  // 逃げる側の候補手は1個なので以下の探索でOKならシチョウが確定する
+  // 追いかける側の候補手は2個なので以下の探索でNGの場合は他の分岐を検証する
   std::vector<Board> stack({*this});
 
   while (!stack.empty()) {
-    // Get board
+    // 盤面を取得
     Board board = stack.back();
     stack.pop_back();
 
-    // Get group ID
+    // 連のIDを取得
     int32_t ren_id = board._renIds[index];
     int32_t color = board._renObjs[ren_id].color;
     int32_t op_color = OPPOSITE(color);
 
-    // If adjacent opponent's group has 1 liberty -> NG (opponent's stone can be captured)
+    // 隣接する相手の連のダメが1個 -> NG（相手の石が取れる）
     bool escaped = false;
 
     for (int32_t pos : board._renObjs[ren_id].positions) {
@@ -1156,19 +1146,19 @@ bool Board::_isShichoRen(int32_t index) {
       continue;
     }
 
-    // Create board after placing stone
-    // No candidate move to escape -> OK (ladder)
+    // 石を置いた盤面を作成
+    // 逃げるための候補手がない -> OK（シチョウ）
     Board curr_board(board);
     int32_t curr_pos = *board._renObjs[ren_id].spaces.begin();
     int32_t curr_pos_x = curr_board._getPosX(curr_pos);
     int32_t curr_pos_y = curr_board._getPosY(curr_pos);
 
-    if (curr_board.play(curr_pos_x, curr_pos_y, color) < 0) {
+    if (curr_board.play(Move(curr_pos_x, curr_pos_y, color)) < 0) {
       return true;
     }
 
-    // If escaped board has 1 liberty -> OK (ladder)
-    // If escaped board has 3 or more liberties -> NG (not ladder)
+    // 逃げた盤面のダメが1個 -> OK（シチョウ）
+    // 逃げた盤面でダメが3個以上 -> NG（シチョウではない）
     int32_t curr_ren_id = curr_board._renIds[index];
 
     if (curr_board._renObjs[curr_ren_id].spaces.size() == 1) {
@@ -1177,27 +1167,27 @@ bool Board::_isShichoRen(int32_t index) {
       continue;
     }
 
-    // Create board by placing opponent's stone in liberty and add to search queue
+    // ダメに相手の石を置いた盤面を作成して探索キューに追加
     for (int32_t next_pos : curr_board._renObjs[curr_ren_id].spaces) {
       Board next_board(curr_board);
       int32_t next_pos_x = next_board._getPosX(next_pos);
       int32_t next_pos_y = next_board._getPosY(next_pos);
 
-      next_board.play(next_pos_x, next_pos_y, op_color);
+      next_board.play(Move(next_pos_x, next_pos_y, op_color));
       stack.push_back(next_board);
     }
   }
 
-  // Not a ladder
+  // シチョウでない
   return false;
 }
 
 /**
- * Get the color of the stone at the specified location.
- * @param index Position number
- * @return Stone color
+ * 指定された場所の石の色を取得する。
+ * @param index 位置番号
+ * @return 石の色
  */
-int32_t Board::_getColor(int32_t index) {
+int32_t Board::_getColor(int32_t index) const {
   int32_t ren_id = _renIds[index];
 
   if (ren_id == -1) {
@@ -1208,66 +1198,66 @@ int32_t Board::_getColor(int32_t index) {
 }
 
 /**
- * Return true if a stone can be placed at the specified location.
- * @param index Position number
- * @param color Stone color
- * @param checkSeki True to check for seki
- * @return True if a stone can be placed
+ * 指定した場所に石を置くことができればtrueを返す。
+ * @param index 位置番号
+ * @param color 石の色
+ * @param checkSeki セキを判定するならtrue
+ * @return 石を置くことができればtrue
  */
 bool Board::_isEnabled(int32_t index, int32_t color, bool checkSeki) {
-  // If there is already a stone -> cannot place
+  // 既に石がある場合 -> 置けない
   if (_renIds[index] != -1) {
     return false;
   }
 
-  // If ko -> cannot place
+  // コウの対象 -> 置けない
   if (index == _koIndex && color == _koColor) {
     return false;
   }
 
-  // If seki -> cannot place
+  // セキの対象 -> 置けない
   if (checkSeki && _isSeki(index, color)) {
     return false;
   }
 
-  // Check surroundings
+  // まわりの判定
   int32_t op_color = OPPOSITE(color);
 
   for (auto a : AROUNDS) {
     int32_t target = index + a;
 
-    // If there is space around -> can place
+    // まわりに空間がある場合 -> 置ける
     if (_renIds[target] == -1) {
       return true;
     }
 
-    // Check groups around
-    Ren ren = _renObjs[_renIds[target]];
+    // まわりにある連を確認する
+    BoardRen ren = _renObjs[_renIds[target]];
 
-    // If there is an allied stone with liberties around -> can place
+    // まわりに余裕のある味方の石がある場合 -> 置ける
     if (ren.color == color && ren.spaces.size() > 1) {
       return true;
     }
 
-    // If there is a capturable enemy stone around -> can place
+    // まわりに取れる敵の石がある場合 -> 置ける
     if (ren.color == op_color && ren.spaces.size() == 1) {
       return true;
     }
   }
 
-  // Cannot place
+  // 置けない
   return false;
 }
 
 /**
- * Return True if the specified location is subject to seki.
- * @param index Position number
- * @param color Stone color
- * @return True if subject to seki
+ * 指定された場所がセキの対象となるならTrueを返す。
+ * @param index 位置番号
+ * @param color 石の色
+ * @return セキの対象となるならTrue
  */
 bool Board::_isSeki(int32_t index, int32_t color) {
-  // Check adjacent opponent groups
-  // If there is an opponent group with 1 liberty around the move coordinate -> NG (opponent's stone can be captured)
+  // 隣接する相手の連を確認
+  // 着手座標の周りにダメが1個の相手の連がある -> NG（相手の石が取れる）
   int32_t op_color = OPPOSITE(color);
 
   for (auto a : AROUNDS) {
@@ -1280,7 +1270,7 @@ bool Board::_isSeki(int32_t index, int32_t color) {
     }
   }
 
-  // Create list of adjacent groups
+  // 隣接する連の一覧を作成する
   std::set<int32_t> ren_ids;
 
   for (auto a : AROUNDS) {
@@ -1291,12 +1281,12 @@ bool Board::_isSeki(int32_t index, int32_t color) {
     }
   }
 
-  // If there is no allied group around the move coordinate -> NG (not subject to seki)
+  // 着手座標の周りに自分の連が存在しない -> NG（セキ判定の対象外）
   if (ren_ids.size() == 0) {
     return false;
   }
 
-  // The number of liberties of the group before the move is 9 or more -> NG (not subject to seki judgment)
+  // 着手前の連のダメの数が9個以上 -> NG（セキ判定の対象外）
   std::set<int32_t> spaces;
 
   for (auto id : ren_ids) {
@@ -1307,40 +1297,40 @@ bool Board::_isSeki(int32_t index, int32_t color) {
     }
   }
 
-  // The number of liberties of the group before the move is 1 -> NG (not subject to seki judgment)
+  // 着手前の連のダメの数が1個 -> NG（セキ判定の対象外）
   if (spaces.size() == 1) {
     return false;
   }
 
-  // Remove own coordinate from liberties
+  // 自身の座標を呼吸点から削除
   spaces.erase(index);
 
-  // If liberties are 0, not seki (cannot place stone)
+  // 呼吸点が0ならセキではない(石を置けない)
   if (spaces.size() == 0) {
     return false;
   }
-  // If there is 1 liberty
+  // 呼吸点が1個の場合
   else if (spaces.size() == 1) {
     return _isSekiRen(index, color, ren_ids, *spaces.begin());
   }
-  // If there are 2 to 7 liberties
+  // 呼吸点が2個以上7個以下の場合
   else {
     return _isSekiArea(index, color, ren_ids, spaces);
   }
 }
 
 /**
- * Return True if the group created by placing a stone at the specified location is subject to seki.
- * @param index Position number
- * @param color Stone color
- * @param renIds List of group IDs to judge
- * @param spaceIndex Position number of empty area
- * @return True if subject to seki
+ * 指定された場所に石を置いたときに作成される連がセキの対象となるならTrueを返す。
+ * @param index 位置番号
+ * @param color 石の色
+ * @param renIds 判定対象の連の識別番号一覧
+ * @param spaceIndex 空き領域の位置番号
+ * @return セキの対象となるならTrue
  */
 bool Board::_isSekiRen(
     int32_t index, int32_t color, std::set<int32_t>& renIds, int32_t spaceIndex) {
-  // Create list of opponent groups adjacent to move coordinate and liberty
-  // If there are empty coordinates around move coordinate and liberty -> NG (not subject to seki)
+  // 着手座標とダメに隣接する相手の連の一覧を作成
+  // 着手座標とダメの周りに空き座標がある -> NG(セキ判定の対象外)
   int32_t op_color = OPPOSITE(color);
   std::set<int32_t> op_ren_ids;
 
@@ -1360,21 +1350,21 @@ bool Board::_isSekiRen(
     }
   }
 
-  // If there are no opponent groups around move coordinate and liberty -> NG (not subject to seki)
+  // 着手座標とダメの周りに相手の連がない -> NG(セキ判定の対象外)
   if (op_ren_ids.size() == 0) {
     return false;
   }
 
-  // If the number of liberties of opponent groups adjacent to move coordinate is not 2 -> NG (not subject to seki)
-  // If the number of liberties of opponent groups adjacent to own liberty is not 2 -> NG (not subject to seki)
+  // 着手座標と隣接している相手の連のダメの数が2個ではない -> NG(セキ判定の対象外)
+  // 自分のダメと隣接している相手の連のダメの数が2個ではない -> NG(セキ判定の対象外)
   for (auto ren_id : op_ren_ids) {
     if (_renObjs[ren_id].spaces.size() != 2) {
       return false;
     }
   }
 
-  // Check group coordinates
-  // If own group size is 7 or more -> OK (seki)
+  // 連の座標を確認
+  // 自分の連の大きさが7個以上 -> OK（セキ）
   std::set<int32_t> positions;
 
   positions.insert(index);
@@ -1388,12 +1378,12 @@ bool Board::_isSekiRen(
     }
   }
 
-  // If own group shape is not nakade -> OK (seki)
+  // 自分の連の形がナカデではない -> OK（セキ）
   if (positions.size() >= 4 && !_isNakade(positions)) {
     return true;
   }
 
-  // Add opponent groups adjacent to own group to the list
+  // 自分の連に隣接する相手の連を一覧に追加する
   for (auto position : positions) {
     for (auto a : AROUNDS) {
       int32_t ren_id = _renIds[position + a];
@@ -1405,7 +1395,7 @@ bool Board::_isSekiRen(
     }
   }
 
-  // Create list of liberties of opponent groups adjacent to move point and liberty
+  // 着手座標・自分のダメ・自分の連に隣接する相手の連のダメの一覧を作成する
   std::set<int32_t> op_spaces;
 
   for (auto ren_id : op_ren_ids) {
@@ -1413,12 +1403,9 @@ bool Board::_isSekiRen(
         _renObjs[ren_id].spaces.begin(), _renObjs[ren_id].spaces.end());
   }
 
-  // If there is a liberty other than the move coordinate and own liberties
-  // in the opponent's group adjacent to the move coordinate -> OK (seki)
-  // If there is a liberty other than the move coordinate and own liberties
-  // in the opponent's group adjacent to own liberties -> OK (seki)
-  // If there is a liberty other than the move coordinate and own liberties
-  // in the opponent's group adjacent to own group -> OK (seki)
+  // 着手座標と隣接している相手の連に着手座標と自分のダメ以外の場所にダメが存在する -> OK（セキ）
+  // 自分のダメと隣接している相手の連に着手座標と自分のダメ以外の場所にダメが存在する -> OK（セキ）
+  // 自分の連と隣接している相手の連に着手座標と自分のダメ以外の場所にダメが存在する -> OK（セキ）
   op_spaces.erase(index);
   op_spaces.erase(spaceIndex);
 
@@ -1426,21 +1413,21 @@ bool Board::_isSekiRen(
     return true;
   }
 
-  // Otherwise -> NG (nakade)
+  // それ以外 -> NG（ナカデ）
   return false;
 }
 
 /**
- * Return True if the area created by placing a stone at the specified location is subject to seki.
- * @param index Position number
- * @param color Stone color
- * @param renIds List of group IDs to judge
- * @param spacesIndices List of empty area position numbers
- * @return True if subject to seki
+ * 指定された場所に石を置いたときに作成される領域がセキの対象となるならTrueを返す。
+ * @param index 位置番号
+ * @param color 石の色
+ * @param renIds 判定対象の連の識別番号一覧
+ * @param spacesIndices 空き領域の位置番号一覧
+ * @return セキの対象となるならTrue
  */
 bool Board::_isSekiArea(
     int32_t index, int32_t color, std::set<int32_t>& renIds, std::set<int32_t>& spacesIndices) {
-  // Create a list of area coordinates and adjacent groups on the board before the move
+  // 着手前の盤面で領域の座標一覧と隣接している連の一覧を作成する
   int32_t op_color = OPPOSITE(color);
   std::set<int32_t> positions;
   std::set<int32_t> ren_ids;
@@ -1473,19 +1460,19 @@ bool Board::_isSekiArea(
       }
     }
 
-    // If size of adjacent area is 9 or more -> NG (not seki)
+    // 隣接領域の大きさが9以上 -> NG（セキではない）
     if (positions.size() >= 9) {
       return false;
     }
   }
 
-  // If adjacent area is connected to groups other than those connected to move coordinate -> NG (not seki)
+  // 隣接領域が着手座標と接続する連以外の連と接している -> NG（セキではない）
   if (ren_ids != renIds) {
     return false;
   }
 
-  // If group connected to move coordinate is connected to only one area
-  // If any of the coordinate lists excluding any empty coordinate from area coordinates is nakade -> NG (not subject to seki)
+  // 着手座標と接続する連が１つの領域とのみ接続しており
+  // 領域座標から任意の空き座標を除外した座標一覧のいずれかがナカデ -> NG（セキ判定の対象外）
   if (_isSingleArea(positions, color, -1)) {
     for (int32_t pos : positions) {
       if (_renIds[pos] != -1) {
@@ -1501,15 +1488,15 @@ bool Board::_isSekiArea(
     }
   }
 
-  // Check adjacent area after move
+  // 着手後の隣接領域を確認する
   positions.erase(index);
 
-  // If group connected to move coordinate is connected to multiple areas -> NG (not seki)
+  // 着手座標と接続する連が複数の領域と接続している -> NG（セキではない）
   if (!_isSingleArea(positions, color, index)) {
     return false;
   }
 
-  // If any of the coordinate lists excluding any empty coordinate from area coordinates is nakade -> OK (seki)
+  // 領域座標から任意の空き座標を除外した座標一覧のいずれかがナカデ -> OK（セキ）
   for (int32_t pos : positions) {
     if (_renIds[pos] != -1) {
       continue;
@@ -1523,14 +1510,14 @@ bool Board::_isSekiArea(
     }
   }
 
-  // Otherwise -> NG (not seki)
+  // それ以外 -> NG（セキではない）
   return false;
 }
 
 /**
- * Returns true if the specified list of position numbers forms a Nakade.
- * @param positions List of position numbers
- * @return True if it is a Nakade
+ * 指定された座標番号の一覧がナカデであるならTrueを返す。
+ * @param positions 座標番号の一覧
+ * @return ナカデであるならTrue
  */
 bool Board::_isNakade(std::set<int32_t>& positions) {
   const int32_t length = 5;
@@ -1538,17 +1525,17 @@ bool Board::_isNakade(std::set<int32_t>& positions) {
   const int32_t horizontals[] = {1, -1, 1, -1};
   const int32_t verticals[] = {length, length, -length, -length};
 
-  // If the number of positions is 0, it is not a Nakade
+  // 座標の数が0ならばナカデではない
   if (positions.size() == 0) {
     return false;
   }
 
-  // If the size of the group is 7 or more -> NG (not a Nakade)
+  // 連の大きさが7以上 -> NG（ナカデではない）
   if (positions.size() >= 7) {
     return false;
   }
 
-  // Check the upper left and lower right of the positions
+  // 座標の左上と右下を確認する
   int32_t start_x = _width - 2;
   int32_t start_y = _height - 2;
   int32_t end_x = 0;
@@ -1564,13 +1551,13 @@ bool Board::_isNakade(std::set<int32_t>& positions) {
     end_y = std::max(y, end_y);
   }
 
-  // Check the distance between the upper left and lower right
-  // If it is 3x3 or larger, there is no vital point -> not a Nakade
+  // 左上と右下までの距離を確認する
+  // 3x3以上なら急所は存在しない -> ナカデではない
   if (end_x - start_x > 3 || end_y - start_y > 3) {
     return false;
   }
 
-  // Create a board for calculation
+  // 計算用の盤面を作成する
   int32_t board[length * length] = {0};
   int32_t corner[length * length] = {0};
 
@@ -1588,24 +1575,24 @@ bool Board::_isNakade(std::set<int32_t>& positions) {
     }
   }
 
-  // Search for vital points
+  // 急所を探す
   for (int32_t y = 1; y < length - 1; y++) {
     for (int32_t x = 1; x < length - 1; x++) {
       int32_t p = y * length + x;
 
-      // If it is not a target position for calculation
+      // 計算対象の座標ではない場合
       if (board[p] != 1) {
         continue;
       }
 
-      // Calculate the number of direct (vertical/horizontal) connections
+      // 縦横の接続数を計算
       int32_t direct_connections = 0;
 
       for (auto a : arounds) {
         direct_connections += board[p + a];
       }
 
-      // Calculate the number of diagonal connections
+      // 斜めの接続数を計算
       int32_t skew_connections = 0;
       int32_t corner_connections = 0;
 
@@ -1613,28 +1600,28 @@ bool Board::_isNakade(std::set<int32_t>& positions) {
         int32_t v = verticals[i];
         int32_t h = horizontals[i];
 
-        // Check the target
+        // 対象を確認
         if (board[p + v + h] != 1) {
           continue;
         }
 
-        // If it is a connection to a corner
+        // 隅に対する接続の場合
         if (corner_connections == 0 && corner[p + v] == 1 && board[p + v] == 1) {
           corner_connections = 1;
         } else if (corner_connections == 0 && corner[p + h] == 1 && board[p + h] == 1) {
           corner_connections = 1;
         }
-        // If it is a diagonal connection
+        // 斜めの接続の場合
         else if (skew_connections == 0 && board[p + v] == 1 && board[p + h] == 1) {
           skew_connections = 1;
         }
       }
 
-      // If the number of connections is greater than or equal to the specified value, judge as a vital point
-      // If there is a position (vital point) that satisfies the following conditions -> OK (Nakade)
-      // (1) Stones adjacent in vertical/horizontal directions
-      // (2) Stones adjacent in diagonal directions (up to 1 place)
-      // (3) Corner stones adjacent in diagonal directions (up to 1 place)
+      // 接続数が指定された値以上の場合は急所と判定
+      // 以下の条件を満たす座標（急所）がある -> OK（ナカデ）
+      // (1) 縦横方向に隣接している石
+      // (2) 斜め方向に隣接している石(1箇所まで)
+      // (3) 斜め方向に隣接している隅の石(1箇所まで)
       if (direct_connections + skew_connections + corner_connections >= int(positions.size()) - 1) {
         return true;
       }
@@ -1645,11 +1632,11 @@ bool Board::_isNakade(std::set<int32_t>& positions) {
 }
 
 /**
- * Returns true if the specified list of position numbers is contained within a single area.
- * @param positions List of position numbers
- * @param color Color of the stones surrounding the area
- * @param excludedIndex Position number to exclude
- * @return True if contained within a single area
+ * 指定された座標番号の一覧が単一領域に含まれているならTrueを返す。
+ * @param positions 座標番号の一覧
+ * @param color 領域を囲む石の色
+ * @param excludedIndex 除外する位置番号
+ * @return 単一領域に含まれているならTrue
  */
 bool Board::_isSingleArea(
     std::set<int32_t>& positions, int32_t color, int32_t excludedIndex) {

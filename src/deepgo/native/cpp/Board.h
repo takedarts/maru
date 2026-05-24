@@ -1,408 +1,418 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
-#include <iostream>
-#include <memory>
+#include <ostream>
 #include <set>
+#include <string>
 #include <vector>
 
-#include "History.h"
-#include "Pattern.h"
-#include "Ren.h"
+#include "BoardPattern.h"
+#include "BoardRen.h"
+#include "Config.h"
+#include "Move.h"
+#include "MoveHistory.h"
 
 namespace deepgo {
 
+#define BITBOARD_SIZE (MODEL_SIZE * MODEL_SIZE / 64 + 2)
+
 /**
- * Class of board information.
+ * 盤面の情報を保持するクラス。
  */
 class Board {
+ private:
+  /**
+   * 盤面のハッシュ値を計算するためのクラス。
+   * Boardクラスのprivateメンバにアクセスできるようにするため、Boardクラスのfriendクラスとする。
+   */
+  friend class BoardHash;
+
  public:
   /**
-   * Creates a board object.
-   * @param width Board width
-   * @param height Board height
+   * 盤面オブジェクトを作成する。
+   * @param width 盤面の幅
+   * @param height 盤面の高さ
    */
   Board(int width, int height);
 
   /**
-   * Creates a copied board object.
-   * @param board Board object to copy from
+   * コピーした盤面オブジェクトを作成する。
+   * @param board コピー元の盤面オブジェクト
    */
   Board(const Board& board);
 
   /**
-   * Destroys the board object.
+   * 盤面オブジェクトを破棄する。
    */
   virtual ~Board() = default;
 
   /**
-   * Initializes the state of the board.
+   * 盤面の状態を初期化する。
    */
   void clear();
 
   /**
-   * Gets the width of the board.
-   * @return Board width
+   * 盤面の幅を取得する。
+   * @return 盤面の幅
    */
-  int32_t getWidth();
+  int32_t getWidth() const;
 
   /**
-   * Gets the height of the board.
-   * @return Board height
+   * 盤面の高さを取得する。
+   * @return 盤面の高さ
    */
-  int32_t getHeight();
+  int32_t getHeight() const;
 
   /**
-   * Play a stone.
-   * @param x X coordinate to play
-   * @param y Y coordinate to play
-   * @param color Color of the stone
-   * @return Number of captured stones (returns -1 if not playable)
+   * 石を置く。
+   * @param move 着手情報
+   * @return 取り上げた石の数（おけない場合は-1）
    */
-  int32_t play(int32_t x, int32_t y, int32_t color);
+  int32_t play(Move move);
 
   /**
-   * Gets the coordinates of Ko.
-   * Returns (-1, -1) if Ko does not occur.
-   * @param color Color of the target stone
-   * @return Coordinates of Ko
+   * コウの座標を取得する。
+   * コウが発生していないなら(-1, -1)を返す。
+   * @param color 対象の石の色
+   * @return コウの座標
    */
-  std::pair<int32_t, int32_t> getKo(int32_t color);
+  std::pair<int32_t, int32_t> getKo(int32_t color) const;
 
   /**
-   * Returns a list of the most recent move coordinates.
-   * @param color Color of the stone
-   * @return List of move coordinates
+   * 最も最近の着手座標の一覧を返す。
+   * @param color 石の色
+   * @return 着手座標の一覧
    */
-  std::vector<std::pair<int32_t, int32_t>> getHistories(int color);
+  std::vector<Move> getHistories(int color) const;
 
   /**
-   * Gets the color of the stone at the specified coordinates.
-   * @param x X coordinate
-   * @param y Y coordinate
-   * @return Color of the stone
+   * 指定した座標の石の色を取得する。
+   * @param x X座標
+   * @param y Y座標
+   * @return 石の色
    */
-  int32_t getColor(int32_t x, int32_t y);
+  int32_t getColor(int32_t x, int32_t y) const;
 
   /**
-   * Returns a list of stone colors.
-   * @param colors Data of stone colors
-   * @param color Color of the stone
+   * 石の色の一覧を返す。
+   * @param colors 石の色のデータ
+   * @param color 石の色
    */
   void getColors(int32_t* colors, int32_t color);
 
   /**
-   * Gets the size of the group at the specified coordinates.
-   * @param x X coordinate
-   * @param y Y coordinate
-   * @return Size of the group
+   * 指定した座標の連の大きさを取得する。
+   * @param x X座標
+   * @param y Y座標
+   * @return 連の大きさ
    */
   int32_t getRenSize(int32_t x, int32_t y);
 
   /**
-   * Gets the number of liberties of the group at the specified coordinates.
-   * @param x X coordinate
-   * @param y Y coordinate
-   * @return Number of liberties
+   * 指定した座標の連のダメの数を取得する。
+   * @param x X座標
+   * @param y Y座標
+   * @return ダメの数
    */
   int32_t getRenSpace(int32_t x, int32_t y);
 
   /**
-   * Gets whether the group at the specified coordinates is a ladder (shicho).
-   * @param x X coordinate
-   * @param y Y coordinate
-   * @return True if the group is a ladder (shicho)
+   * 指定した座標の連のシチョウの有無を取得する。
+   * @param x X座標
+   * @param y Y座標
+   * @return シチョウであればtrue
    */
   bool isShicho(int32_t x, int32_t y);
 
   /**
-   * Returns True if a stone can be placed.
-   * @param x X coordinate
-   * @param y Y coordinate
-   * @param color Color of the stone
-   * @param checkSeki True to check for seki
-   * @return True if a stone can be placed
+   * 石を置けるならtrueを返す。
+   * @param x X座標
+   * @param y Y座標
+   * @param color 石の色
+   * @param checkSeki セキを判定するならtrue
+   * @return 石を置けるならtrue
    */
   bool isEnabled(int32_t x, int32_t y, int32_t color, bool checkSeki);
 
   /**
-   * Gets a list of places where a stone can be placed.
-   * @param enableds List of places where a stone can be placed
-   * @param color Color of the stone
-   * @param checkSeki True to check for seki
+   * 石を置ける場所の一覧を取得する。
+   * @param enableds 石を置ける場所の一覧
+   * @param color 石の色
+   * @param checkSeki セキを判定するならtrue
    */
   void getEnableds(int32_t* enableds, int32_t color, bool checkSeki);
 
   /**
-   * Returns the data of fixed territory.
-   * @param territories Data of fixed territory
-   * @param color Reference stone color (if WHITE is set, returns data judged for both black and white)
+   * 確定地のデータを返す。
+   * @param territories 確定地のデータ
+   * @param color 基準となる石の色（WHITEを設定すると黒白を判定したデータを返す）
    */
   void getTerritories(int32_t* territories, int32_t color);
 
   /**
-   * Returns the data of the owner of each coordinate.
-   * @param owners Data of owners
-   * @param color Reference stone color (if WHITE is set, returns data judged for both black and white)
-   * @param rule Calculation rule (RULE_CH: Chinese rule, RULE_JP: Japanese rule, RULE_COM: automatic match rule)
+   * それぞれの座標の所有者のデータを返す。
+   * @param owners 所有者のデータ
+   * @param color 基準となる石の色（WHITEを設定すると黒白を判定したデータを返す）
+   * @param rule 計算ルール（RULE_CH:中国ルール, RULE_JP:日本ルール, RULE_COM:自動対戦ルール）
    */
   void getOwners(int32_t* owners, int32_t color, int32_t rule);
 
   /**
-   * Gets the value representing the arrangement of stones.
-   * @return Value representing the arrangement of stones
+   * 石の並びを表現する値を取得する。
+   * @return 石の並びを表現する値
    */
   std::vector<int32_t> getPatterns();
 
   /**
-   * Gets the data to input to the model.
-   * @param inputs Data to input to the model
-   * @param color Color of the stone to play
-   * @param komi Komi points
-   * @param rule Rule for determining the winner
-   * @param superko True to apply the superko rule
+   * モデルに入力するデータを取得する。
+   * @param inputs モデルに入力する盤面データ
+   * @param color 着手する石の色
+   * @param komi コミの目数
+   * @param rule 勝敗の判定ルール
+   * @param superko スーパーコウルールを適用するならtrue
    */
   void getInputs(
       int32_t* inputs, int32_t color, float komi, int32_t rule, bool superko);
 
   /**
-   * Gets the hash value of the board.
-   * Returns a value that includes not only the arrangement of stones but also the Ko information.
-   * @return Hash value of the board
-   */
-  uint64_t getHash() const;
-
-  /**
-   * Gets the state of the board.
-   * @return State of the board
+   * 盤面の状態を取得する。
+   * @return 盤面の状態
    */
   std::vector<int32_t> getState();
 
   /**
-   * Restores the state of the board.
-   * @param state State of the board
+   * 盤面の状態を復元する。
+   * @param state 盤面の状態
    */
   void loadState(std::vector<int32_t> state);
 
   /**
-   * Copies the state of the board.
-   * @param board Board to copy from
+   * 盤面の状態をコピーする。
+   * @param board コピー元の盤面
    */
   void copyFrom(const Board* board);
 
   /**
-   * Outputs the state of the board.
-   * @param os Output destination
+   * 盤面の状態を文字列に変換する。
+   * @return 盤面の状態を表す文字列
    */
-  void print(std::ostream& os = std::cout);
+  std::string toString() const;
+
+  /**
+   * 盤面の状態を表す文字列を出力ストリームに書き込む。
+   * @param os 出力ストリーム
+   * @param board 盤面オブジェクト
+   * @return 出力ストリーム
+   */
+  friend std::ostream& operator<<(std::ostream& os, const Board& board) {
+    os << board.toString();
+    return os;
+  }
 
  private:
   /**
-   * Value of board width + 2.
+   * 盤面の幅+2の値。
    */
   int32_t _width;
 
   /**
-   * Value of board height + 2.
+   * 盤面の高さ+2の値。
    */
   int32_t _height;
 
   /**
-   * Length of board data.
-   * Value is (width + 2) * (height + 2).
+   * 盤面データの長さ。
+   * (幅+2) * (高さ+2)の値となる。
    */
   int32_t _length;
 
   /**
-   * List of group information IDs.
+   * 連情報の識別番号一覧。
    */
-  std::unique_ptr<int32_t[]> _renIds;
+  std::vector<int32_t> _renIds;
 
   /**
-   * List of group information.
+   * 連情報の一覧。
    */
-  std::unique_ptr<Ren[]> _renObjs;
+  std::vector<BoardRen> _renObjs;
 
   /**
-   * List of empty area information IDs.
+   * 空き領域情報の識別番号の一覧。
    */
-  std::unique_ptr<int32_t[]> _areaIds[2];
+  std::array<std::vector<int32_t>, 2> _areaIds;
 
   /**
-   * List of empty area information.
+   * 空き領域情報の一覧。
    */
-  std::unique_ptr<bool[]> _areaFlags[2];
+  std::array<std::vector<bool>, 2> _areaFlags;
 
   /**
-   * Location where Ko occurs.
+   * コウが発生している場所。
    */
   int32_t _koIndex;
 
   /**
-   * Color subject to Ko.
+   * コウの対象となる色。
    */
   int32_t _koColor;
 
   /**
-   * History of move coordinates.
+   * 着手座標の履歴。
    */
-  History _histories[2];
+  MoveHistory _histories[2];
 
   /**
-   * Object representing the arrangement of stones on the board.
+   * 盤面の石の並びを表現するオブジェクト。
    */
-  Pattern _pattern;
+  BoardPattern _pattern;
 
   /**
-   * True if area information has been updated.
+   * 領域情報が更新されていればtrue。
    */
   bool _areaUpdated;
 
   /**
-   * True if atari information has been updated.
+   * シチョウ情報が更新されていればtrue。
    */
   bool _shichoUpdated;
 
   /**
-   * Hash value of the board.
-   * Represents only the arrangement of stones and does not include Ko information.
+   * 盤面のハッシュ値。
+   * 石の配置のみを表す値で、コウの情報は含まない。
    */
   uint64_t _hash;
 
   /**
-   * Places a stone at the specified location.
-   * Does not merge or remove groups.
-   * @param index Position number
-   * @param color Color of the stone
+   * 盤面の石の配置を表すビットボード。
+   * 1ビットが盤面の1マスに対応し、石が置いてあるなら1、空きなら0となる。
+   */
+  uint64_t _bitBoard[BITBOARD_SIZE];
+
+  /**
+   * 指定した場所に石を置く。
+   * 連の統合や削除は行わない。
+   * @param index 位置番号
+   * @param color 石の色
    */
   void _put(int32_t index, int32_t color);
 
   /**
-   * Merges the specified groups.
-   * @param srcIndex Position number of the source group
-   * @param dstIndex Position number of the destination group
+   * 指定された連を統合する。
+   * @param srcIndex 統合元の連の位置番号
+   * @param dstIndex 統合先の連の位置番号
    */
   void _mergeRen(int32_t srcIndex, int32_t dstIndex);
 
   /**
-   * Removes the specified group.
-   * @param index Position number
+   * 指定された連を削除する。
+   * @param index 位置番号
    */
   void _removeRen(int32_t index);
 
   /**
-   * Updates empty area information.
+   * 空き領域情報を更新する。
    */
   void _updateArea();
 
   /**
-   * Updates atari information.
+   * シチョウの情報を更新する。
    */
   void _updateShicho();
 
   /**
-   * Returns true if the specified group is a ladder (shicho).
-   * @param index Position number
-   * @return True if the group is a ladder (shicho)
+   * 指定された連がシチョウであるならTrueを返す。
+   * @param index 位置番号
+   * @return シチョウであるならTrue
    */
   bool _isShichoRen(int32_t index);
 
   /**
-   * Gets the color of the stone at the specified location.
-   * @param index Position number
-   * @return Color of the stone
+   * 指定された場所の石の色を取得する。
+   * @param index 位置番号
+   * @return 石の色
    */
-  int32_t _getColor(int32_t index);
+  int32_t _getColor(int32_t index) const;
 
   /**
-   * Returns true if a stone can be placed at the specified location.
-   * @param index Position number
-   * @param color Color of the stone
-   * @param checkSeki True to check for seki
-   * @return True if a stone can be placed
+   * 指定した場所に石を置くことができればtrueを返す。
+   * @param index 位置番号
+   * @param color 石の色
+   * @param checkSeki セキを判定するならtrue
+   * @return 石を置くことができればtrue
    */
   bool _isEnabled(int32_t index, int32_t color, bool checkSeki);
 
   /**
-   * Returns true if the specified location is subject to seki.
-   * @param index Position number
-   * @param color Color of the stone
-   * @return True if subject to seki
+   * 指定された場所がセキの対象となるならTrueを返す。
+   * @param index 位置番号
+   * @param color 石の色
+   * @return セキの対象となるならTrue
    */
   bool _isSeki(int32_t index, int32_t color);
 
   /**
-   * Returns true if the group created by placing a stone at the specified location is subject to seki.
-   * @param index Position number
-   * @param color Color of the stone
-   * @param renIds List of group IDs to be judged
-   * @param spaceIndex Position number of the empty area
-   * @return True if subject to seki
+   * 指定された場所に石を置いたときに作成される連がセキの対象となるならTrueを返す。
+   * @param index 位置番号
+   * @param color 石の色
+   * @param renIds 判定対象の連の識別番号一覧
+   * @param spaceIndex 空き領域の位置番号
+   * @return セキの対象となるならTrue
    */
   bool _isSekiRen(int32_t index, int32_t color, std::set<int32_t>& renIds, int32_t spaceIndex);
 
   /**
-   * Returns true if the area created by placing a stone at the specified location is subject to seki.
-   * @param index Position number
-   * @param color Color of the stone
-   * @param renIds List of group IDs to be judged
-   * @param spacesIndices List of position numbers of empty areas
-   * @return True if subject to seki
+   * 指定された場所に石を置いたときに作成される領域がセキの対象となるならTrueを返す。
+   * @param index 位置番号
+   * @param color 石の色
+   * @param renIds 判定対象の連の識別番号一覧
+   * @param spacesIndices 空き領域の位置番号一覧
+   * @return セキの対象となるならTrue
    */
   bool _isSekiArea(
       int32_t index, int32_t color, std::set<int32_t>& renIds, std::set<int32_t>& spacesIndices);
 
   /**
-   * Returns true if the specified list of position numbers forms a Nakade.
-   * @param positions List of position numbers
-   * @return True if it is a Nakade
+   * 指定された座標番号の一覧がナカデであるならTrueを返す。
+   * @param positions 座標番号の一覧
+   * @return ナカデであるならTrue
    */
   bool _isNakade(std::set<int32_t>& positions);
 
   /**
-   * Returns true if the specified list of position numbers is contained within a single area.
-   * @param positions List of position numbers
-   * @param color Color of the stones surrounding the area
-   * @param excludedIndex Position number to exclude
-   * @return True if contained within a single area
+   * 指定された座標番号の一覧が単一領域に含まれているならTrueを返す。
+   * @param positions 座標番号の一覧
+   * @param color 領域を囲む石の色
+   * @param excludedIndex 除外する位置番号
+   * @return 単一領域に含まれているならTrue
    */
   bool _isSingleArea(std::set<int32_t>& positions, int32_t color, int32_t excludedIndex);
 
   /**
-   * Returns whether the specified coordinates are a valid position.
-   * @param x X coordinate
-   * @param y Y coordinate
-   * @return True if the position is valid
+   * 指定された座標の位置番号を取得する。
+   * @param x X座標
+   * @param y Y座標
+   * @return 位置番号
    */
-  inline bool _isValidPosition(int32_t x, int32_t y) {
-    return (x >= 0 && x < _width - 2 && y >= 0 && y < _height - 2);
-  }
-
-  /**
-   * Gets the position number for the specified coordinates.
-   * @param x X coordinate
-   * @param y Y coordinate
-   * @return Position number
-   */
-  inline int32_t _getIndex(int32_t x, int32_t y) {
+  inline int32_t _getIndex(int32_t x, int32_t y) const {
     return ((y + 1) * _width) + (x + 1);
   }
 
   /**
-   * Gets the X coordinate for the specified position number.
-   * @param index Position number
-   * @return X coordinate
+   * 指定された位置番号のX座標を取得する。
+   * @param index 位置番号
+   * @return X座標
    */
-  inline int32_t _getPosX(int32_t index) {
+  inline int32_t _getPosX(int32_t index) const {
     return (index % _width) - 1;
   }
 
   /**
-   * Gets the Y coordinate for the specified position number.
-   * @param index Position number
-   * @return Y coordinate
+   * 指定された位置番号のY座標を取得する。
+   * @param index 位置番号
+   * @return Y座標
    */
-  inline int32_t _getPosY(int32_t index) {
+  inline int32_t _getPosY(int32_t index) const {
     return (index / _width) - 1;
   }
 };

@@ -1,480 +1,473 @@
 #include "Player.h"
 
-#include <algorithm>
-#include <cmath>
-#include <cstring>
-#include <map>
-#include <queue>
-#include <unordered_map>
+#include <iomanip>
+#include <sstream>
 
 namespace deepgo {
 
 /**
- * Creates a player object.
- * @param processor Object to evaluate the board
- * @param threads Number of board search threads
- * @param cacheSize Cache size for evaluation results
- * @param width Board width
- * @param height Board height
- * @param komi Komi points
- * @param rule Game rule
- * @param superko True to apply the superko rule
- * @param ucbConstant Constant multiplied to the UCB upper confidence bound
- * @param pucbConstantInit Initial value applied to the PUCB upper confidence bound
- * @param pucbConstantBase Base value applied to the PUCB upper confidence bound
- * @param evalLeafOnly True to evaluate only leaf nodes
- * @param maxVisits Maximum number of visits
+ * プレイヤオブジェクトを作成する。
+ * @param processor 推論を実行するオブジェクト
+ * @param threads スレッドの数
+ * @param maxVisits 最大訪問数
+ * @param width 盤面の幅
+ * @param height 盤面の高さ
+ * @param komi コミの目数
+ * @param rule 勝敗の判定ルール
+ * @param superko スーパーコウルールを適用するならtrue
+ * @param pucbConstantInit PUCBの信頼上限に掛ける定数の初期値
+ * @param pucbConstantBase PUCBの信頼上限に掛ける定数の変化値
  */
 Player::Player(
-    Processor* processor, int32_t threads, int32_t cacheSize,
+    InferenceProcessor* processor, int32_t threads, int32_t maxVisits,
     int32_t width, int32_t height, float komi, int32_t rule, bool superko,
-    float ucbConstant, float pucbConstantInit, float pucbConstantBase,
-    bool evalLeafOnly, int32_t maxVisits)
+    float pucbConstantInit, float pucbConstantBase)
     : _mutex(),
-      _condition(),
-      _nodeManager(
-          processor, cacheSize, width, height, komi, rule, superko,
-          ucbConstant, pucbConstantInit, pucbConstantBase),
+      _searchCondition(),
+      _updateCondition(),
+      _stopCondition(),
+      _processor(processor),
       _threadPool(threads),
-      _thread(),
+      _searchThread(),
+      _updateThread(),
+      _nodeManager(MctsParameter(
+          width, height, komi, rule, superko, pucbConstantInit, pucbConstantBase)),
       _root(_nodeManager.createNode()),
-      _evalLeafOnly(evalLeafOnly),
       _maxVisits(maxVisits),
-      _searchVisits(0),
-      _searchPlayouts(0),
       _searchEqually(false),
-      _searchAlgorithm(SEARCH_PUCB),
-      _searchWidth(0),
+      _searchCandidateWidth(0),
       _searchTemperature(1.0f),
       _searchNoise(0.0f),
       _runnings(0),
       _paused(false),
       _stopped(true),
-      _terminated(false) {
-  _thread.reset(new std::thread([this]() { this->_run(); }));
+      _terminated(false),
+      _evaluatingNodes() {
   _root->initialize();
+  _searchThread = std::thread(&Player::_runSearch, this);
+  _updateThread = std::thread(&Player::_runUpdate, this);
 }
 
 /**
- * Destroys the player object.
+ * プレイヤオブジェクトを破棄する。
  */
 Player::~Player() {
   {
-    std::unique_lock<std::mutex> lock(_mutex);
+    std::lock_guard<std::mutex> lock(_mutex);
     _terminated = true;
-    _condition.notify_all();
-    _condition.wait(lock, [this]() { return _runnings == 0; });
   }
 
-  _thread->join();
+  _searchCondition.notify_one();
+  _updateCondition.notify_one();
+  _searchThread.join();
+  _updateThread.join();
 }
 
 /**
- * Initializes the state of the player object.
+ * プレイヤオブジェクトの状態を初期化する。
  */
 void Player::initialize() {
   std::unique_lock<std::mutex> lock(_mutex);
 
-  // Pause the thread
+  // 探索スレッドを一時停止する
   _paused = true;
-  _condition.wait(lock, [this]() { return _runnings == 0; });
+  _stopCondition.wait(lock, [this]() {
+    return _runnings == 0 && _evaluatingNodes.empty();
+  });
 
-  // Save the current root node
-  Node* old_root = _root;
+  // 現在の探索木を退避して、新しい初期局面のルートを作成する
+  MctsNode* old_root = _root;
 
-  // Set the initial node as the root node
   _root = _nodeManager.createNode();
   _root->initialize();
 
-  // Release nodes other than the root node
-  _releaseNode(old_root);
+  // 古い探索木はノードプールへ戻して再利用できる状態にする
+  _nodeManager.releaseTree(old_root);
 
-  // Resume the thread
+  // 探索スレッドを再開する
   _paused = false;
-  _condition.notify_all();
+  _searchCondition.notify_one();
 }
 
 /**
- * Places a stone on the board.
- * @param x x coordinate of the position to place the stone
- * @param y y coordinate of the position to place the stone
+ * 盤面に石を置く。
+ * @param move 着手
+ * @return 打ち上げた石の数
  */
-int32_t Player::play(int32_t x, int32_t y) {
+int32_t Player::play(Move move) {
   std::unique_lock<std::mutex> lock(_mutex);
 
-  // Pause the thread
+  // 探索スレッドを一時停止する
   _paused = true;
-  _condition.wait(lock, [this]() { return _runnings == 0; });
+  _stopCondition.wait(lock, [this]() {
+    return _runnings == 0 && _evaluatingNodes.empty();
+  });
 
-  // Save the current root node
-  Node* old_root = _root;
+  // 着手先の子ノードを新しいルートにする
+  MctsNode* old_root = _root;
 
-  // Set the new root node
-  _root = old_root->getChild(x, y);
+  _root = old_root->getChild(move);
+  _root->setAsRootNode();
 
-  // Release nodes other than the root node
-  _releaseNode(old_root);
+  // 新しいルートを古い探索木から切り離して、それ以外を解放する
+  old_root->removeChild(move);
+  _nodeManager.releaseTree(old_root);
 
-  // Resume the thread
+  // 探索スレッドを再開する
   _paused = false;
-  _condition.notify_all();
+  _searchCondition.notify_one();
 
-  // Return the number of captured stones
   return _root->getCaptured();
 }
 
 /**
- * Gets candidate moves for pass.
- * @return Candidate moves for pass
+ * パスの候補手を取得する。
+ * @return パスの候補手
  */
 std::vector<Candidate> Player::getPass() {
   std::unique_lock<std::mutex> lock(_mutex);
 
-  // Pause the thread
+  // 探索スレッドを一時停止する
   _paused = true;
-  _condition.wait(lock, [this]() { return _runnings == 0; });
+  _stopCondition.wait(lock, [this]() {
+    return _runnings == 0 && _evaluatingNodes.empty();
+  });
 
-  // Create candidate moves
+  // パスの候補手を作成する
   std::vector<Candidate> candidates;
 
   candidates.emplace_back(
-      -1, -1, OPPOSITE(_root->getColor()),
-      0, 0, 1.0f, _root->getValue(), _root->getMinimax(),
-      std::vector<std::pair<int32_t, int32_t>>());
+      Move::createPassMove(_root->getNextColor()), 0, 0, 1.0f,
+      _root->getMctsValue(), std::vector<Move>(), _root->getTerritories());
 
-  // Resume the thread
+  // 探索スレッドを再開する
   _paused = false;
-  _condition.notify_all();
+  _searchCondition.notify_one();
 
   return candidates;
 }
 
 /**
- * Selects the next candidate move randomly.
- * @param temperature Temperature (higher value increases randomness)
- * @return Randomly selected candidate move
- */
-std::vector<Candidate> Player::getRandom(float temperature) {
-  std::unique_lock<std::mutex> lock(_mutex);
-
-  // Pause the thread
-  _paused = true;
-  _condition.wait(lock, [this]() { return _runnings == 0; });
-
-  // Create candidate moves
-  std::pair<int32_t, int32_t> move = _root->getRandomMove(temperature);
-  std::vector<Candidate> candidates;
-
-  candidates.emplace_back(
-      move.first, move.second, OPPOSITE(_root->getColor()),
-      1, 1, 1.0f, _root->getValue(), _root->getMinimax(),
-      std::vector<std::pair<int32_t, int32_t>>());
-
-  // Resume the thread
-  _paused = false;
-  _condition.notify_all();
-
-  return candidates;
-}
-
-/**
- * Starts board evaluation.
- * Search processing is executed in a separate thread.
- * @param equally True to make the number of searches equal; false to use UCB or PUCB
- * @param algorithm Search algorithm
- * @param width Search width (if 0, search width is automatically adjusted)
- * @param temperature Temperature parameter for search
- * @param noise Strength of Gumbel noise for search
+ * 盤面評価を開始する。
+ * @param equally 探索回数を均等にするならtrue
+ * @param width 候補手の探索幅
+ * @param temperature 探索の温度パラメータ
+ * @param noise ガンベルノイズの強さ
  */
 void Player::startEvaluation(
-    bool equally, int32_t algorithm, int32_t width, float temperature, float noise) {
+    bool equally, int32_t width, float temperature, float noise) {
   std::unique_lock<std::mutex> lock(_mutex);
 
-  // Pause the thread
+  // 探索条件をまとめて変更するため、実行中の探索をいったん止める
   _paused = true;
-  _condition.wait(lock, [this]() { return _runnings == 0; });
+  _stopCondition.wait(lock, [this]() {
+    return _runnings == 0 && _evaluatingNodes.empty();
+  });
 
-  // Change search settings
-  _searchVisits = _root->getVisits();
-  _searchPlayouts = _root->getPlayouts();
+  // 以降の探索で使用する条件を更新する
   _searchEqually = equally;
-  _searchAlgorithm = algorithm;
-  _searchWidth = width;
+  _searchCandidateWidth = width;
   _searchTemperature = temperature;
   _searchNoise = noise;
 
-  // Set to running state
+  // 探索スレッドを動作状態にする
   _stopped = false;
 
-  // Resume the thread
+  // 探索スレッドを再開する
   _paused = false;
-  _condition.notify_all();
+  _searchCondition.notify_one();
 }
 
 /**
- * Waits until the specified number of visits and playouts is reached.
- * @param visits Number of visits
- * @param playouts Number of playouts
- * @param timelimit Time limit
- * @param stop True to stop search
+ * 指定された訪問数とプレイアウト数になるまで待機する。
+ * @param visits 訪問数
+ * @param playouts プレイアウト数
+ * @param timelimit 時間制限
+ * @param stop 探索を停止するならtrue
  */
 void Player::waitEvaluation(int32_t visits, int32_t playouts, float timelimit, bool stop) {
   std::unique_lock<std::mutex> lock(_mutex);
 
-  // Wait until the specified number of visits and playouts is reached
+  // 最初の評価を待機する
+  if (visits > 0 || playouts > 0) {
+    _stopCondition.wait(lock, [this]() {
+      return _root->getVisits() > 0;
+    });
+  }
+
   std::chrono::milliseconds timeout(static_cast<int32_t>(timelimit * 1000.0f));
-  _condition.wait_for(lock, timeout, [this, visits, playouts]() {
-    return _searchVisits >= visits && _searchPlayouts >= playouts;
+
+  // 指定回数に到達するか、時間制限に達するまで待機する
+  _stopCondition.wait_for(lock, timeout, [this, visits, playouts]() {
+    return _root->getVisits() >= visits && _root->getPlayouts() >= playouts;
   });
 
-  // Stop search
+  // 停止状態が要求されている場合は停止フラグを設定する
   _stopped = _stopped || stop;
 }
 
 /**
- * Gets the list of candidate moves.
- * @return List of candidate moves
+ * 候補手の一覧を取得する。
+ * @return 候補手の一覧
  */
 std::vector<Candidate> Player::getCandidates() {
   std::unique_lock<std::mutex> lock(_mutex);
 
-  // Pause the thread
+  // スレッドを一時停止する
   _paused = true;
-  _condition.wait(lock, [this]() { return _runnings == 0; });
+  _stopCondition.wait(lock, [this]() {
+    return _runnings == 0 && _evaluatingNodes.empty();
+  });
 
-  // Set child nodes of the root node as candidate moves
+  // 候補手の一覧を作成する
   std::vector<Candidate> candidates;
 
-  for (Node* node : _root->getChildren()) {
-    candidates.emplace_back(
-        node->getX(), node->getY(), node->getColor(),
-        node->getVisits(), node->getPlayouts(),
-        node->getPolicy(), node->getValue(), node->getMinimax(),
-        node->getVariations());
+  for (MctsNode* node : _root->getChildren()) {
+    candidates.emplace_back(node);
   }
 
-  // If there are no candidate moves, add a move by PolicyNetwork
+  // 候補手がない場合はPolicyNetworkによる着手を追加する
   if (candidates.empty()) {
-    std::pair<int32_t, int32_t> move = _root->getPolicyMove();
+    Move move = _root->getPolicyMove();
 
-    candidates.emplace_back(
-        move.first, move.second, OPPOSITE(_root->getColor()),
-        1, 1, 1.0f, _root->getValue(), _root->getMinimax(),
-        std::vector<std::pair<int32_t, int32_t>>());
+    if (!move.isPass()) {
+      candidates.emplace_back(
+          move, 0, 0, 1.0f, _root->getMctsValue(),
+          std::vector<Move>(), _root->getTerritories());
+    }
   }
 
-  // Resume the thread
   _paused = false;
-  _condition.notify_all();
+  _searchCondition.notify_one();
 
   return candidates;
 }
 
 /**
- * Gets the color of the next stone.
- * @return Stone color
+ * 次の石の色を取得する。
+ * @return 石の色
  */
 int32_t Player::getColor() {
-  return OPPOSITE(_root->getColor());
+  std::lock_guard<std::mutex> lock(_mutex);
+  return _root->getNextColor();
 }
 
 /**
- * Gets the state of the board.
- * @return State of the board
+ * 盤面の状態を取得する。
+ * @return 盤面の状態
  */
 std::vector<int32_t> Player::getBoardState() {
   return _root->getBoardState();
 }
 
 /**
- * Outputs debug information of the search tree.
+ * プレイヤオブジェクトの文字列表現を取得する。
+ * @return プレイヤオブジェクトの文字列表現
  */
-std::string Player::getDebugInfo() {
+std::string Player::toString() {
   std::unique_lock<std::mutex> lock(_mutex);
+  std::stringstream ss;
 
-  // Pause the thread
+  // スレッドを一時停止する
   _paused = true;
-  _condition.wait(lock, [this]() { return _runnings == 0; });
+  _stopCondition.wait(lock, [this]() {
+    return _runnings == 0 && _evaluatingNodes.empty();
+  });
 
-  // Traverse the search tree in depth-first order and create debug information
-  std::vector<std::pair<Node*, std::string>> stack = {{_root, ""}};
-  std::ostringstream output;
+  // 盤面の状態を文字列に変換する
+  ss << "--- Board ---" << std::endl
+     << _root->getBoard() << std::endl;
+
+  // 探索木を深さ優先で辿りながら現在の状態を文字列に変換する
+  std::vector<std::pair<MctsNode*, std::string>> stack = {{_root, ""}};
 
   while (!stack.empty()) {
-    Node* current = stack.back().first;
+    MctsNode* current = stack.back().first;
     std::string prefix = stack.back().second;
     stack.pop_back();
 
-    output << prefix
-           << "Move: (" << current->getX() << ", " << current->getY() << ") "
-           << "Color: " << current->getColor() << " "
-           << "Visits: " << current->getVisits() << " "
-           << "Playouts: " << current->getPlayouts() << " "
-           << "Value: " << current->getValue() << " "
-           << "Minimax: " << current->getMinimax() << " "
-           << "Policy: " << current->getPolicy()
-           << std::endl;
+    ss << prefix
+       << "Move=(" << current->getMove() << ")"
+       << ", Visits=" << current->getVisits()
+       << ", Playouts=" << current->getPlayouts()
+       << ", Value=" << std::setprecision(4) << current->getMctsValue()
+       << ", Policy=" << std::setprecision(4) << current->getProbability()
+       << ", PUCB=" << std::setprecision(4) << current->getPriorityByPUCB(_root->getVisits())
+       << std::endl;
 
-    std::vector<Node*> children = current->getChildren();
+    std::vector<MctsNode*> children = current->getChildren();
+
+    // 深さ優先で出力し、子ノードはインデントで親子関係を表現する
     for (auto it = children.rbegin(); it != children.rend(); ++it) {
       stack.emplace_back(*it, prefix + "  ");
     }
   }
 
-  // Resume the thread
+  // スレッドを再開する
   _paused = false;
-  _condition.notify_all();
+  _searchCondition.notify_one();
 
-  return output.str();
+  return ss.str();
 }
 
 /**
- * Starts the search process.
+ * 探索処理を起動する。
  */
-void Player::_run() {
+void Player::_runSearch() {
+  // 評価ノード数の最大数を計算する
+  const int32_t max_evaluating_size =
+      _processor->getBatchSize() * _processor->getThreadSize() * 10;
+
   while (true) {
     {
       std::unique_lock<std::mutex> lock(_mutex);
-      _condition.wait(lock, [this]() {
-        if (_terminated) {
+
+      // 探索処理が実行可能になるまで待機する
+      // 探索処理が実行可能になる条件は以下のいずれか
+      // - [停止] 終了が要求されていて、実行中のスレッドがなくて、評価中のノードがない
+      // - [手順探索] 終了が要求、探索が停止要求、一時停止要求のいずれもなくて、
+      //   実行スレッド数がスレッドプールのスレッド数未満で、
+      //   評価中のノードの数が最大評価ノード数未満で、探索回数が最大訪問回数未満
+      _searchCondition.wait(lock, [this, max_evaluating_size]() {
+        if (_terminated && _runnings == 0 && _evaluatingNodes.empty()) {
           return true;
         } else if (
-            !_stopped &&
-            !_paused &&
+            !_terminated && !_stopped && !_paused &&
             _runnings < _threadPool.getSize() &&
-            _searchVisits < _maxVisits) {
+            _evaluatingNodes.size() < static_cast<size_t>(max_evaluating_size) &&
+            _root->getVisits() < _maxVisits) {
           return true;
         } else {
           return false;
         }
       });
 
-      if (_terminated) {
+      // 停止条件を満たしているならばループを抜ける
+      if (_terminated && _runnings == 0 && _evaluatingNodes.empty()) {
         break;
       }
 
-      _searchVisits += 1;
+      // そうでない場合は探索処理を実行する
       _runnings += 1;
-      _condition.notify_all();
     }
 
+    // 探索木の展開処理をスレッドプールに登録する
     _threadPool.submit([this]() {
-      int32_t playouts = _evaluate();
-      std::unique_lock<std::mutex> lock(_mutex);
-      _searchPlayouts += playouts;
-      _runnings -= 1;
-      _condition.notify_all();
+      _runExpand();
+
+      {
+        std::unique_lock<std::mutex> lock(_mutex);
+        _runnings -= 1;
+      }
+
+      _searchCondition.notify_one();
+      _updateCondition.notify_one();
+      _stopCondition.notify_all();
     });
   }
 }
 
 /**
- * Executes search.
- * @return Number of search playouts
+ * 探索木を展開する。
  */
-int32_t Player::_evaluate() {
-  std::vector<Node*> nodes = {_root};
+void Player::_runExpand() {
+  // 探索の設定をローカル変数にコピーする
   bool search_equally = _searchEqually;
-  int32_t search_width = _searchWidth;
-  int32_t search_algorithm = _searchAlgorithm;
+  int32_t search_width = _searchCandidateWidth;
   float search_temperature = _searchTemperature;
   float search_noise = _searchNoise;
-  int32_t playouts = 0;
+
+  // ルートノードから探索を開始する
+  // 次に評価するノードを取得しながら探索木を辿る
+  MctsNode* node = nullptr;
+  MctsNode* next_node = _root;
 
   while (true) {
-    NodeResult result = nodes.back()->evaluate(
-        search_equally, search_width, search_algorithm, search_temperature, search_noise);
+    // 次に評価するノードを取得する
+    node = next_node;
+    next_node = node->pickupNextNode(
+        search_equally, search_width, search_temperature, search_noise);
 
-    // Update the evaluation value of the node
-    // If the leaf node is reached (playout count is 1), update the evaluation value
-    // Start updating from the leaf node and update the minimax evaluation value if necessary
-    if (result.getPlayouts() == 1) {
-      bool minimax_update = true;
-
-      for (int32_t i = nodes.size() - 1; i >= 0; i--) {
-        std::vector<Node*> children = nodes[i]->getChildren();
-        int32_t color = OPPOSITE(nodes[i]->getColor());
-        float minimax_value = result.getValue();
-
-        if (!minimax_update) {
-          minimax_value = nodes[i]->getMinimax();
-        } else if (children.size() > 1) {
-          float value = -2.0f;
-
-          for (Node* child : children) {
-            float child_minimax = child->getMinimax() * color;
-
-            if (value < child_minimax) {
-              value = child_minimax;
-            }
-          }
-
-          minimax_value = value * color;
-
-          if (std::fabs(minimax_value - nodes[i]->getMinimax()) < 1e-6) {
-            minimax_update = false;
-          }
-        }
-
-        nodes[i]->updateValue(result.getValue(), minimax_value);
-      }
-    }
-
-    // If only leaf nodes are evaluated and child nodes are created for a leaf node,
-    // cancel the evaluation value registered in the parent node
-    if (_evalLeafOnly && result.getPlayouts() == -1) {
-      for (Node* node : nodes) {
-        node->cancelValue(result.getValue());
-      }
-    }
-
-    // Update the number of playouts for the node
-    for (Node* node : nodes) {
-      node->setPlayouts(node->getPlayouts() + result.getPlayouts());
-    }
-
-    // Update the number of playouts for this search
-    playouts += result.getPlayouts();
-
-    // If a child node exists, set it as the next node
-    if (result.getNode() != nullptr) {
-      nodes.push_back(result.getNode());
-    } else {
+    // 次に評価するノードが存在しない場合は探索を終了する
+    if (next_node == nullptr) {
       break;
     }
 
-    // Reset settings that apply only to the root node
-    search_equally = 0;
+    // 探索の設定を更新する
+    search_equally = false;
     search_width = 0;
-    search_algorithm = SEARCH_PUCB;
     search_temperature = 1.0f;
     search_noise = 0.0f;
   }
 
-  // Return the number of playouts
-  return playouts;
+  // 未評価の場合
+  if (!node->isEvaluated()) {
+    // 盤面評価の推論モデルに評価対象としてノードを登録する
+    _processor->submit(node, [this](MctsNode*) {
+      std::unique_lock<std::mutex> lock(_mutex);
+      _updateCondition.notify_one();
+    });
+  }
+
+  // 評価中のノードの一覧にノードを追加する
+  {
+    std::unique_lock<std::mutex> lock(_mutex);
+    _evaluatingNodes.push(node);
+    _updateCondition.notify_one();
+  }
 }
 
 /**
- * Releases node objects other than the root node.
- * @param node Node object to release
+ * ノードの状態を更新する。
  */
-void Player::_releaseNode(Node* node) {
-  std::vector<Node*> stack = {node};
+void Player::_runUpdate() {
+  while (true) {
+    std::vector<MctsNode*> finished_nodes;
 
-  while (!stack.empty()) {
-    Node* current = stack.back();
-    stack.pop_back();
+    {
+      std::unique_lock<std::mutex> lock(_mutex);
 
-    if (current == _root) {
-      continue;
+      // 更新処理が実行可能になるまで待機する
+      // 更新処理が実行可能になる条件は以下のいずれか
+      // - [停止] 終了が要求されていて、実行中のスレッドがなくて、評価中のノードがない。
+      // - [評価] 評価中のノードがあって、そのノードの評価が完了している
+      _updateCondition.wait(lock, [this]() {
+        if (_terminated && _runnings == 0 && _evaluatingNodes.empty()) {
+          return true;
+        } else if (!_evaluatingNodes.empty() && _evaluatingNodes.front()->isEvaluated()) {
+          return true;
+        } else {
+          return false;
+        }
+      });
+
+      // 停止条件を満たしているならばループを抜ける
+      if (_terminated && _runnings == 0 && _evaluatingNodes.empty()) {
+        break;
+      }
+
+      // 評価済みのノードを取り出す
+      while (!_evaluatingNodes.empty() && _evaluatingNodes.front()->isEvaluated()) {
+        finished_nodes.push_back(_evaluatingNodes.front());
+        _evaluatingNodes.pop();
+      }
     }
 
-    for (Node* child : current->getChildren()) {
-      stack.push_back(child);
+    // 評価済みのノードの統計情報を更新する
+    // 詰み手順が見つかっているノードで評価値をNodeValueに設定する
+    for (MctsNode* node : finished_nodes) {
+      float mcts_value = node->getNodeValue();
+      MctsNode* current_node = node;
+
+      while (current_node != nullptr) {
+        current_node->updateMctsValue(mcts_value);
+        current_node = current_node->getParent();
+      }
     }
 
-    _nodeManager.releaseNode(current);
+    // 探索処理に通知する
+    _searchCondition.notify_one();
+    _stopCondition.notify_all();
   }
 }
 

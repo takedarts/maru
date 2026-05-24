@@ -50,14 +50,8 @@ MODEL_INPUT_SIZE = (MODEL_FEATURES + 1) * MODEL_SIZE * MODEL_SIZE + MODEL_INFOS
 MODEL_INPUT_PACK_SIZE = (MODEL_INPUT_SIZE + 31) // 32 + 1
 # Size of data output by model
 MODEL_OUTPUT_SIZE = MODEL_PREDICTIONS * MODEL_SIZE * MODEL_SIZE + MODEL_VALUES
-
-################################################################
-# Search algorithm settings
-################################################################
-# Search algorithm: UCB
-SEARCH_UCB = 0
-# Search algorithm: PUCB
-SEARCH_PUCB = 1
+# Size of model output mask when embedded as int32
+MODEL_OUTPUT_PACK_SIZE = (MODEL_OUTPUT_SIZE + 31) // 32
 
 ################################################################
 # Default settings
@@ -68,12 +62,14 @@ DEFAULT_SIZE = 19
 DEFAULT_KOMI = 7.5
 # Default maximum visits for MCTS
 DEFAULT_MAX_VISITS = 1_000_000
-# Default constant multiplier for UCB upper confidence bound
-DEFAULT_UCB_CONSTANT = 1.4
 # Initial value applied to PUCB upper confidence bound
 DEFAULT_PUCB_CONSTANT_INIT = 0.8
 # Base value applied to PUCB upper confidence bound
 DEFAULT_PUCB_CONSTANT_BASE = 9000.0
+# Default number of threads per GPU
+DEFAULT_THREADS_PER_GPU = 1
+# Default batch size for board evaluation calculation
+DEFAULT_BATCH_SIZE = 32
 
 ################################################################
 # Logging settings
