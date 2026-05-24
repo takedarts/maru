@@ -26,7 +26,11 @@ def get_default_gpus(
 
     # If GPU ID list is not specified, set the list of available GPU IDs
     if gpus is None:
-        new_gpus = available_gpus
+        # If GPU IDs are available, exclude CPU
+        if max(available_gpus, default=-1) >= 0:
+            new_gpus = [gpu for gpu in available_gpus if gpu >= 0]
+        else:
+            new_gpus = available_gpus
     # Otherwise, exclude unavailable GPU IDs
     else:
         new_gpus = [gpu for gpu in gpus if gpu in available_gpus]
