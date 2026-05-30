@@ -127,8 +127,8 @@ class Candidate(object):
     def __str__(self) -> str:
         return (
             f'Candidate(pos={self.pos}, color={get_color_name(self.color)},'
-            f' visits={self.visits}, playouts={self.playouts},'
-            f' policy={self.policy:.2f}, value={self.value: .3f},'
+            f' visits={self.visits}, playouts={self.playouts}, policy={self.policy:.2f},'
+            f' value={self.value: .3f}, value_lcb={self.value_lcb: .3f},'
             f' win_chance={self.win_chance: .3f}, win_chance_lcb={self.win_chance_lcb: .3f},'
             f' score={self.get_score(): .2f}, variations={self.variations})')
 
