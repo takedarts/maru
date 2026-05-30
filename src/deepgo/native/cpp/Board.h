@@ -200,6 +200,15 @@ class Board {
   std::string toString() const;
 
   /**
+   * Updates the board state.
+   * Updates the area and ladder information.
+   */
+  inline void updateStatus() {
+    _updateArea();
+    _updateShicho();
+  }
+
+  /**
    * Writes the string representation of the board state to an output stream.
    * @param os Output stream
    * @param board Board object

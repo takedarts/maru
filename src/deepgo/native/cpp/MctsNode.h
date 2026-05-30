@@ -3,6 +3,7 @@
 #include <atomic>
 #include <condition_variable>
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <queue>
 #include <set>
@@ -56,13 +57,18 @@ class MctsNode {
 
   /**
    * Gets the next node to evaluate.
+   * Returns this node if there is no next node to evaluate.
+   * Returns nullptr if the search is canceled.
    * @param equally True if search count should be equally distributed
    * @param width Search width
    * @param temperature Temperature parameter for search
    * @param noise Strength of Gumbel noise
+   * @param isCanceled Function that returns true if the search is canceled
    * @return Next node to evaluate
    */
-  MctsNode* pickupNextNode(bool equally, int32_t width, float temperature, float noise);
+  MctsNode* pickupNextNode(
+      bool equally, int32_t width, float temperature, float noise,
+      std::function<bool()> isCanceled);
 
   /**
    * Sets this node as the root node.
@@ -305,7 +311,7 @@ class MctsNode {
   /**
    * Visit count.
    */
-  int32_t _visits;
+  std::atomic<int32_t> _visits;
 
   /**
    * Playout count.

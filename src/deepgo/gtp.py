@@ -141,8 +141,8 @@ def lz_candidate_to_string(
     candidate_text = (
         f'info move {gtp_position_to_string(candidate.pos, width, height)}'
         f' visits {candidate.visits}'
-        f' winrate {int(candidate.get_win_chance() * 10000)}'
-        f' lcb {int(candidate.get_win_chance_lcb() * 10000)}'
+        f' winrate {int(candidate.win_chance * 10000)}'
+        f' lcb {int(candidate.win_chance_lcb * 10000)}'
         f' prior {int(candidate.policy * 10000)}'
         f' order {order}')
 
@@ -194,8 +194,8 @@ def kata_candidate_to_string(
     candidate_text = (
         f'info move {gtp_position_to_string(candidate.pos, width, height)}'
         f' visits {candidate.visits}'
-        f' winrate {candidate.get_win_chance():.4f}'
-        f' lcb {candidate.get_win_chance_lcb():.4f}'
+        f' winrate {candidate.win_chance:.4f}'
+        f' lcb {candidate.win_chance_lcb:.4f}'
         f' prior {candidate.policy:.4f}'
         f' order {order}')
 
@@ -230,7 +230,7 @@ def kata_candidates_to_string(
         for o, c in enumerate(candidates))
 
     # Create rootInfo string
-    win_chance = candidates[0].get_win_chance()
+    win_chance = candidates[0].win_chance
     visits = sum(c.visits for c in candidates)
     score = score if candidates[0].color == BLACK else -score
     root_text = (f'rootInfo winrate {win_chance:.4f} visits {visits} scoreLead {score:.1f}')
@@ -268,7 +268,7 @@ def cgos_candidates_to_string(
     root_values: Dict[str, Any] = {}
 
     # Set rootInfo values
-    root_values['winrate'] = candidates[0].get_win_chance()
+    root_values['winrate'] = candidates[0].win_chance
     root_values['score'] = score if candidates[0].color == BLACK else -score
     root_values['visits'] = sum(c.visits for c in candidates)
 
@@ -281,7 +281,7 @@ def cgos_candidates_to_string(
 
         move_values.append({
             'move': gtp_position_to_string(candidate.pos, width, height),
-            'winrate': candidate.get_win_chance(),
+            'winrate': candidate.win_chance,
             'prior': candidate.policy,
             'pv': variations,
             'visits': candidate.visits,
@@ -662,7 +662,7 @@ class GTPEngine(object):
         pos = candidates[0].pos
         score = candidates[0].get_score(self.player.get_board()) - self.komi
         territories = candidates[0].territories
-        win_chance = candidates[0].get_win_chance()
+        win_chance = candidates[0].win_chance
 
         # In Japanese rule, if all candidate moves have the same predicted territory, pass as move
         if self.rule == RULE_JP and len(candidates) > 1:
@@ -688,7 +688,7 @@ class GTPEngine(object):
                 pos = PASS
                 score = candidate_pass.get_score(board) - self.komi
                 territories = candidate_pass.territories
-                win_chance = candidate_pass.get_win_chance()
+                win_chance = candidate_pass.win_chance
 
         # In Chinese rule, if passing, prioritize capturing opponent stones in territory
         if self.rule == RULE_CH and pos == PASS:

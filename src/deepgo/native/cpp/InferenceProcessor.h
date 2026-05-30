@@ -20,6 +20,10 @@ namespace deepgo {
  * A class that manages inference execution.
  */
 class InferenceProcessor {
+ private:
+  // Make InferenceExecutor a friend class to access the inference waiting queue
+  friend class InferenceExecutor;
+
  public:
   /**
    * Creates an inference processor object.
@@ -34,6 +38,11 @@ class InferenceProcessor {
   InferenceProcessor(
       std::string model, std::vector<int32_t> gpus, bool fp16, bool deterministic,
       int32_t batchSize, int32_t threadsPerGpu, int32_t cacheSize);
+
+  /**
+   * Destroys the inference processor object.
+   */
+  virtual ~InferenceProcessor();
 
   /**
    * Submits an inference execution request.
@@ -77,21 +86,45 @@ class InferenceProcessor {
     return _batchSize;
   }
 
+  /**
+   * Gets the inference efficiency.
+   * @return Inference efficiency
+   */
+  inline float getEfficiency() const {
+    float total_efficiency = 0.0f;
+
+    for (const auto& executor : _executors) {
+      total_efficiency += executor->getEfficiency();
+    }
+
+    return total_efficiency / static_cast<float>(_executors.size());
+  }
+
  private:
   /**
-   * Mutex for synchronization.
+   * Mutex for synchronizing the cache.
    */
-  std::mutex _mutex;
+  std::mutex _cacheMutex;
+
+  /**
+   * Mutex for synchronizing the queue.
+   */
+  std::mutex _queueMutex;
+
+  /**
+   * Condition variable for waiting on the queue.
+   */
+  std::condition_variable _queueCondition;
+
+  /**
+   * Inference waiting queue.
+   */
+  std::queue<std::pair<MctsNode*, InferenceExecutorCallback>> _queue;
 
   /**
    * Inference executor objects.
    */
   std::vector<std::unique_ptr<InferenceExecutor>> _executors;
-
-  /**
-   * Number of inference threads.
-   */
-  int32_t _threadSize;
 
   /**
    * Cache size.
@@ -107,6 +140,16 @@ class InferenceProcessor {
    * Inference result cache.
    */
   std::map<BoardHash, InferenceResult> _cacheResults;
+
+  /**
+   * True if the processor is terminated.
+   */
+  bool _terminated;
+
+  /**
+   * Number of inference threads.
+   */
+  int32_t _threadSize;
 
   /**
    * Batch size.

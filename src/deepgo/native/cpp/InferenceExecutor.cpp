@@ -3,6 +3,7 @@
 #include <algorithm>
 
 #include "Config.h"
+#include "InferenceProcessor.h"
 #include "MctsNode.h"
 #include "Move.h"
 
@@ -25,7 +26,8 @@ static int32_t getPolicyIndex(const Board* board, int32_t x, int32_t y) {
 
 /**
  * Creates an inference executor object.
- * @param model Model file
+ * @param processor Inference management object
+ * @param file Model file
  * @param gpu GPU number
  * @param fp16 true to use half precision
  * @param deterministic true to run deterministically
@@ -33,22 +35,21 @@ static int32_t getPolicyIndex(const Board* board, int32_t x, int32_t y) {
  * @param threads Number of execution threads
  */
 InferenceExecutor::InferenceExecutor(
-    std::string model, int32_t gpu, bool fp16, bool deterministic,
-    int32_t batchSize, int32_t threads)
-    : _modelMutex(),
-      _threadMutex(),
-      _condition(),
+    InferenceProcessor* processor, std::string file, int32_t gpu, bool fp16,
+    bool deterministic, int32_t batchSize, int32_t threads)
+    : _mutex(),
+      _processor(processor),
       _model(nullptr),
-      _modelFile(model),
+      _file(file),
       _gpu(gpu),
       _fp16(fp16),
       _deterministic(deterministic),
       _batchSize(batchSize),
       _threads(),
-      _terminated(false),
-      _queue() {
+      _efficiencies(threads) {
   for (int32_t i = 0; i < threads; i++) {
-    _threads.emplace_back(&InferenceExecutor::_run, this);
+    _threads.emplace_back(&InferenceExecutor::_run, this, i);
+    _efficiencies[i].store(0.0f, std::memory_order_relaxed);
   }
 }
 
@@ -56,14 +57,6 @@ InferenceExecutor::InferenceExecutor(
  * Destroys the inference executor object.
  */
 InferenceExecutor::~InferenceExecutor() {
-  // Terminates the inference processing
-  {
-    std::lock_guard<std::mutex> lock(_threadMutex);
-    _terminated = true;
-  }
-
-  _condition.notify_all();
-
   // Waits for threads to finish
   for (auto& thread : _threads) {
     thread.join();
@@ -71,24 +64,13 @@ InferenceExecutor::~InferenceExecutor() {
 
   // Destroys the inference model object
   {
-    std::lock_guard<std::mutex> lock(_modelMutex);
+    std::lock_guard<std::mutex> lock(_mutex);
 
     if (_model != nullptr) {
       delete _model;
       _model = nullptr;
     }
   }
-}
-
-/**
- * Submits an inference execution request.
- * @param node Node to perform inference on
- * @param callback Callback invoked when inference completes
- */
-void InferenceExecutor::submit(MctsNode* node, InferenceExecutorCallback callback) {
-  std::lock_guard<std::mutex> lock(_threadMutex);
-  _queue.emplace_back(node, callback);
-  _condition.notify_one();
 }
 
 /**
@@ -106,18 +88,18 @@ void InferenceExecutor::execute(int32_t* inputs, float* outputs, int32_t size) {
   InferenceModel* model = nullptr;
 
   {
-    std::lock_guard<std::mutex> lock(_modelMutex);
+    std::lock_guard<std::mutex> lock(_mutex);
 
     // The model is lazily loaded on the first execution and shared for subsequent inference
     if (_model == nullptr) {
-      _model = new InferenceModel(_modelFile, _gpu, _fp16, _deterministic);
+      _model = new InferenceModel(_file, _gpu, _fp16, _deterministic);
     }
 
     model = _model;
   }
 
   // When running on non-CPU devices, executes inference with the specified batch size
-  if (!_model->isCpu()) {
+  if (!_model->isCpu() && size < _batchSize) {
     std::vector<int32_t> input_buffer(_batchSize * MODEL_INPUT_PACK_SIZE);
     std::vector<float> output_buffer(_batchSize * MODEL_OUTPUT_SIZE);
 
@@ -130,18 +112,10 @@ void InferenceExecutor::execute(int32_t* inputs, float* outputs, int32_t size) {
 }
 
 /**
- * Gets the number of pending inference requests.
- * @return Number of pending inference requests
- */
-int32_t InferenceExecutor::getQueueSize() {
-  std::lock_guard<std::mutex> lock(_threadMutex);
-  return static_cast<int32_t>(_queue.size());
-}
-
-/**
  * Processing executed in the inference thread.
+ * @param threadIndex Thread index
  */
-void InferenceExecutor::_run() {
+void InferenceExecutor::_run(int32_t threadIndex) {
   // Sets the device to use
   torch::DeviceGuard device_guard(InferenceModel::getDevice(_gpu));
 
@@ -151,10 +125,10 @@ void InferenceExecutor::_run() {
 
   // Creates the model object if it has not been created
   {
-    std::lock_guard<std::mutex> lock(_modelMutex);
+    std::lock_guard<std::mutex> lock(_mutex);
 
     if (_model == nullptr) {
-      _model = new InferenceModel(_modelFile, _gpu, _fp16, _deterministic);
+      _model = new InferenceModel(_file, _gpu, _fp16, _deterministic);
     }
   }
 
@@ -166,15 +140,15 @@ void InferenceExecutor::_run() {
 
     {
       // Acquires a lock for synchronization
-      std::unique_lock<std::mutex> lock(_threadMutex);
+      std::unique_lock<std::mutex> lock(_processor->_queueMutex);
 
       // Waits if there are no pending inference requests
       // [Stop] Ends waiting if a stop request exists and the queue is empty
       // [Inference] Ends waiting if there are pending inference requests
-      _condition.wait(lock, [this] {
-        if (_terminated && _queue.empty()) {
+      _processor->_queueCondition.wait(lock, [this] {
+        if (_processor->_terminated && _processor->_queue.empty()) {
           return true;
-        } else if (!_queue.empty()) {
+        } else if (!_processor->_queue.empty()) {
           return true;
         } else {
           return false;
@@ -182,15 +156,18 @@ void InferenceExecutor::_run() {
       });
 
       // Breaks out of the loop if inference should be terminated
-      if (_terminated && _queue.empty()) {
+      if (_processor->_terminated && _processor->_queue.empty()) {
         break;
       }
 
       // Pops up to the maximum batch size from the queue to form an inference batch
-      while (!_queue.empty() && batch.size() < static_cast<size_t>(_batchSize)) {
-        batch.push_back(_queue.back());
-        _queue.pop_back();
+      while (!_processor->_queue.empty() && batch.size() < static_cast<size_t>(_batchSize)) {
+        batch.push_back(_processor->_queue.front());
+        _processor->_queue.pop();
       }
+
+      // Notifies other threads that the queue state has changed
+      _processor->_queueCondition.notify_all();
     }
 
     // Initializes the input data buffer
@@ -212,6 +189,13 @@ void InferenceExecutor::_run() {
     int32_t batch_size = (_model->isCpu()) ? static_cast<int32_t>(batch.size()) : _batchSize;
 
     _model->forward(input_buffer.data(), output_buffer.data(), batch_size);
+
+    // Calculates and stores the inference efficiency
+    float efficiency = static_cast<float>(batch.size()) / static_cast<float>(batch_size);
+    float old_efficiency = _efficiencies[threadIndex].load(std::memory_order_relaxed);
+    float new_efficiency = old_efficiency * 0.99f + efficiency * 0.01f;
+
+    _efficiencies[threadIndex].store(new_efficiency, std::memory_order_relaxed);
 
     // Applies inference results to nodes and invokes the callback functions
     for (size_t i = 0; i < batch.size(); i++) {

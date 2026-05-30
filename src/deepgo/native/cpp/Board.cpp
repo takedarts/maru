@@ -796,7 +796,7 @@ std::string Board::toString() const {
   for (int32_t x = 0; x < _width - 2; x++) {
     ss << "--";
   }
-  ss << "-+" << std::endl;
+  ss << "-+";
 
   return ss.str();
 }

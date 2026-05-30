@@ -131,3 +131,10 @@ cdef class NativeInferenceProcessor:
         self.processor.execute(in_data, out_data, size)
 
         return outputs
+
+    def get_efficiency(self) -> float:
+        '''Get the efficiency of inference.
+        Returns:
+            float: Inference efficiency
+        '''
+        return self.processor.getEfficiency()

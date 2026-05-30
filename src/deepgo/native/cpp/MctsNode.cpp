@@ -96,60 +96,71 @@ void MctsNode::applyInferenceResult(const InferenceResult& result) {
 }
 
 /**
- * Returns the next node to evaluate.
- * @param equally True to equalize the visit count
+ * Gets the next node to evaluate.
+ * Returns this node if there is no next node to evaluate.
+ * Returns nullptr if the search is canceled.
+ * @param equally True if search count should be equally distributed
  * @param width Search width
  * @param temperature Temperature parameter for search
- * @param noise Gumbel noise strength
+ * @param noise Strength of Gumbel noise
+ * @param isCanceled Function that returns true if the search is canceled
  * @return Next node to evaluate
  */
-MctsNode* MctsNode::pickupNextNode(bool equally, int32_t width, float temperature, float noise) {
+MctsNode* MctsNode::pickupNextNode(
+    bool equally, int32_t width, float temperature, float noise,
+    std::function<bool()> isCanceled) {
   std::unique_lock<std::shared_mutex> lock(_mutex);
-
-  // Increment the visit count for this node
-  _visits += 1;
 
   // If this node is being evaluated, wait for evaluation to complete
   if (_evaluating) {
     _condition.wait(lock, [this] { return !_evaluating; });
   }
 
-  // If already evaluated, return the next node to evaluate
+  // If this node has already been evaluated, find the next node to evaluate
   if (_evaluated) {
-    // If the next node to evaluate exists, return the next node to evaluate
-    // Playout count is incremented by the leaf node
+    // If the search is canceled, return nullptr
+    if (isCanceled()) {
+      return nullptr;
+    }
+
+    // If there is a next node to evaluate, return it
     if (!_policies.empty()) {
       return _pickupNextNode(equally, width, temperature, noise);
     }
-    // Otherwise, increment the playout count only and return this node
-    else {
-      MctsNode* current_node = this;
 
-      while (current_node != nullptr) {
-        current_node->_playouts.fetch_add(1, std::memory_order_relaxed);
-        current_node = current_node->_parent;
-      }
+    // This node is a leaf node, so increment visit count and playout count
+    MctsNode* current_node = this;
 
-      return nullptr;
+    while (current_node != nullptr) {
+      current_node->_playouts.fetch_add(1, std::memory_order_relaxed);
+      current_node->_visits.fetch_add(1, std::memory_order_relaxed);
+      current_node = current_node->_parent;
     }
-  }
 
-  // Reached an unevaluated node, so increment the playout count
-  _playouts.fetch_add(1, std::memory_order_relaxed);
-
-  if (!_firstChild) {
-    MctsNode* parent = _parent;
-
-    while (parent) {
-      parent->_playouts.fetch_add(1, std::memory_order_relaxed);
-      parent = parent->_parent;
-    }
+    return this;
   }
 
   // Mark this node as being evaluated
   _evaluating = true;
 
-  return nullptr;
+  // This node is a leaf node, so increment visit count and playout count
+  _visits.fetch_add(1, std::memory_order_relaxed);
+  _playouts.fetch_add(1, std::memory_order_relaxed);
+
+  // Increment visit count and playout count of parent nodes
+  MctsNode* current_node = _parent;
+
+  while (current_node != nullptr) {
+    current_node->_visits.fetch_add(1, std::memory_order_relaxed);
+
+    if (!_firstChild) {
+      current_node->_playouts.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    current_node = current_node->_parent;
+  }
+
+  return this;
 }
 
 /**
@@ -283,6 +294,7 @@ MctsNode* MctsNode::getChild(Move move) {
   node->_resetNode();
   node->_board.copyFrom(&_board);
   node->_captured = std::max(node->_board.play(move), 0);
+  node->_board.updateStatus();
   node->_move = move;
   node->_probability = 0.0f;
 
@@ -304,8 +316,7 @@ void MctsNode::removeChild(Move move) {
  * @return Visit count
  */
 int32_t MctsNode::getVisits() {
-  std::shared_lock<std::shared_mutex> lock(_mutex);
-  return _visits;
+  return _visits.load(std::memory_order_relaxed);
 }
 
 /**
@@ -347,6 +358,8 @@ float MctsNode::getMctsValueLCB() {
  */
 float MctsNode::getPriorityByPUCB(int32_t totalVisits) {
   std::shared_lock<std::shared_mutex> lock(_mutex);
+
+  int32_t visits = _visits.load(std::memory_order_relaxed);
   float pucb_constant_base = _manager->getParameter().getPucbConstantBase();
   float pucb_constant_init = _manager->getParameter().getPucbConstantInit();
 
@@ -354,7 +367,7 @@ float MctsNode::getPriorityByPUCB(int32_t totalVisits) {
   float value = _mctsValue.getValue(_nodeValue) * _move.getColor();
   float c_pucb_inc = std::log((1 + totalVisits + pucb_constant_base) / pucb_constant_base);
   float c_pucb = pucb_constant_init * (1.0f + c_pucb_inc);
-  float ucb = _probability * std::sqrt(static_cast<float>(totalVisits)) / (1 + _visits);
+  float ucb = _probability * std::sqrt(static_cast<float>(totalVisits)) / (1 + visits);
 
   return value + c_pucb * ucb;
 }
@@ -476,7 +489,7 @@ void MctsNode::_resetNode() {
   _policies.clear();
   _parent = nullptr;
   _children.clear();
-  _visits = 0;
+  _visits.store(0, std::memory_order_relaxed);
   _playouts.store(0, std::memory_order_relaxed);
   _mctsValue.reset();
   _waitingPolicies = std::queue<Policy>();
@@ -592,6 +605,7 @@ MctsNode* MctsNode::_pickupNextNode(bool equally, int32_t width, float temperatu
       node->_resetNode();
       node->_board.copyFrom(&_board);
       node->_captured = std::max(node->_board.play(policy.getMove()), 0);
+      node->_board.updateStatus();
       node->_move = policy.getMove();
       node->_probability = policy.getProbability();
       node->_nodeValue = _move.getColor();
@@ -612,7 +626,7 @@ MctsNode* MctsNode::_pickupNextNode(bool equally, int32_t width, float temperatu
   }
 
   if (children.empty()) {
-    return nullptr;
+    return this;
   }
 
   // If a search width is specified, limit the number of child nodes to search
@@ -625,8 +639,9 @@ MctsNode* MctsNode::_pickupNextNode(bool equally, int32_t width, float temperatu
   }
 
   // Return the node with the highest priority as the next search target
-  MctsNode* max_node = nullptr;
+  int32_t total_visits = _visits.load(std::memory_order_relaxed);
   float max_priority = -std::numeric_limits<float>::infinity();
+  MctsNode* max_node = nullptr;
 
   for (std::pair<MctsNode*, float> child : children) {
     float priority;
@@ -644,7 +659,7 @@ MctsNode* MctsNode::_pickupNextNode(bool equally, int32_t width, float temperatu
     }
     // Otherwise, calculate priority based on PUCB
     else {
-      priority = child.first->getPriorityByPUCB(_visits);
+      priority = child.first->getPriorityByPUCB(total_visits);
     }
 
     // Keep the node with the highest priority

@@ -65,7 +65,13 @@ cdef class NativePlayer:
         Returns:
             int: Number of captured stones
         '''
-        return self.player.play(Move(pos[0], pos[1], color))
+        cdef Move move = Move(pos[0], pos[1], color)
+        cdef int32_t captured
+
+        with nogil:
+            captured = self.player.play(move)
+
+        return captured
 
     def get_pass(
         self,
@@ -118,7 +124,14 @@ cdef class NativePlayer:
             temperature (float): Temperature parameter for search
             noise (float): Strength of Gumbel noise for search
         '''
-        self.player.startEvaluation(equally, candidate_width, temperature, noise)
+        cdef bool equally_bool = equally
+        cdef int32_t candidate_width_int = candidate_width
+        cdef float temperature_float = temperature
+        cdef float noise_float = noise
+
+        with nogil:
+            self.player.startEvaluation(
+                equally_bool, candidate_width_int, temperature_float, noise_float)
 
     def wait_evaluation(self, visits: int, playouts: int, timelimit: float, stop: bool) -> None:
         '''Wait until the specified number of visits and playouts is reached.
@@ -149,7 +162,9 @@ cdef class NativePlayer:
         cdef vector[Candidate] candidates
         cdef np.ndarray[np.float32_t, ndim=1, mode='c'] territories
 
-        candidates = self.player.getCandidates()
+        with nogil:
+            candidates = self.player.getCandidates()
+
         x_begin = (MODEL_SIZE - self.width) // 2
         x_end = x_begin + self.width
         y_begin = (MODEL_SIZE - self.height) // 2

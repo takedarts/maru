@@ -40,3 +40,10 @@ class Processor(object):
             inputs (np.ndarray): Input data
         '''
         return self.native.execute(inputs)
+
+    def get_efficiency(self) -> float:
+        '''Get the efficiency of the inference.
+        Returns:
+            float: Efficiency of the inference
+        '''
+        return self.native.get_efficiency()

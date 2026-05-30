@@ -67,7 +67,7 @@ DEFAULT_PUCB_CONSTANT_INIT = 0.8
 # Base value applied to PUCB upper confidence bound
 DEFAULT_PUCB_CONSTANT_BASE = 9000.0
 # Default number of threads per GPU
-DEFAULT_THREADS_PER_GPU = 1
+DEFAULT_THREADS_PER_GPU = 2
 # Default batch size for board evaluation calculation
 DEFAULT_BATCH_SIZE = 32
 

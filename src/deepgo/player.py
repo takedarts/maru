@@ -104,21 +104,10 @@ class Candidate(object):
         if math .isnan(self.value):
             raise GoException('Value is NaN')
 
+        self.win_chance = self.value * self.color * 0.5 + 0.5
+
         self.value_lcb = value - color * 1.96 * 0.5 / (visits + 1)**0.5
-
-    def get_win_chance(self) -> float:
-        '''Get the win rate.
-        Returns:
-            float: Win rate
-        '''
-        return self.value * self.color * 0.5 + 0.5
-
-    def get_win_chance_lcb(self) -> float:
-        '''Get the lower bound of the win rate.
-        Returns:
-            float: Lower bound of the win rate
-        '''
-        return self.value_lcb * self.color * 0.5 + 0.5
+        self.win_chance_lcb = self.value_lcb * self.color * 0.5 + 0.5
 
     def get_score(self, board: Board | None = None) -> float:
         '''Get the score of the candidate move.
@@ -138,9 +127,10 @@ class Candidate(object):
     def __str__(self) -> str:
         return (
             f'Candidate(pos={self.pos}, color={get_color_name(self.color)},'
-            f' visits={self.visits}, playouts={self.playouts}, policy={self.policy:.2f},'
-            f' value={self.value:.3f}, value_lcb={self.value_lcb:.3f}, score={self.get_score():.2f},'
-            f' variations={self.variations})')
+            f' visits={self.visits}, playouts={self.playouts},'
+            f' policy={self.policy:.2f}, value={self.value: .3f},'
+            f' win_chance={self.win_chance: .3f}, win_chance_lcb={self.win_chance_lcb: .3f},'
+            f' score={self.get_score(): .2f}, variations={self.variations})')
 
     def __repr__(self) -> str:
         return str(self)
@@ -325,11 +315,11 @@ class Player(object):
         candidates = [Candidate(*c) for c in self.native.get_candidates()]
 
         # Get the maximum expected win rate
-        max_win_chance = max(c.get_win_chance() for c in candidates)
+        max_win_chance = max(c.win_chance for c in candidates)
 
         # Exclude candidate moves with expected win rate less than max_win_chance - delta
         candidates = [
-            c for c in candidates if c.get_win_chance() >= max_win_chance - delta]
+            c for c in candidates if c.win_chance >= max_win_chance - delta]
 
         # Convert policy values to selection probabilities
         probs = [c.policy**(1 / max(temperature, 1e-3)) for c in candidates]
@@ -392,7 +382,7 @@ class Player(object):
         if criterion == 'visits':
             candidates.sort(key=lambda cand: cand.visits, reverse=True)
         else:
-            candidates.sort(key=lambda cand: cand.get_win_chance_lcb(), reverse=True)
+            candidates.sort(key=lambda cand: cand.win_chance_lcb, reverse=True)
 
         # Output log
         if LOGGER.isEnabledFor(logging.DEBUG):

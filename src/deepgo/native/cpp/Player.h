@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <condition_variable>
 #include <cstdint>
 #include <mutex>
@@ -199,6 +200,11 @@ class Player {
    * true if search has terminated.
    */
   bool _terminated;
+
+  /**
+   * true if search is canceled.
+   */
+  std::atomic<bool> _canceled;
 
   /**
    * Nodes awaiting evaluation.

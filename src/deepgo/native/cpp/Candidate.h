@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cmath>
 #include <cstdint>
 #include <ostream>
 #include <vector>
@@ -112,6 +113,30 @@ class Candidate {
    */
   inline void getTerritories(float* territories) const {
     std::copy(std::begin(_territories), std::end(_territories), territories);
+  }
+
+  /**
+   * Returns the lower bound of the confidence interval for the evaluation value.
+   * @return lower bound of the confidence interval for the evaluation value
+   */
+  inline float getValueLCB() const {
+    return _value - _move.getColor() * 1.96f * 0.5f / std::sqrt(_visits + 1);
+  }
+
+  /**
+   * Returns the predicted win rate.
+   * @return predicted win rate
+   */
+  inline float getWinChance() const {
+    return _value * _move.getColor() * 0.5f + 0.5f;
+  }
+
+  /**
+   * Returns the lower bound of the confidence interval for the predicted win rate.
+   * @return lower bound of the confidence interval for the predicted win rate
+   */
+  inline float getWinChanceLCB() const {
+    return getValueLCB() * _move.getColor() * 0.5f + 0.5f;
   }
 
   /**

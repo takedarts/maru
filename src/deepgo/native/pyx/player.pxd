@@ -14,12 +14,12 @@ cdef extern from "cpp/Player.h" namespace "deepgo":
             int32_t width, int32_t height, float komi, int32_t rule, bool superko,
             float pucbConstantInit, float pucbConstantBase) except +
         void initialize()
-        int32_t play(Move move)
+        int32_t play(Move move) nogil
         vector[Candidate] getPass() nogil
         void startEvaluation(
-            bool equally, int32_t candidateWidth, float temperature, float noise)
+            bool equally, int32_t candidateWidth, float temperature, float noise) nogil
         void waitEvaluation(int32_t visits, int32_t playouts, float timeout, bool stop) nogil
-        vector[Candidate] getCandidates()
+        vector[Candidate] getCandidates() nogil
         int32_t getColor()
         vector[int32_t] getBoardState()
         string toString()

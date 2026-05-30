@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <condition_variable>
 #include <cstdint>
 #include <functional>
@@ -14,6 +15,7 @@
 namespace deepgo {
 
 class MctsNode;
+class InferenceProcessor;
 
 using InferenceExecutorCallback =
     std::function<void(MctsNode*, const InferenceResult&)>;
@@ -25,7 +27,8 @@ class InferenceExecutor {
  public:
   /**
    * Creates an inference executor object.
-   * @param model Model file
+   * @param processor Inference management object
+   * @param file Model file
    * @param gpu GPU number
    * @param fp16 true to use half precision
    * @param deterministic true to run deterministically
@@ -33,20 +36,13 @@ class InferenceExecutor {
    * @param threads Number of execution threads
    */
   InferenceExecutor(
-      std::string model, int32_t gpu, bool fp16, bool deterministic,
-      int32_t batchSize, int32_t threads);
+      InferenceProcessor* processor, std::string file, int32_t gpu, bool fp16,
+      bool deterministic, int32_t batchSize, int32_t threads);
 
   /**
    * Destroys the inference executor object.
    */
   virtual ~InferenceExecutor();
-
-  /**
-   * Submits an inference execution request.
-   * @param node Node to perform inference on
-   * @param callback Callback invoked when inference completes
-   */
-  void submit(MctsNode* node, InferenceExecutorCallback callback);
 
   /**
    * Executes inference synchronously.
@@ -57,26 +53,29 @@ class InferenceExecutor {
   void execute(int32_t* inputs, float* outputs, int32_t size);
 
   /**
-   * Gets the number of pending inference requests.
-   * @return Number of pending inference requests
+   * Gets the inference efficiency.
+   * @return The inference efficiency
    */
-  int32_t getQueueSize();
+  inline float getEfficiency() const {
+    float total_efficiency = 0.0f;
+
+    for (const auto& efficiency : _efficiencies) {
+      total_efficiency += efficiency.load(std::memory_order_relaxed);
+    }
+
+    return total_efficiency / static_cast<float>(_efficiencies.size());
+  }
 
  private:
   /**
    * Mutex for model synchronization.
    */
-  std::mutex _modelMutex;
+  std::mutex _mutex;
 
   /**
-   * Mutex for thread synchronization.
+   * Inference management object.
    */
-  std::mutex _threadMutex;
-
-  /**
-   * Condition variable.
-   */
-  std::condition_variable _condition;
+  InferenceProcessor* _processor;
 
   /**
    * Inference model.
@@ -86,7 +85,7 @@ class InferenceExecutor {
   /**
    * Model file.
    */
-  std::string _modelFile;
+  std::string _file;
 
   /**
    * GPU number.
@@ -114,19 +113,15 @@ class InferenceExecutor {
   std::vector<std::thread> _threads;
 
   /**
-   * true if terminating.
+   * Inference efficiencies.
    */
-  bool _terminated;
-
-  /**
-   * Queue of pending inference requests.
-   */
-  std::vector<std::pair<MctsNode*, InferenceExecutorCallback>> _queue;
+  std::vector<std::atomic<float>> _efficiencies;
 
   /**
    * Processing executed in the inference thread.
+   * @param threadIndex Thread index
    */
-  void _run();
+  void _run(int32_t threadIndex);
 };
 
 }  // namespace deepgo
