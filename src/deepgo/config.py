@@ -63,9 +63,9 @@ DEFAULT_KOMI = 7.5
 # Default maximum visits for MCTS
 DEFAULT_MAX_VISITS = 1_000_000
 # Initial value applied to PUCB upper confidence bound
-DEFAULT_PUCB_CONSTANT_INIT = 0.8
+DEFAULT_PUCB_CONSTANT_INIT = 0.6
 # Base value applied to PUCB upper confidence bound
-DEFAULT_PUCB_CONSTANT_BASE = 9000.0
+DEFAULT_PUCB_CONSTANT_BASE = 1600.0
 # Default number of threads per GPU
 DEFAULT_THREADS_PER_GPU = 2
 # Default batch size for board evaluation calculation

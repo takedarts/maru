@@ -53,17 +53,17 @@ class InferenceExecutor {
   void execute(int32_t* inputs, float* outputs, int32_t size);
 
   /**
-   * Gets the inference efficiency.
-   * @return The inference efficiency
+   * Gets the batch fill rate.
+   * @return The batch fill rate
    */
-  inline float getEfficiency() const {
-    float total_efficiency = 0.0f;
+  inline float getBatchFillRate() const {
+    float total_fill_rate = 0.0f;
 
-    for (const auto& efficiency : _efficiencies) {
-      total_efficiency += efficiency.load(std::memory_order_relaxed);
+    for (const auto& fill_rate : _batchFillRates) {
+      total_fill_rate += fill_rate.load(std::memory_order_relaxed);
     }
 
-    return total_efficiency / static_cast<float>(_efficiencies.size());
+    return total_fill_rate / static_cast<float>(_batchFillRates.size());
   }
 
  private:
@@ -113,9 +113,9 @@ class InferenceExecutor {
   std::vector<std::thread> _threads;
 
   /**
-   * Inference efficiencies.
+   * Variable storing the ratio of inference requests included in the batch.
    */
-  std::vector<std::atomic<float>> _efficiencies;
+  std::vector<std::atomic<float>> _batchFillRates;
 
   /**
    * Processing executed in the inference thread.

@@ -6,7 +6,7 @@ from libcpp.vector cimport vector
 import numpy
 cimport numpy
 
-from deepgo.config import MODEL_OUTPUT_PACK_SIZE, MODEL_OUTPUT_SIZE
+from deepgo.config import MODEL_OUTPUT_SIZE
 from pyx.inference cimport InferenceModel, InferenceProcessor
 
 
@@ -132,9 +132,16 @@ cdef class NativeInferenceProcessor:
 
         return outputs
 
-    def get_efficiency(self) -> float:
-        '''Get the efficiency of inference.
+    def get_batch_fill_rate(self) -> float:
+        '''Get the ratio of inference requests included in the batch.
         Returns:
-            float: Inference efficiency
+            float: Ratio of inference requests included in the batch
         '''
-        return self.processor.getEfficiency()
+        return self.processor.getBatchFillRate()
+
+    def get_cache_hit_rate(self) -> float:
+        '''Get the cache hit rate of inference.
+        Returns:
+            float: Cache hit rate of inference
+        '''
+        return self.processor.getCacheHitRate()

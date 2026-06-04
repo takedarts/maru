@@ -29,7 +29,8 @@ InferenceProcessor::InferenceProcessor(
       _cacheResults(),
       _terminated(false),
       _threadSize(static_cast<int32_t>(gpus.size()) * threadsPerGpu),
-      _batchSize(batchSize) {
+      _batchSize(batchSize),
+      _cacheHitRate(0.0f) {
   for (int32_t gpu : gpus) {
     _executors.emplace_back(std::make_unique<InferenceExecutor>(
         this, model, gpu, fp16, deterministic, batchSize, threadsPerGpu));
@@ -76,6 +77,13 @@ void InferenceProcessor::submit(MctsNode* node, std::function<void(MctsNode*)> c
       cached_result = it->second;
       cached_result_found = true;
     }
+
+    // Updates the cache hit rate
+    float hit_rate_increment = cached_result_found ? 1.0f : 0.0f;
+    float old_hit_rate = _cacheHitRate.load(std::memory_order_relaxed);
+    float new_hit_rate = old_hit_rate * 0.99f + hit_rate_increment * 0.01f;
+
+    _cacheHitRate.store(new_hit_rate, std::memory_order_relaxed);
   }
 
   // If a cached inference result was found,

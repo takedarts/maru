@@ -112,19 +112,24 @@ class Player {
   std::mutex _mutex;
 
   /**
-   * Search condition variable.
+   * Condition variable to trigger search.
    */
   std::condition_variable _searchCondition;
 
   /**
-   * Update condition variable.
+   * Condition variable to trigger node update processing.
    */
   std::condition_variable _updateCondition;
 
   /**
-   * Stop-wait condition variable.
+   * Condition variable to wait for search termination.
    */
   std::condition_variable _stopCondition;
+
+  /**
+   * Condition variable to wait until the specified visit and playout counts are met.
+   */
+  std::condition_variable _waitCondition;
 
   /**
    * Object that executes inference.

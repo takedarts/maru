@@ -41,9 +41,16 @@ class Processor(object):
         '''
         return self.native.execute(inputs)
 
-    def get_efficiency(self) -> float:
-        '''Get the efficiency of the inference.
+    def get_batch_fill_rate(self) -> float:
+        '''Get the ratio of inference requests included in the batch.
         Returns:
-            float: Efficiency of the inference
+            float: Ratio of inference requests included in the batch
         '''
-        return self.native.get_efficiency()
+        return self.native.get_batch_fill_rate()
+
+    def get_cache_hit_rate(self) -> float:
+        '''Get the cache hit rate of inference.
+        Returns:
+            float: Cache hit rate of inference
+        '''
+        return self.native.get_cache_hit_rate()

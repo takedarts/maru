@@ -26,6 +26,7 @@ Player::Player(
       _searchCondition(),
       _updateCondition(),
       _stopCondition(),
+      _waitCondition(),
       _processor(processor),
       _threadPool(threads),
       _searchThread(),
@@ -200,15 +201,17 @@ void Player::waitEvaluation(int32_t visits, int32_t playouts, float timelimit, b
 
   // Wait for the first evaluation
   if (visits > 0 || playouts > 0) {
-    _stopCondition.wait(lock, [this]() {
+    _waitCondition.wait(lock, [this]() {
       return _root->getVisits() > 0;
     });
   }
 
+  // Wait until one of the following conditions is satisfied
+  // [Condition 1] Both the visit and playout count of the root node reach the specified values
+  // [Condition 2] The specified time has elapsed
   std::chrono::milliseconds timeout(static_cast<int32_t>(timelimit * 1000.0f));
 
-  // Wait until the specified count is reached or the time limit expires
-  _stopCondition.wait_for(lock, timeout, [this, visits, playouts]() {
+  _waitCondition.wait_for(lock, timeout, [this, visits, playouts]() {
     return _root->getVisits() >= visits && _root->getPlayouts() >= playouts;
   });
 
@@ -403,7 +406,7 @@ void Player::_runExpand() {
         search_equally, search_width, search_temperature, search_noise,
         [this]() { return _canceled.load(std::memory_order_acquire); });
 
-      // If the search is canceled, end the search
+    // If the search is canceled, end the search
     if (next_node == nullptr) {
       return;
     }
@@ -419,6 +422,10 @@ void Player::_runExpand() {
     search_temperature = 1.0f;
     search_noise = 0.0f;
   }
+
+  // The visit and playout count have been updated by the last executed `node->pickupNextNode()`
+  // Notify the waiting thread that the visit and playout counts have been updated
+  _waitCondition.notify_all();
 
   // If not yet evaluated
   if (!node->isEvaluated()) {

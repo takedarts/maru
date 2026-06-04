@@ -87,17 +87,25 @@ class InferenceProcessor {
   }
 
   /**
-   * Gets the inference efficiency.
-   * @return Inference efficiency
+   * Gets the batch fill rate.
+   * @return Batch fill rate
    */
-  inline float getEfficiency() const {
-    float total_efficiency = 0.0f;
+  inline float getBatchFillRate() const {
+    float total_fill_rate = 0.0f;
 
     for (const auto& executor : _executors) {
-      total_efficiency += executor->getEfficiency();
+      total_fill_rate += executor->getBatchFillRate();
     }
 
-    return total_efficiency / static_cast<float>(_executors.size());
+    return total_fill_rate / static_cast<float>(_executors.size());
+  }
+
+  /**
+   * Gets the cache hit rate for inference.
+   * @return Cache hit rate for inference
+   */
+  inline float getCacheHitRate() const {
+    return _cacheHitRate.load(std::memory_order_relaxed);
   }
 
  private:
@@ -155,6 +163,11 @@ class InferenceProcessor {
    * Batch size.
    */
   int32_t _batchSize;
+
+  /**
+   * Cache hit rate for inference.
+   */
+  std::atomic<float> _cacheHitRate;
 };
 
 }  // namespace deepgo

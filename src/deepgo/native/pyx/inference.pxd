@@ -24,7 +24,8 @@ cdef extern from "cpp/InferenceProcessor.h" namespace "deepgo":
         float predict(
             Board* board, int32_t color, float komi, int32_t rule, cpp_bool superko) except +
         void execute(int32_t* inputs, float* outputs, int32_t size) except +
-        float getEfficiency() except +
+        float getBatchFillRate() except +
+        float getCacheHitRate() except +
 
 
 cdef extern from "cpp/InferenceResult.h" namespace "deepgo":

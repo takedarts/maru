@@ -46,10 +46,10 @@ InferenceExecutor::InferenceExecutor(
       _deterministic(deterministic),
       _batchSize(batchSize),
       _threads(),
-      _efficiencies(threads) {
+      _batchFillRates(threads) {
   for (int32_t i = 0; i < threads; i++) {
     _threads.emplace_back(&InferenceExecutor::_run, this, i);
-    _efficiencies[i].store(0.0f, std::memory_order_relaxed);
+    _batchFillRates[i].store(0.0f, std::memory_order_relaxed);
   }
 }
 
@@ -99,13 +99,21 @@ void InferenceExecutor::execute(int32_t* inputs, float* outputs, int32_t size) {
   }
 
   // When running on non-CPU devices, executes inference with the specified batch size
-  if (!_model->isCpu() && size < _batchSize) {
+  if (!_model->isCpu()) {
     std::vector<int32_t> input_buffer(_batchSize * MODEL_INPUT_PACK_SIZE);
     std::vector<float> output_buffer(_batchSize * MODEL_OUTPUT_SIZE);
 
-    std::copy(inputs, inputs + (size * MODEL_INPUT_PACK_SIZE), input_buffer.data());
-    model->forward(input_buffer.data(), output_buffer.data(), _batchSize);
-    std::copy(output_buffer.data(), output_buffer.data() + (size * MODEL_OUTPUT_SIZE), outputs);
+    for (int32_t i = 0; i < size; i += _batchSize) {
+      int32_t batch_size = std::min(_batchSize, size - i);
+      int32_t* inputs_begin = inputs + (i * MODEL_INPUT_PACK_SIZE);
+      int32_t inputs_size = batch_size * MODEL_INPUT_PACK_SIZE;
+      float* outputs_begin = outputs + (i * MODEL_OUTPUT_SIZE);
+      int32_t outputs_size = batch_size * MODEL_OUTPUT_SIZE;
+
+      std::copy(inputs_begin, inputs_begin + inputs_size, input_buffer.data());
+      model->forward(input_buffer.data(), output_buffer.data(), batch_size);
+      std::copy(output_buffer.data(), output_buffer.data() + outputs_size, outputs_begin);
+    }
   } else {
     model->forward(inputs, outputs, size);
   }
@@ -190,12 +198,12 @@ void InferenceExecutor::_run(int32_t threadIndex) {
 
     _model->forward(input_buffer.data(), output_buffer.data(), batch_size);
 
-    // Calculates and stores the inference efficiency
-    float efficiency = static_cast<float>(batch.size()) / static_cast<float>(batch_size);
-    float old_efficiency = _efficiencies[threadIndex].load(std::memory_order_relaxed);
-    float new_efficiency = old_efficiency * 0.99f + efficiency * 0.01f;
+    // Calculates and stores the ratio of inference requests in the batch
+    float fill_rate = static_cast<float>(batch.size()) / static_cast<float>(batch_size);
+    float old_fill_rate = _batchFillRates[threadIndex].load(std::memory_order_relaxed);
+    float new_fill_rate = old_fill_rate * 0.99f + fill_rate * 0.01f;
 
-    _efficiencies[threadIndex].store(new_efficiency, std::memory_order_relaxed);
+    _batchFillRates[threadIndex].store(new_fill_rate, std::memory_order_relaxed);
 
     // Applies inference results to nodes and invokes the callback functions
     for (size_t i = 0; i < batch.size(); i++) {

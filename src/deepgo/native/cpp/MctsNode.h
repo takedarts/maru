@@ -324,6 +324,18 @@ class MctsNode {
   MctsValue _mctsValue;
 
   /**
+   * Number of times this node was selected in MCTS.
+   * This variable is updated by the parent node when selected by the parent node.
+   */
+  std::atomic<int32_t> _mctsSelects;
+
+  /**
+   * Number of times exploration was performed at this node in MCTS.
+   * This variable is updated by this node when expanding the search tree.
+   */
+  std::atomic<int32_t> _mctsProceeds;
+
+  /**
    * List of predicted territory probabilities.
    */
   std::array<float, 3 * MODEL_SIZE * MODEL_SIZE> _territories;
