@@ -1,0 +1,59 @@
+# syntax=docker/dockerfile:1
+
+############################
+# 1. Base stage
+############################
+FROM pytorch/pytorch:2.12.0-cuda12.6-cudnn9-runtime AS base
+
+LABEL maintainer="Atsushi TAKEDA @takedarts"
+
+ENV DEBIAN_FRONTEND=noninteractive
+WORKDIR /opt/prod
+
+# Install build dependencies
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        git make g++ wget ca-certificates \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install cython
+RUN pip install --no-cache-dir --break-system-packages cython
+
+# Install CUDA toolkit 12.6
+RUN wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb \
+    && dpkg -i cuda-keyring_1.1-1_all.deb \
+    && rm cuda-keyring_1.1-1_all.deb \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends cuda-toolkit-12.6 \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+############################
+# 2. Build stage
+############################
+FROM base AS builder
+
+# Clone the repository and build the project
+ARG BRANCH=main
+RUN git clone --branch ${BRANCH} --depth=1 https://github.com/takedarts/maru . \
+    && python3 src/build.py \
+    && rm -rf src/deepshogi/native/build
+
+############################
+# 3. Runtime stage
+############################
+FROM pytorch/pytorch:2.12.0-cuda12.6-cudnn9-runtime AS runtime
+
+WORKDIR /opt/prod
+
+# Copy the built project from the builder stage
+COPY --from=builder /opt/prod /opt/prod
+
+# Copy the run script
+COPY --chmod=755 run.sh /opt/run.sh
+
+WORKDIR /workspace
+
+# Set the default command to display help
+CMD ["/opt/run.sh", "--help"]
