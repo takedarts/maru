@@ -127,7 +127,7 @@ def lz_candidate_to_string(
     order: int,
     candidate: Candidate,
     width: int,
-    height: int
+    height: int,
 ) -> str:
     '''Convert candidate move to LeelaZero string representation.
     Args:
@@ -160,14 +160,18 @@ def lz_candidates_to_string(
     score: float,
     width: int,
     height: int,
+    rootinfo: bool,
+    ownership: bool,
 ) -> str:
     '''Convert list of candidate moves to LeelaZero string representation.
     Args:
         candidates (List[Candidate]): List of candidate moves
-        territories (np.ndarray): Territory data (not used here)
+        territories (np.ndarray): Territory data (not used, ignored)
         score (float): Predicted score difference
         width (int): Board width
         height (int): Board height
+        rootinfo (bool): True if root info should be output (not used, always disabled)
+        ownership (bool): True if ownership should be output (not used, always disabled)
     Returns:
         str: LeelaZero string representation
     '''
@@ -180,7 +184,7 @@ def kata_candidate_to_string(
     order: int,
     candidate: Candidate,
     width: int,
-    height: int
+    height: int,
 ) -> str:
     '''Convert candidate move to KataGo string representation.
     Args:
@@ -212,7 +216,9 @@ def kata_candidates_to_string(
     territories: np.ndarray,
     score: float,
     width: int,
-    height: int
+    height: int,
+    rootinfo: bool,
+    ownership: bool,
 ) -> str:
     '''Convert list of candidate moves to KataGo string representation.
     Args:
@@ -221,30 +227,39 @@ def kata_candidates_to_string(
         score (float): Predicted score difference
         width (int): Board width
         height (int): Board height
+        rootinfo (bool): True if root info should be output
+        ownership (bool): True if ownership should be output
     Returns:
         str: KataGo string representation
     '''
+    output_texts = []
+
     # Create candidate move string
     candidates_text = ' '.join(
         kata_candidate_to_string(o, c, width, height)
         for o, c in enumerate(candidates))
+    output_texts.append(candidates_text)
 
     # Create rootInfo string
-    win_chance = candidates[0].win_chance
-    visits = sum(c.visits for c in candidates)
-    score = score if candidates[0].color == BLACK else -score
-    root_text = (f'rootInfo winrate {win_chance:.4f} visits {visits} scoreLead {score:.1f}')
+    if rootinfo:
+        win_chance = candidates[0].win_chance
+        visits = sum(c.visits for c in candidates)
+        score = score if candidates[0].color == BLACK else -score
+        root_text = (f'rootInfo winrate {win_chance:.4f} visits {visits} scoreLead {score:.1f}')
+        output_texts.append(root_text)
 
     # Create territory string
-    def territory_to_string(t: np.ndarray) -> str:
-        v = max(float(t[2] - t[1]), 0) - max(float(t[0] - t[1]), 0)
-        return f'{v:.2f}' if candidates[0].color == BLACK else f'{-v:.2f}'
+    if ownership:
+        def territory_to_string(t: np.ndarray) -> str:
+            v = max(float(t[2] - t[1]), 0) - max(float(t[0] - t[1]), 0)
+            return f'{v:.2f}' if candidates[0].color == BLACK else f'{-v:.2f}'
 
-    ownership_values = ' '.join(
-        territory_to_string(territories[:, y, x]) for y, x in np.ndindex(height, width))
-    ownership_text = f'ownership {ownership_values}'
+        ownership_values = ' '.join(
+            territory_to_string(territories[:, y, x]) for y, x in np.ndindex(height, width))
+        ownership_text = f'ownership {ownership_values}'
+        output_texts.append(ownership_text)
 
-    return f'{candidates_text} {root_text} {ownership_text}'
+    return ' '.join(output_texts)
 
 
 def cgos_candidates_to_string(
@@ -252,7 +267,9 @@ def cgos_candidates_to_string(
     territories: np.ndarray,
     score: float,
     width: int,
-    height: int
+    height: int,
+    rootinfo: bool,
+    ownership: bool,
 ) -> str:
     '''Convert list of candidate moves to CGOS string representation.
     Args:
@@ -261,6 +278,8 @@ def cgos_candidates_to_string(
         score (float): Predicted score difference
         width (int): Board width
         height (int): Board height
+        rootinfo (bool): True if root info should be output (not used, always enabled)
+        ownership (bool): True if ownership should be output (not used, always enabled)
     Returns:
         str: CGOS string representation
     '''
@@ -1010,7 +1029,8 @@ class GTPEngine(object):
         self,
         args: List[str],
         analyze_func: Callable[
-            [List[Candidate], np.ndarray, float, int, int], str] = lz_candidates_to_string,
+            [List[Candidate], np.ndarray, float, int, int, bool, bool], str,
+        ] = lz_candidates_to_string,
         play: bool = True,
     ) -> Tuple[bool, str, bool]:
         '''Execute genmove_analyze command.
@@ -1028,14 +1048,26 @@ class GTPEngine(object):
         # Parse arguments
         color = self.player.get_color()
         interval = 1.0
+        rootinfo = False
+        ownership = False
+        arg_idx = 0
 
-        for arg in args:
+        while arg_idx < len(args):
+            arg = args[arg_idx]
+            arg_idx += 1
+
             if arg.lower()[0] == 'b':
                 color = BLACK
             elif arg.lower()[0] == 'w':
                 color = WHITE
             elif arg.isdigit():
                 interval = float(arg) / 100
+            elif arg.lower() == 'rootinfo' and args[arg_idx].lower() == 'true':
+                rootinfo = True
+                arg_idx += 1
+            elif arg.lower() == 'ownership' and args[arg_idx].lower() == 'true':
+                ownership = True
+                arg_idx += 1
 
         # Get list of candidate moves
         if play:
@@ -1054,7 +1086,8 @@ class GTPEngine(object):
             score = self.player.get_final_score()
 
         # Create analysis result string
-        analyze_line = analyze_func(candidates, territories, score, self.size, self.size)
+        analyze_line = analyze_func(
+            candidates, territories, score, self.size, self.size, rootinfo, ownership)
 
         # If not advancing the board, return only analysis result
         if not play:

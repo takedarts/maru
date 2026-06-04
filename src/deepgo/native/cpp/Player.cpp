@@ -333,7 +333,7 @@ std::string Player::toString() {
 void Player::_runSearch() {
   // Calculate the maximum number of evaluating nodes
   const int32_t max_evaluating_size =
-      _processor->getBatchSize() * _processor->getThreadSize() * 10;
+      _processor->getBatchSize() * _processor->getThreadSize() * 5;
 
   while (true) {
     {
