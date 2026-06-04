@@ -124,22 +124,22 @@ python src/run.py --fp16 --batch-size 16 b4c128-645.rt.model
 ### CUDAを使用できる環境での実行
 Maruを実行できるDockerイメージが用意されており、これを使用することで簡単にMaruを実行できます（TensorRTはサポートしていません）。
 
-GPUを使用してDocker版のMaruを実行するためには、Version 13.0以降のCUDAに対応したNVIDIAドライバとNVIDIA Container Toolkitがインストールされている必要があります。
+GPUを使用してDocker版のMaruを実行するためには、Version 12.6以降のCUDAに対応したNVIDIAドライバとNVIDIA Container Toolkitがインストールされている必要があります。
 以下のコマンドを実行してDockerからGPUにアクセスできるのであれば、GPUを使用してDocker版のMaruを実行できます。
 ```
-docker run --rm -i --gpus all pytorch/pytorch:2.12.0-cuda13.0-cudnn9-runtime nvidia-smi
+docker run --rm -i --gpus all pytorch/pytorch:2.12.0-cuda12.6-cudnn9-runtime nvidia-smi
 ```
 
 最初に実行する際にはDockerイメージをダウンロードする必要があります。
-CUDAを使用することを想定したDockerイメージ`takedarts/maru:v8.2-cuda13.0`は、イメージサイズが約3GBとなっているため、ダウンロードに時間がかかる場合があります。
+CUDAを使用することを想定したDockerイメージ`takedarts/maru:v8.2-cuda12.6`は、イメージサイズが約4GBとなっているため、ダウンロードに時間がかかる場合があります。
 以下のコマンドを実行して、あらかじめDockerイメージをダウンロードしておくことをおすすめします。
 ```
-docker pull takedarts/maru:v8.2-cuda13.0
+docker pull takedarts/maru:v8.2-cuda12.6
 ```
 
 CUDAが使用できる環境で以下のコマンドを実行することで、MaruのDockerイメージを実行できます（モデルファイルは[こちら](https://github.com/takedarts/maru/releases/tag/v8.2)からダウンロードできます）。
 ```
-docker run -iq --rm --gpus all -v .:/workspace takedarts/maru:v8.2-cuda13.0 /opt/run.sh <model_file>
+docker run -iq --rm --gpus all -v .:/workspace takedarts/maru:v8.2-cuda12.6 /opt/run.sh <model_file>
 ```
 オプション`--gpus`で使用するGPUを指定し、`-v .:/workspace`でカレントディレクトリをコンテナ内の`/workspace`にマウントします。
 モデルファイルをカレントディレクトリ以下に置き、`<model_file>`にそのファイルパスを指定してください。
@@ -147,7 +147,7 @@ docker run -iq --rm --gpus all -v .:/workspace takedarts/maru:v8.2-cuda13.0 /opt
 実行コマンドに続けてオプションを指定することもできます。
 実行コマンドに`--help`を指定すると、指定可能なオプションの一覧が表示されます。
 ```
-docker run -iq --rm --gpus all -v .:/workspace takedarts/maru:v8.2-cuda13.0 /opt/run.sh --help
+docker run -iq --rm --gpus all -v .:/workspace takedarts/maru:v8.2-cuda12.6 /opt/run.sh --help
 ```
 
 ### CPUでの実行
