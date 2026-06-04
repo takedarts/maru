@@ -1,44 +1,44 @@
 #pragma once
 
+#include <atomic>
 #include <condition_variable>
 #include <cstdint>
-#include <functional>
 #include <mutex>
 #include <queue>
 #include <thread>
-#include <tuple>
 #include <vector>
 
-#include "Board.h"
 #include "Candidate.h"
 #include "Config.h"
-#include "Node.h"
-#include "NodeManager.h"
-#include "Processor.h"
+#include "InferenceProcessor.h"
+#include "MctsManager.h"
+#include "MctsNode.h"
 #include "ThreadPool.h"
 
 namespace deepgo {
 
 /**
- * Class representing a player that progresses the game.
+ * A class representing a player that manages game progression.
  */
 class Player {
  public:
   /**
    * Creates a player object.
-   * @param processor Object to execute inference
+   * @param processor Object that executes inference
    * @param threads Number of threads
+   * @param maxVisits Maximum number of visits
    * @param width Board width
    * @param height Board height
    * @param komi Komi points
-   * @param rule Rule for determining the winner
-   * @param superko True to apply the superko rule
-   * @param evalLeafOnly True to evaluate only leaf nodes
+   * @param rule Win/loss determination rule
+   * @param superko true to apply the superko rule
+   * @param pucbConstantInit Initial value of the constant multiplied by the PUCB confidence upper bound
+   * @param pucbConstantBase Change value of the constant multiplied by the PUCB confidence upper bound
    */
   Player(
-      Processor* processor, int32_t threads,
+      InferenceProcessor* processor, int32_t threads, int32_t maxVisits,
       int32_t width, int32_t height, float komi, int32_t rule, bool superko,
-      bool evalLeafOnly);
+      float pucbConstantInit, float pucbConstantBase);
 
   /**
    * Destroys the player object.
@@ -52,43 +52,32 @@ class Player {
 
   /**
    * Places a stone on the board.
-   * @param x x coordinate of the position to place the stone
-   * @param y y coordinate of the position to place the stone
+   * @param move Move to play
    * @return Number of captured stones
    */
-  int32_t play(int32_t x, int32_t y);
+  int32_t play(Move move);
 
   /**
-   * Gets candidate moves for pass.
-   * @return Candidate moves for pass
+   * Gets the pass candidate move.
+   * @return Pass candidate move
    */
   std::vector<Candidate> getPass();
 
   /**
-   * Selects the next candidate move randomly.
-   * @param temperature Temperature (higher value increases randomness)
-   * @return Randomly selected candidate move
-   */
-  std::vector<Candidate> getRandom(float temperature = 0.0);
-
-  /**
    * Starts board evaluation.
-   * Search processing is executed in a separate thread.
-   * @param equally True to make the number of searches equal; false to use UCB1 or PUCB
-   * @param useUcb1 True to use UCB1 as the search criterion; false to use PUCB
-   * @param width Search width (if 0, search width is automatically adjusted)
+   * @param equally true to distribute search counts equally
+   * @param width Search width for candidate moves
    * @param temperature Temperature parameter for search
-   * @param noise Strength of Gumbel noise for search
+   * @param noise Strength of Gumbel noise
    */
-  void startEvaluation(
-      bool equally, bool useUcb1, int32_t width, float temperature, float noise);
+  void startEvaluation(bool equally, int32_t width, float temperature, float noise);
 
   /**
-   * Waits until the specified number of visits and playouts is reached.
+   * Waits until the specified visit count and playout count are reached.
    * @param visits Number of visits
    * @param playouts Number of playouts
    * @param timelimit Time limit
-   * @param stop True to stop search
+   * @param stop true to stop the search
    */
   void waitEvaluation(int32_t visits, int32_t playouts, float timelimit, bool stop);
 
@@ -105,10 +94,16 @@ class Player {
   int32_t getColor();
 
   /**
-   * Gets the state of the board.
-   * @return State of the board
+   * Gets the board state.
+   * @return Board state
    */
   std::vector<int32_t> getBoardState();
+
+  /**
+   * Gets the string representation of the player object.
+   * @return String representation of the player object
+   */
+  std::string toString();
 
  private:
   /**
@@ -117,14 +112,29 @@ class Player {
   std::mutex _mutex;
 
   /**
-   * Condition variable.
+   * Condition variable to trigger search.
    */
-  std::condition_variable _condition;
+  std::condition_variable _searchCondition;
 
   /**
-   * Object to manage search nodes.
+   * Condition variable to trigger node update processing.
    */
-  NodeManager _nodeManager;
+  std::condition_variable _updateCondition;
+
+  /**
+   * Condition variable to wait for search termination.
+   */
+  std::condition_variable _stopCondition;
+
+  /**
+   * Condition variable to wait until the specified visit and playout counts are met.
+   */
+  std::condition_variable _waitCondition;
+
+  /**
+   * Object that executes inference.
+   */
+  InferenceProcessor* _processor;
 
   /**
    * Thread management object.
@@ -132,44 +142,39 @@ class Player {
   ThreadPool _threadPool;
 
   /**
-   * Thread to execute search.
+   * Search management thread.
    */
-  std::unique_ptr<std::thread> _thread;
+  std::thread _searchThread;
+
+  /**
+   * Update management thread.
+   */
+  std::thread _updateThread;
+
+  /**
+   * Object that manages search nodes.
+   */
+  MctsManager _nodeManager;
 
   /**
    * Root node.
    */
-  Node* _root;
+  MctsNode* _root;
 
   /**
-   * True to evaluate only leaf nodes.
+   * Maximum number of visits.
    */
-  bool _evalLeafOnly;
+  int32_t _maxVisits;
 
   /**
-   * Number of visits to execute.
-   */
-  int32_t _searchVisits;
-
-  /**
-   * Number of playouts to execute.
-   */
-  int32_t _searchPlayouts;
-
-  /**
-   * True to make the number of searches equal.
+   * true to distribute search counts equally.
    */
   bool _searchEqually;
 
   /**
-   * True to use UCB1 as the search criterion.
+   * Search width for candidate moves.
    */
-  bool _searchUseUcb1;
-
-  /**
-   * Search width.
-   */
-  int32_t _searchWidth;
+  int32_t _searchCandidateWidth;
 
   /**
    * Temperature parameter for search.
@@ -187,36 +192,44 @@ class Player {
   int32_t _runnings;
 
   /**
-   * True if search is paused.
+   * true if search is paused.
    */
   bool _paused;
 
   /**
-   * True if search is stopped.
+   * true if search is stopped.
    */
   bool _stopped;
 
   /**
-   * True if search is terminated.
+   * true if search has terminated.
    */
   bool _terminated;
 
   /**
-   * Starts the search process.
+   * true if search is canceled.
    */
-  void _run();
+  std::atomic<bool> _canceled;
 
   /**
-   * Executes search.
-   * @return Number of search playouts
+   * Nodes awaiting evaluation.
    */
-  int32_t _evaluate();
+  std::queue<MctsNode*> _evaluatingNodes;
 
   /**
-   * Releases node objects other than the root node.
-   * @param node Node object to release
+   * Launches the search process.
    */
-  void _releaseNode(Node* node);
+  void _runSearch();
+
+  /**
+   * Expands the search tree.
+   */
+  void _runExpand();
+
+  /**
+   * Updates node states.
+   */
+  void _runUpdate();
 };
 
 }  // namespace deepgo

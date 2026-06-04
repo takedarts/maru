@@ -11,30 +11,30 @@
 namespace deepgo {
 
 /**
- * Thread management class.
+ * Thread pool management class.
  */
 class ThreadPool {
  public:
   /**
-   * Create thread management object.
-   * @param threads Number of threads
+   * Creates a thread pool object.
+   * @param threads number of threads
    */
   ThreadPool(int32_t threads);
 
   /**
-   * Destroy thread management object.
+   * Destroys the thread pool object.
    */
   virtual ~ThreadPool();
 
   /**
-   * Register a task to execute.
-   * @param task Task
+   * Submits a task for execution.
+   * @param task task to execute
    */
   void submit(std::function<void()> task);
 
   /**
-   * Return the number of threads.
-   * @return Number of threads
+   * Returns the number of threads.
+   * @return number of threads
    */
   int32_t getSize();
 
@@ -55,17 +55,17 @@ class ThreadPool {
   std::vector<std::thread> _threads;
 
   /**
-   * List of waiting tasks.
+   * Queue of pending tasks.
    */
   std::queue<std::function<void()>> _tasks;
 
   /**
-   * True to stop operation.
+   * True if the pool should stop running.
    */
   bool _terminated;
 
   /**
-   * Execute search.
+   * Worker function that executes tasks.
    */
   void _run();
 };

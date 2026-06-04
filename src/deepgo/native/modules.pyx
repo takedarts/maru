@@ -1,3 +1,3 @@
-include 'pyx/board.pyx'
-include 'pyx/model.pyx'
-include 'pyx/player.pyx'
+include 'pyx/board.pxi'
+include 'pyx/inference.pxi'
+include 'pyx/player.pxi'

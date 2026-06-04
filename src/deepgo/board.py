@@ -217,7 +217,8 @@ class Board(object):
         captured = self.native.play(pos, color)
 
         if captured < 0:
-            raise GoException(f'Invalid move: {pos} {get_color_name(color)}')
+            raise GoException(
+                f'Invalid move: {pos} {get_color_name(color)}\n{get_board_string(self)}')
 
         return captured
 
@@ -380,13 +381,15 @@ class Board(object):
 
     def get_state(self) -> List[int]:
         '''Return the serialized value of the board state.
-        :return: Board state value
+        Returns:
+            List[int]: Board state value
         '''
         return self.native.get_state()
 
     def load_state(self, state: List[int]) -> None:
         '''Deserialize the board state.
-        :param state: Board state value
+        Args:
+            state (List[int]): Board state value
         '''
         self.native.load_state(state)
 

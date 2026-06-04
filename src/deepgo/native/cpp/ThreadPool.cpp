@@ -1,12 +1,10 @@
 #include "ThreadPool.h"
 
-#include <iostream>
-
 namespace deepgo {
 
 /**
- * Create thread management object.
- * @param threads Number of threads
+ * Creates a thread pool object.
+ * @param threads number of threads
  */
 ThreadPool::ThreadPool(int32_t threads)
     : _mutex(),
@@ -20,7 +18,7 @@ ThreadPool::ThreadPool(int32_t threads)
 }
 
 /**
- * Destroy thread management object.
+ * Destroys the thread pool object.
  */
 ThreadPool::~ThreadPool() {
   {
@@ -35,8 +33,8 @@ ThreadPool::~ThreadPool() {
 }
 
 /**
- * Register a task to execute.
- * @param task Task
+ * Submits a task for execution.
+ * @param task task to execute
  */
 void ThreadPool::submit(std::function<void()> task) {
   {
@@ -48,7 +46,7 @@ void ThreadPool::submit(std::function<void()> task) {
 }
 
 /**
- * Execute search.
+ * Worker function that executes tasks.
  */
 void ThreadPool::_run() {
   while (true) {
@@ -71,11 +69,11 @@ void ThreadPool::_run() {
 }
 
 /**
- * Return the number of threads.
- * @return Number of threads
+ * Returns the number of threads.
+ * @return number of threads
  */
 int32_t ThreadPool::getSize() {
-  return _threads.size();
+  return static_cast<int32_t>(_threads.size());
 }
 
 }  // namespace deepgo

@@ -2,7 +2,10 @@ import argparse
 import sys
 
 import torch
-from deepgo.config import (DEFAULT_KOMI, DEFAULT_SIZE, NAME, RULE_CH, RULE_COM,
+from deepgo.config import (DEFAULT_BATCH_SIZE, DEFAULT_KOMI,
+                           DEFAULT_PUCB_CONSTANT_BASE,
+                           DEFAULT_PUCB_CONSTANT_INIT, DEFAULT_SIZE,
+                           DEFAULT_THREADS_PER_GPU, NAME, RULE_CH, RULE_COM,
                            RULE_JP, VERSION)
 from deepgo.gpu import get_default_gpus
 from deepgo.gtp import GTPEngine
@@ -13,65 +16,98 @@ from deepgo.processor import Processor
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description='Run with GTP mode.')
     parser.add_argument(
-        'model', type=str, help='Path to the model file')
+        'model', type=str,
+        help='Path to the model file')
     parser.add_argument(
-        '--visits', type=int, default=50, help='Number of visits (default: 50)')
+        '--visits', type=int, default=50,
+        help='Number of visits (default: 50)')
     parser.add_argument(
-        '--playouts', type=int, default=0, help='Number of playouts (default: 0)')
+        '--playouts', type=int, default=0,
+        help='Number of playouts (default: 0)')
     parser.add_argument(
-        '--search', type=str, default='pucb', choices=['ucb1', 'pucb'],
-        help='Criterion for selecting search nodes (default: pucb)')
+        '--criterion', type=str, default='value', choices=['value', 'visits'],
+        help='Criterion for candidate prioritization (default: value)')
     parser.add_argument(
-        '--temperature', type=float, default=1.0, help='Temperature for exploration (default: 1.0)')
+        '--temperature', type=float, default=1.0,
+        help='Temperature for exploration (default: 1.0)')
     parser.add_argument(
-        '--randomness', type=float, default=0.0, help='Randomness for number of exploration (default: 0.0)')
+        '--randomness', type=float, default=0.0,
+        help='Randomness for number of exploration (default: 0.0)')
     parser.add_argument(
-        '--criterion', type=str, default='lcb', choices=['lcb', 'visits'],
-        help='Criterion for candidate prioritization (default: lcb)')
+        '--rule', type=str, default='ch', choices=['ch', 'jp', 'com'],
+        help='Rule (default: ch)')
     parser.add_argument(
-        '--rule', type=str, default='ch', choices=['ch', 'jp', 'com'], help='Rule (default: ch)')
+        '--boardsize', type=int, default=DEFAULT_SIZE,
+        help=f'Board size (default: {DEFAULT_SIZE})')
     parser.add_argument(
-        '--boardsize', type=int, default=DEFAULT_SIZE, help=f'Board size (default: {DEFAULT_SIZE})')
+        '--komi', type=float, default=DEFAULT_KOMI,
+        help=f'Komi (default: {DEFAULT_KOMI})')
     parser.add_argument(
-        '--komi', type=float, default=DEFAULT_KOMI, help=f'Komi (default: {DEFAULT_KOMI})')
+        '--superko', default=False, action='store_true',
+        help='Use superko rule')
     parser.add_argument(
-        '--superko', default=False, action='store_true', help='Use superko rule')
+        '--pucb-constant-init', type=float, default=DEFAULT_PUCB_CONSTANT_INIT,
+        help=f'Initial value of the constant in PUCB (default: {DEFAULT_PUCB_CONSTANT_INIT})')
     parser.add_argument(
-        '--eval-leaf-only', default=False, action='store_true', help='Evaluate leaf nodes only')
+        '--pucb-constant-base', type=float, default=DEFAULT_PUCB_CONSTANT_BASE,
+        help=f'Change value of the constant in PUCB (default: {DEFAULT_PUCB_CONSTANT_BASE})')
     parser.add_argument(
-        '--timelimit', type=float, default=120, help='Timelimit (sec) (default: 120 sec)')
+        '--timelimit', type=float, default=120,
+        help='Timelimit (sec) (default: 120 sec)')
     parser.add_argument(
-        '--ponder', default=False, action='store_true', help='Use pondering')
+        '--ponder', default=False, action='store_true',
+        help='Use pondering')
     parser.add_argument(
-        '--resign', type=float, default=0.02, help='Resign threshold (default: 0.02)')
+        '--resign', type=float, default=0.02,
+        help='Resign threshold (default: 0.02)')
     parser.add_argument(
-        '--min-score', type=float, default=0.0, help='Minium score at resign (default: 0.0)')
+        '--min-score', type=float, default=0.0,
+        help='Minium score at resign (default: 0.0)')
     parser.add_argument(
-        '--min-turn', type=int, default=100, help='Minimum number of resign turns (default: 100)')
+        '--min-turn', type=int, default=100,
+        help='Minimum number of resign turns (default: 100)')
     parser.add_argument(
-        '--initial-turn', type=int, default=4, help='Number of turns to move randomly (default: 4)')
+        '--initial-turn', type=int, default=4,
+        help='Number of turns to move randomly (default: 4)')
     parser.add_argument(
-        '--client-name', type=str, default=NAME, help=f'Client name (default: {NAME})')
+        '--client-name', type=str, default=NAME,
+        help=f'Client name (default: {NAME})')
     parser.add_argument(
-        '--client-version', type=str, default=VERSION, help=f'Client version (default: {VERSION})')
+        '--client-version', type=str, default=VERSION,
+        help=f'Client version (default: {VERSION})')
     parser.add_argument(
-        '--threads', type=int, default=16, help='Number of threads (default: 16)')
+        '--threads', type=int, default=16,
+        help='Number of threads (default: 16)')
     parser.add_argument(
-        '--display', type=str, default=None, help='Command to display board (default: None)')
+        '--display', type=str, default=None,
+        help='Command to display board (default: None)')
     parser.add_argument(
-        '--sgf', type=str, default=None, help='SGF file to load (default: None)')
+        '--sgf', type=str, default=None,
+        help='SGF file to load (default: None)')
     parser.add_argument(
-        '--batch-size', type=int, default=2048, help='Batch size (default: 2048)')
+        '--batch-size', type=int, default=DEFAULT_BATCH_SIZE,
+        help=f'Batch size (default: {DEFAULT_BATCH_SIZE})')
     parser.add_argument(
         '--gpus', type=lambda x: list(map(int, x.split(','))), default=None,
         help='GPU IDs (comma-separated) (default: all available GPUs)')
     parser.add_argument(
-        '--fp16', default=False, action='store_true', help='Use FP16')
+        '--fp16', default=False, action='store_true',
+        help='Use FP16')
     parser.add_argument(
-        '--verbose', action='store_true', help='Verbose mode')
+        '--threads-per-gpu', type=int, default=DEFAULT_THREADS_PER_GPU,
+        help=f'Number of threads per GPU (default: {DEFAULT_THREADS_PER_GPU})')
+    parser.add_argument(
+        '--cache-size', type=int, default=None,
+        help='Cache size for board evaluation (default: max(visits, playouts))')
+    parser.add_argument(
+        '--verbose', action='store_true',
+        help='Verbose mode')
 
     args = parser.parse_args()
     args.gpus, args.fp16 = get_default_gpus(args.gpus, args.fp16)
+
+    if args.cache_size is None:
+        args.cache_size = max(args.visits, args.playouts)
 
     return args
 
@@ -99,7 +135,13 @@ def main() -> None:
         raise ValueError(f'Invalid rule: {args.rule}')
 
     # Create inference object
-    processor = Processor(args.model, args.gpus, args.batch_size, args.fp16)
+    processor = Processor(
+        model=args.model,
+        gpus=args.gpus,
+        batch_size=args.batch_size,
+        fp16=args.fp16,
+        threads_per_gpu=args.threads_per_gpu,
+        cache_size=args.cache_size)
 
     # Create GPT object
     engine = GTPEngine(
@@ -107,7 +149,6 @@ def main() -> None:
         threads=args.threads,
         visits=args.visits,
         playouts=args.playouts,
-        use_ucb1=(args.search == 'ucb1'),
         temperature=args.temperature,
         randomness=args.randomness,
         criterion=args.criterion,
@@ -115,7 +156,8 @@ def main() -> None:
         boardsize=args.boardsize,
         komi=args.komi,
         superko=args.superko,
-        eval_leaf_only=args.eval_leaf_only,
+        pucb_constant_init=args.pucb_constant_init,
+        pucb_constant_base=args.pucb_constant_base,
         timelimit=args.timelimit,
         ponder=args.ponder,
         resign_threshold=args.resign,

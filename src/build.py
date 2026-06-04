@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import List
 
 import cmake
-import torch
 from deepgo import config
 
 SRC_PATH = Path(__file__).parent.absolute()
@@ -18,13 +17,31 @@ def parse_args() -> argparse.Namespace:
         description='Build native codes',
         formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument(
+        '--torch-path', type=str, default=None, help='Path to libtorch.')
+    parser.add_argument(
+        '--debug', action='store_true', default=False, help='Build with debug options.')
+    parser.add_argument(
         '--clean', action='store_true', default=False, help='Clean object files only.')
     return parser.parse_args()
 
 
-def make_files(path: str) -> None:
+def make_files(
+    path: str,
+    torch_path: str | None = None,
+    debug: bool = False,
+) -> None:
     '''Create Config.h'''
     work_path = Path(__file__).parent / path
+
+    # If the libtorch path is not specified, infer it from `torch.__file__`
+    if torch_path is None:
+        try:
+            import torch
+        except ModuleNotFoundError:
+            raise Exception(
+                'torch is not found. Please specify --torch-path or install pytorch.')
+
+        torch_path = str(Path(torch.__file__).parent).replace('\\', '/')
 
     # Create Config.h
     config_path = work_path / 'cpp' / 'Config.h'
@@ -35,14 +52,23 @@ def make_files(path: str) -> None:
         config_path.write_text(config_text)
 
     # Create CMakeLists.txt
-    torch_path = str(Path(torch.__file__).parent).replace('\\', '/')
-    cpp_paths = [p.relative_to(work_path) for p in (work_path / 'cpp').glob('**/*.cpp')]
+    cpp_paths = [
+        p.relative_to(work_path)
+        for p in sorted((work_path / 'cpp').glob('**/*.cpp'))
+    ]
     cpp_files = ' '.join(map(str, cpp_paths)).replace('\\', '/')
     cmake_path = work_path / 'CMakeLists.txt'
     cmake_text = (work_path / 'CMakeLists.template').read_text()
     cmake_text = cmake_text.replace('%PYTHON3_VERSION%', platform.python_version())
     cmake_text = cmake_text.replace('%TORCH_PATH%', torch_path)
     cmake_text = cmake_text.replace('%CPP_FILES%', cpp_files)
+
+    if debug:
+        cmake_text = cmake_text.replace('%MSVC_CXX_FLAGS%', '/Zi /Od /utf-8')
+        cmake_text = cmake_text.replace('%UNIX_CXX_FLAGS%', '-g -Og -fno-omit-frame-pointer')
+    else:
+        cmake_text = cmake_text.replace('%MSVC_CXX_FLAGS%', '/O2 /utf-8')
+        cmake_text = cmake_text.replace('%UNIX_CXX_FLAGS%', '-O3')
 
     if not cmake_path.exists() or cmake_path.read_text() != cmake_text:
         cmake_path.write_text(cmake_text)
@@ -131,7 +157,7 @@ def main() -> None:
     if args.clean:
         clean(path)
     else:
-        make_files(path)
+        make_files(path, args.torch_path, args.debug)
         run_cmake(path)
 
 

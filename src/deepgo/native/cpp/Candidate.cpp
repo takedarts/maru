@@ -1,94 +1,104 @@
 #include "Candidate.h"
 
+#include <iomanip>
+#include <sstream>
+
 namespace deepgo {
 
 /**
  * Creates candidate move data.
  * @param x x coordinate
  * @param y y coordinate
- * @param color Stone color
- * @param visits Number of visits
- * @param playouts Number of playouts
- * @param policy Predicted move probability
- * @param value Evaluation value
- * @param variations Predicted sequence
+ * @param color stone color
+ * @param visits number of visits
+ * @param playouts number of playouts
+ * @param policy predicted move probability
+ * @param value evaluation value
+ * @param variations predicted sequence of moves
+ * @param territories predicted territory probabilities
  */
 Candidate::Candidate(
-    int32_t x, int32_t y, int32_t color,
-    int32_t visits, int32_t playouts, float policy, float value,
-    std::vector<std::pair<int32_t, int32_t>> variations)
-    : _x(x),
-      _y(y),
-      _color(color),
+    Move move, int32_t visits, int32_t playouts,
+    float policy, float value, const std::vector<Move> variations,
+    const std::array<float, 3 * MODEL_SIZE * MODEL_SIZE>& territories)
+    : _move(move),
       _visits(visits),
       _playouts(playouts),
       _policy(policy),
       _value(value),
-      _variations(variations) {
+      _variations(variations),
+      _territories(territories) {
 }
 
 /**
- * Gets the x coordinate.
- * @return x coordinate
+ * Creates candidate move data from a node object.
+ * @param node node object
  */
-int32_t Candidate::getX() const {
-  return _x;
+Candidate::Candidate(MctsNode* node)
+    : _move(node->getMove()),
+      _visits(node->getVisits()),
+      _playouts(node->getPlayouts()),
+      _policy(node->getProbability()),
+      _value(node->getMctsValue()),
+      _variations(node->getVariations()),
+      _territories(node->getTerritories()) {
 }
 
 /**
- * Gets the y coordinate.
- * @return y coordinate
+ * Copies a candidate move object.
+ * @param other source candidate move object to copy from
  */
-int32_t Candidate::getY() const {
-  return _y;
+Candidate::Candidate(const Candidate& other)
+    : _move(other._move),
+      _visits(other._visits),
+      _playouts(other._playouts),
+      _policy(other._policy),
+      _value(other._value),
+      _variations(other._variations),
+      _territories(other._territories) {
 }
 
 /**
- * Gets the stone color.
- * @return Stone color
+ * Creates a candidate move object.
+ * Creates an object representing an invalid candidate move.
  */
-int32_t Candidate::getColor() const {
-  return _color;
+Candidate::Candidate()
+    : _move(MOVE_INVALID),
+      _visits(0),
+      _playouts(0),
+      _policy(0.0f),
+      _value(0.0f),
+      _variations(),
+      _territories() {
+  std::fill(std::begin(_territories), std::end(_territories), 0.0f);
 }
 
 /**
- * Gets the number of visits.
- * @return Number of visits
+ * Returns the string representation of the candidate move.
+ * @return string representation of the candidate move
  */
-int32_t Candidate::getVisits() const {
-  return _visits;
-}
+std::string Candidate::toString() const {
+  std::stringstream ss;
 
-/**
- * Gets the number of playouts.
- * @return Number of playouts
- */
-int32_t Candidate::getPlayouts() const {
-  return _playouts;
-}
+  ss << "Move: (" << _move << ")";
+  ss << ", Visits: " << _visits;
+  ss << ", Playouts: " << _playouts;
+  ss << ", Policy: " << std::fixed << std::setprecision(4) << _policy;
+  ss << ", Value: " << std::fixed << std::setprecision(4) << _value;
+  ss << ", Variations: [";
 
-/**
- * Gets the predicted move probability.
- * @return Predicted move probability
- */
-float Candidate::getPolicy() const {
-  return _policy;
-}
+  for (size_t i = 0; i < _variations.size(); ++i) {
+    const auto& variation = _variations[i];
+    ss << "(" << variation << ")";
 
-/**
- * Gets the evaluation value.
- * @return Evaluation value
- */
-float Candidate::getValue() const {
-  return _value;
-}
+    if (i < _variations.size() - 1) {
+      ss << ", ";
+    }
+  }
 
-/**
- * Gets the predicted sequence.
- * @return Predicted sequence
- */
-std::vector<std::pair<int32_t, int32_t>> Candidate::getVariations() const {
-  return _variations;
+  ss << "]";
+
+  return ss.str();
 }
 
 }  // namespace deepgo

@@ -1,12 +1,17 @@
 import logging
+import math
+import random
 from typing import List, Set, Tuple
 
 import numpy as np
+from deepgo.exception import GoException
 
 from .board import (Board, get_color_name, get_handicap_positions,
                     get_opposite_color, is_valid_position)
-from .config import (BLACK, DEFAULT_KOMI, DEFAULT_SIZE, EMPTY, MODEL_SIZE,
-                     PASS, RULE_CH, RULE_COM, RULE_JP, WHITE)
+from .config import (BLACK, DEFAULT_KOMI, DEFAULT_MAX_VISITS,
+                     DEFAULT_PUCB_CONSTANT_BASE, DEFAULT_PUCB_CONSTANT_INIT,
+                     DEFAULT_SIZE, EMPTY, MODEL_SIZE, PASS, RULE_CH,
+                     RULE_COM, RULE_JP, WHITE)
 from .native import NativePlayer
 from .processor import Processor
 
@@ -70,7 +75,8 @@ class Candidate(object):
         playouts: int,
         policy: float,
         value: float,
-        variations: List[Tuple[int, int]],
+        variations: List[Tuple[Tuple[int, int], int]],
+        territories: np.ndarray,
     ) -> None:
         '''Initialize candidate move object.
         Args:
@@ -80,7 +86,8 @@ class Candidate(object):
             playouts (int): Number of playouts
             policy (float): Predicted move probability
             value (float): Predicted win rate
-            variations (List[Tuple[int, int]]): Predicted sequence
+            variations (List[Tuple[Tuple[int, int], int]]): Predicted sequence
+            territories (np.ndarray): Predicted territory
         '''
         self.pos = pos
         self.color = color
@@ -89,15 +96,41 @@ class Candidate(object):
         self.policy = policy
         self.value = value
         self.variations = variations
-        self.win_chance = value * color * 0.5 + 0.5
-        self.win_chance_lcb = self.win_chance - 1.96 * 0.25 / (visits + 1)**0.5
+        self.territories = territories
+
+        if math.isnan(self.policy):
+            raise GoException('Policy is NaN')
+
+        if math .isnan(self.value):
+            raise GoException('Value is NaN')
+
+        self.win_chance = self.value * self.color * 0.5 + 0.5
+
+        self.value_lcb = value - color * 1.96 * 0.5 / (visits + 1)**0.5
+        self.win_chance_lcb = self.value_lcb * self.color * 0.5 + 0.5
+
+    def get_score(self, board: Board | None = None) -> float:
+        '''Get the score of the candidate move.
+        This score is calculated from the predicted territory probabilities and does not consider komi.
+        Args:
+            board (Board | None): Board data
+        Returns:
+            float: Score
+        '''
+        score = self.territories[2].sum() - self.territories[0].sum()
+
+        if board is not None:
+            score += (board.get_colors() * self.territories[1]).sum()
+
+        return score
 
     def __str__(self) -> str:
         return (
             f'Candidate(pos={self.pos}, color={get_color_name(self.color)},'
-            f' visits={self.visits}, playouts={self.playouts},'
-            f' policy={self.policy:.2f}, value={self.value:.2f},'
-            f' win_chance={self.win_chance:.2f}, win_chance_lcb={self.win_chance_lcb:.2f}')
+            f' visits={self.visits}, playouts={self.playouts}, policy={self.policy:.2f},'
+            f' value={self.value: .3f}, value_lcb={self.value_lcb: .3f},'
+            f' win_chance={self.win_chance: .3f}, win_chance_lcb={self.win_chance_lcb: .3f},'
+            f' score={self.get_score(): .2f}, variations={self.variations})')
 
     def __repr__(self) -> str:
         return str(self)
@@ -113,7 +146,9 @@ class Player(object):
         komi: float = DEFAULT_KOMI,
         rule: int = RULE_CH,
         superko: bool = False,
-        eval_leaf_only: bool = False,
+        pucb_constant_init: float = DEFAULT_PUCB_CONSTANT_INIT,
+        pucb_constant_base: float = DEFAULT_PUCB_CONSTANT_BASE,
+        max_visits: int = DEFAULT_MAX_VISITS,
     ) -> None:
         '''Initialize player object.
         Args:
@@ -124,12 +159,15 @@ class Player(object):
             komi (float): Komi value
             rule (int): Rule for determining winner
             superko (bool): True to apply superko rule
-            eval_leaf_only (bool): True to evaluate only leaf nodes
+            pucb_constant_init (float): Initial value applied to PUCB upper confidence bound
+            pucb_constant_base (float): Base value applied to PUCB upper confidence bound
+            max_visits (int): Maximum number of visits
         '''
         self.native = NativePlayer(
-            processor=processor.native, threads=threads,
+            processor=processor.native, threads=threads, max_visits=max_visits,
             width=width, height=height, komi=komi, rule=rule, superko=superko,
-            eval_leaf_only=eval_leaf_only)
+            pucb_constant_init=pucb_constant_init,
+            pucb_constant_base=pucb_constant_base)
         self.processor = processor
         self.width = width
         self.height = height
@@ -156,10 +194,7 @@ class Player(object):
             handicap (int): Number of handicap stones
         '''
         for pos in get_handicap_positions(self.width, self.height, handicap):
-            if self.native.get_color() != BLACK:
-                self.native.play(PASS)
-
-            self.native.play(pos)
+            self.native.play(pos, BLACK)
             self.moves[0] += 1
 
     def is_valid_position(self, pos: Tuple[int, int]) -> bool:
@@ -226,12 +261,8 @@ class Player(object):
         if color is None:
             color = self.native.get_color()
 
-        # If the color to play is different, pass
-        if self.native.get_color() != color:
-            self.native.play(PASS)
-
         # Play the move
-        captured = self.native.play(pos)
+        captured = self.native.play(pos, color)
         self.turn += 1
 
         # Update the number of moves and captured stones
@@ -254,43 +285,47 @@ class Player(object):
         Returns:
             Candidate: Pass candidate
         '''
-        self.native.start_evaluation(False, False, 0, 1.0, 0.0)
+        self.native.start_evaluation(False, 0, 1.0, 0.0)
         self.native.wait_evaluation(1, 0, 120.0, True)
 
         return Candidate(*self.native.get_pass())
 
-    def get_random(self, temperature: float = 0.0, allow_outermost: bool = True) -> Candidate:
+    def get_random(
+        self,
+        width: int = 16,
+        timelimit: float = 120.0,
+        temperature: float = 1.0,
+        delta: float = 0.1,
+        ponder: bool = False,
+    ) -> Candidate:
         '''Return a random move.
         Args:
+            width (int): Number of candidate moves
+            timelimit (float): Time limit in seconds
             temperature (float): Temperature parameter
-            allow_outermost (bool): True to allow moves on the edge
+            delta (float): Maximum acceptable win rate decrease
+            ponder (bool): True to continue searching
         Returns:
             Candidate: Candidate move
         '''
-        self.native.start_evaluation(False, False, 0, 1.0, 0.0)
-        self.native.wait_evaluation(1, 0, 120.0, True)
+        self.native.start_evaluation(True, width, temperature, 0.0)
+        self.native.wait_evaluation(width + 1, 0, timelimit, not ponder)
 
-        for _ in range(10):
-            # Select a move randomly
-            candidate = Candidate(*self.native.get_random(temperature))
+        # Create a list of candidate moves
+        candidates = [Candidate(*c) for c in self.native.get_candidates()]
 
-            # Output log
-            LOGGER.debug(candidate)
+        # Get the maximum expected win rate
+        max_win_chance = max(c.win_chance for c in candidates)
 
-            # If the move is valid, exit the loop
-            if not self.is_valid_position(candidate.pos):
-                break
-            elif self.superko and self.is_superko_move(candidate.pos, candidate.color):
-                candidate = self.get_pass()
-                continue
-            elif not allow_outermost and (
-                    candidate.pos[0] == 0 or candidate.pos[0] == self.width - 1
-                    or candidate.pos[1] == 0 or candidate.pos[1] == self.height - 1):
-                continue
-            else:
-                break
+        # Exclude candidate moves with expected win rate less than max_win_chance - delta
+        candidates = [
+            c for c in candidates if c.win_chance >= max_win_chance - delta]
 
-        return candidate
+        # Convert policy values to selection probabilities
+        probs = [c.policy**(1 / max(temperature, 1e-3)) for c in candidates]
+
+        # Return a randomly selected candidate move
+        return random.choices(candidates, weights=probs, k=1)[0]
 
     def evaluate(
         self,
@@ -298,11 +333,10 @@ class Player(object):
         playouts: int = 0,
         timelimit: float = 120.0,
         equally: bool = False,
-        use_ucb1: bool = False,
+        criterion: str = 'value',
         width: int | None = None,
         temperature: float = 1.0,
         noise: float = 0.0,
-        criterion: str = 'lcb',
         ponder: bool = False,
     ) -> List[Candidate]:
         '''Evaluate the board.
@@ -310,12 +344,11 @@ class Player(object):
             visits (int): Target number of visits
             playouts (int): Target number of playouts
             timelimit (float): Time limit (seconds)
-            equally (bool): True to make the number of searches equal, False to use UCB1 or PUCB
-            use_ucb1 (bool): True to use UCB1 as the search criterion, False to use PUCB
+            equally (bool): True to make the number of searches equal, False to use UCB or PUCB
+            criterion (str): Candidate priority criterion ('value' or 'visits')
             width (int): Search width (number of candidate moves to search; 0 for auto adjustment)
             temperature (float): Temperature parameter for search
             noise (float): Strength of Gumbel noise for search
-            criterion (str): Candidate priority criterion ('lcb' or 'visits')
             ponder (bool): True to continue searching
         Returns:
             List[Candidate]: List of candidate moves
@@ -323,7 +356,7 @@ class Player(object):
         width = width if width is not None else 0
 
         # Evaluate the board
-        self.native.start_evaluation(equally, use_ucb1, width, temperature, noise)
+        self.native.start_evaluation(equally, width, temperature, noise)
         self.native.wait_evaluation(visits, playouts, timelimit, not ponder)
 
         # Create a list of candidate moves
@@ -348,17 +381,17 @@ class Player(object):
         # Sort candidates
         if criterion == 'visits':
             candidates.sort(key=lambda cand: cand.visits, reverse=True)
-        elif criterion == 'lcb':
-            candidates.sort(key=lambda cand: cand.win_chance_lcb, reverse=True)
         else:
-            raise ValueError(f'Unknown criterion: {criterion}')
+            candidates.sort(key=lambda cand: cand.win_chance_lcb, reverse=True)
 
         # Output log
         if LOGGER.isEnabledFor(logging.DEBUG):
             LOGGER.debug(
-                'Evaluation: %d visits, %d playouts',
+                'Evaluation: %d visits, %d playouts (batch fill rate=%.2f, cache hit rate=%.2f)',
                 sum(c.visits for c in candidates),
-                sum(c.playouts for c in candidates))
+                sum(c.playouts for c in candidates),
+                self.processor.get_batch_fill_rate(),
+                self.processor.get_cache_hit_rate())
             for candidate in candidates:
                 LOGGER.debug(candidate)
 
@@ -532,3 +565,10 @@ class Player(object):
             result -= self.moves[0] - self.moves[1]
 
         return result
+
+    def __str__(self) -> str:
+        '''Get the string representation of the search tree.
+        Returns:
+            str: String representation
+        '''
+        return self.native.to_string()

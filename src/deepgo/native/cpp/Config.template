@@ -14,18 +14,22 @@
 // Macro to get the color of the opponent's stone
 #define OPPOSITE(c)  (-c)
 
-// Board feature size input to the model (board size)
+// Size of board features input to the model (board size)
 #define MODEL_SIZE (${MODEL_SIZE})
 // Number of board features input to the model
 #define MODEL_FEATURES (${MODEL_FEATURES})
 // Number of game features input to the model
 #define MODEL_INFOS (${MODEL_INFOS})
-// Number of board prediction values output by the model
+// Number of board predictions output by the model
 #define MODEL_PREDICTIONS (${MODEL_PREDICTIONS})
-// Number of game prediction values output by the model
+// Number of game predictions output by the model
 #define MODEL_VALUES (${MODEL_VALUES})
 
 // Size of data input to the inference model
 #define MODEL_INPUT_SIZE (${MODEL_INPUT_SIZE})
+// Size of model input data when packed into int32
+#define MODEL_INPUT_PACK_SIZE (${MODEL_INPUT_PACK_SIZE})
 // Size of data output by the inference model
 #define MODEL_OUTPUT_SIZE (${MODEL_OUTPUT_SIZE})
+// Size of model output mask when packed into int32
+#define MODEL_OUTPUT_PACK_SIZE (${MODEL_OUTPUT_PACK_SIZE})

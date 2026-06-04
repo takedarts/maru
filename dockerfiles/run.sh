@@ -1,7 +1,6 @@
 #!/bin/bash
 set -e
 ulimit -n 10240
-ulimit -c unlimited
+ulimit -c 0
 
-. /opt/venv/bin/activate
-python /opt/maru/src/run.py $@
+python3 /opt/prod/src/run.py "$@"

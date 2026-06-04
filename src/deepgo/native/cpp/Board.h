@@ -1,32 +1,44 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
-#include <iostream>
-#include <memory>
+#include <ostream>
 #include <set>
+#include <string>
 #include <vector>
 
-#include "History.h"
-#include "Pattern.h"
-#include "Ren.h"
+#include "BoardPattern.h"
+#include "BoardRen.h"
+#include "Config.h"
+#include "Move.h"
+#include "MoveHistory.h"
 
 namespace deepgo {
 
+#define BITBOARD_SIZE (MODEL_SIZE * MODEL_SIZE / 64 + 2)
+
 /**
- * Class of board information.
+ * Class that holds the board state.
  */
 class Board {
+ private:
+  /**
+   * Class for computing the hash value of the board.
+   * Declared as a friend class of Board to allow access to its private members.
+   */
+  friend class BoardHash;
+
  public:
   /**
    * Creates a board object.
-   * @param width Board width
-   * @param height Board height
+   * @param width Width of the board
+   * @param height Height of the board
    */
   Board(int width, int height);
 
   /**
    * Creates a copied board object.
-   * @param board Board object to copy from
+   * @param board Source board object to copy from
    */
   Board(const Board& board);
 
@@ -36,63 +48,61 @@ class Board {
   virtual ~Board() = default;
 
   /**
-   * Initializes the state of the board.
+   * Initializes the board state.
    */
   void clear();
 
   /**
-   * Gets the width of the board.
-   * @return Board width
+   * Returns the width of the board.
+   * @return Width of the board
    */
-  int32_t getWidth();
+  int32_t getWidth() const;
 
   /**
-   * Gets the height of the board.
-   * @return Board height
+   * Returns the height of the board.
+   * @return Height of the board
    */
-  int32_t getHeight();
+  int32_t getHeight() const;
 
   /**
-   * Play a stone.
-   * @param x X coordinate to play
-   * @param y Y coordinate to play
-   * @param color Color of the stone
-   * @return Number of captured stones (returns -1 if not playable)
+   * Places a stone.
+   * @param move Move information
+   * @return Number of captured stones (or -1 if the move is illegal)
    */
-  int32_t play(int32_t x, int32_t y, int32_t color);
+  int32_t play(Move move);
 
   /**
-   * Gets the coordinates of Ko.
-   * Returns (-1, -1) if Ko does not occur.
-   * @param color Color of the target stone
-   * @return Coordinates of Ko
+   * Returns the coordinates of the ko.
+   * Returns (-1, -1) if no ko is in effect.
+   * @param color Color of the stone in question
+   * @return Coordinates of the ko
    */
-  std::pair<int32_t, int32_t> getKo(int32_t color);
+  std::pair<int32_t, int32_t> getKo(int32_t color) const;
 
   /**
-   * Returns a list of the most recent move coordinates.
-   * @param color Color of the stone
+   * Returns the list of most recent move coordinates.
+   * @param color Stone color
    * @return List of move coordinates
    */
-  std::vector<std::pair<int32_t, int32_t>> getHistories(int color);
+  std::vector<Move> getHistories(int color) const;
 
   /**
-   * Gets the color of the stone at the specified coordinates.
+   * Returns the color of the stone at the specified coordinates.
    * @param x X coordinate
    * @param y Y coordinate
    * @return Color of the stone
    */
-  int32_t getColor(int32_t x, int32_t y);
+  int32_t getColor(int32_t x, int32_t y) const;
 
   /**
-   * Returns a list of stone colors.
-   * @param colors Data of stone colors
-   * @param color Color of the stone
+   * Returns the list of stone colors.
+   * @param colors Stone color data
+   * @param color Stone color
    */
   void getColors(int32_t* colors, int32_t color);
 
   /**
-   * Gets the size of the group at the specified coordinates.
+   * Returns the size of the group at the specified coordinates.
    * @param x X coordinate
    * @param y Y coordinate
    * @return Size of the group
@@ -100,7 +110,7 @@ class Board {
   int32_t getRenSize(int32_t x, int32_t y);
 
   /**
-   * Gets the number of liberties of the group at the specified coordinates.
+   * Returns the number of liberties of the group at the specified coordinates.
    * @param x X coordinate
    * @param y Y coordinate
    * @return Number of liberties
@@ -108,281 +118,312 @@ class Board {
   int32_t getRenSpace(int32_t x, int32_t y);
 
   /**
-   * Gets whether the group at the specified coordinates is a ladder (shicho).
+   * Returns whether the group at the specified coordinates is in a ladder.
    * @param x X coordinate
    * @param y Y coordinate
-   * @return True if the group is a ladder (shicho)
+   * @return true if the group is in a ladder
    */
   bool isShicho(int32_t x, int32_t y);
 
   /**
-   * Returns True if a stone can be placed.
+   * Returns true if a stone can be placed at the specified position.
    * @param x X coordinate
    * @param y Y coordinate
-   * @param color Color of the stone
-   * @param checkSeki True to check for seki
-   * @return True if a stone can be placed
+   * @param color Stone color
+   * @param checkSeki true to check for seki
+   * @return true if the move is legal
    */
   bool isEnabled(int32_t x, int32_t y, int32_t color, bool checkSeki);
 
   /**
-   * Gets a list of places where a stone can be placed.
-   * @param enableds List of places where a stone can be placed
-   * @param color Color of the stone
-   * @param checkSeki True to check for seki
+   * Returns the list of positions where a stone can be placed.
+   * @param enableds List of legal positions
+   * @param color Stone color
+   * @param checkSeki true to check for seki
    */
   void getEnableds(int32_t* enableds, int32_t color, bool checkSeki);
 
   /**
-   * Returns the data of fixed territory.
-   * @param territories Data of fixed territory
-   * @param color Reference stone color (if WHITE is set, returns data judged for both black and white)
+   * Returns the settled territory data.
+   * @param territories Territory data
+   * @param color Reference stone color (setting WHITE returns data with black/white evaluated)
    */
   void getTerritories(int32_t* territories, int32_t color);
 
   /**
-   * Returns the data of the owner of each coordinate.
-   * @param owners Data of owners
-   * @param color Reference stone color (if WHITE is set, returns data judged for both black and white)
-   * @param rule Calculation rule (RULE_CH: Chinese rule, RULE_JP: Japanese rule, RULE_COM: automatic match rule)
+   * Returns the owner data for each coordinate.
+   * @param owners Owner data
+   * @param color Reference stone color (setting WHITE returns data with black/white evaluated)
+   * @param rule Scoring rule (RULE_CH: Chinese rules, RULE_JP: Japanese rules, RULE_COM: auto-match rules)
    */
   void getOwners(int32_t* owners, int32_t color, int32_t rule);
 
   /**
-   * Gets the value representing the arrangement of stones.
-   * @return Value representing the arrangement of stones
+   * Returns the value representing the stone arrangement.
+   * @return Value representing the stone arrangement
    */
   std::vector<int32_t> getPatterns();
 
   /**
-   * Gets the data to input to the model.
-   * @param inputs Data to input to the model
+   * Returns the input data for the model.
+   * @param inputs Board data to feed into the model
    * @param color Color of the stone to play
-   * @param komi Komi points
-   * @param rule Rule for determining the winner
-   * @param superko True to apply the superko rule
+   * @param komi Komi in points
+   * @param rule Rule for determining win/loss
+   * @param superko true to apply the superko rule
    */
-  void getInputs(float* inputs, int32_t color, float komi, int32_t rule, bool superko);
+  void getInputs(
+      int32_t* inputs, int32_t color, float komi, int32_t rule, bool superko);
 
   /**
-   * Gets the state of the board.
-   * @return State of the board
+   * Returns the board state.
+   * @return Board state
    */
   std::vector<int32_t> getState();
 
   /**
-   * Restores the state of the board.
-   * @param state State of the board
+   * Restores the board state.
+   * @param state Board state
    */
   void loadState(std::vector<int32_t> state);
 
   /**
-   * Copies the state of the board.
-   * @param board Board to copy from
+   * Copies the board state.
+   * @param board Source board to copy from
    */
   void copyFrom(const Board* board);
 
   /**
-   * Outputs the state of the board.
-   * @param os Output destination
+   * Converts the board state to a string.
+   * @return String representation of the board state
    */
-  void print(std::ostream& os = std::cout);
+  std::string toString() const;
+
+  /**
+   * Updates the board state.
+   * Updates the area and ladder information.
+   */
+  inline void updateStatus() {
+    _updateArea();
+    _updateShicho();
+  }
+
+  /**
+   * Writes the string representation of the board state to an output stream.
+   * @param os Output stream
+   * @param board Board object
+   * @return Output stream
+   */
+  friend std::ostream& operator<<(std::ostream& os, const Board& board) {
+    os << board.toString();
+    return os;
+  }
 
  private:
   /**
-   * Value of board width + 2.
+   * Width of the board plus 2.
    */
   int32_t _width;
 
   /**
-   * Value of board height + 2.
+   * Height of the board plus 2.
    */
   int32_t _height;
 
   /**
-   * Length of board data.
-   * Value is (width + 2) * (height + 2).
+   * Length of the board data array.
+   * Equals (width + 2) * (height + 2).
    */
   int32_t _length;
 
   /**
-   * List of group information IDs.
+   * List of group ID numbers.
    */
-  std::unique_ptr<int32_t[]> _renIds;
+  std::vector<int32_t> _renIds;
 
   /**
-   * List of group information.
+   * List of group objects.
    */
-  std::unique_ptr<Ren[]> _renObjs;
+  std::vector<BoardRen> _renObjs;
 
   /**
-   * List of empty area information IDs.
+   * List of empty area ID numbers.
    */
-  std::unique_ptr<int32_t[]> _areaIds[2];
+  std::array<std::vector<int32_t>, 2> _areaIds;
 
   /**
-   * List of empty area information.
+   * List of empty area flags.
    */
-  std::unique_ptr<bool[]> _areaFlags[2];
+  std::array<std::vector<bool>, 2> _areaFlags;
 
   /**
-   * Location where Ko occurs.
+   * Position where ko is in effect.
    */
   int32_t _koIndex;
 
   /**
-   * Color subject to Ko.
+   * Color subject to the ko restriction.
    */
   int32_t _koColor;
 
   /**
    * History of move coordinates.
    */
-  History _histories[2];
+  MoveHistory _histories[2];
 
   /**
    * Object representing the arrangement of stones on the board.
    */
-  Pattern _pattern;
+  BoardPattern _pattern;
 
   /**
-   * True if area information has been updated.
+   * true if the area information has been updated.
    */
   bool _areaUpdated;
 
   /**
-   * True if atari information has been updated.
+   * true if the ladder information has been updated.
    */
   bool _shichoUpdated;
 
   /**
-   * Places a stone at the specified location.
+   * Hash value of the board.
+   * Represents only the stone placement; does not include ko information.
+   */
+  uint64_t _hash;
+
+  /**
+   * Bitboard representing the placement of stones on the board.
+   * Each bit corresponds to one cell; 1 if a stone is placed, 0 if empty.
+   */
+  uint64_t _bitBoard[BITBOARD_SIZE];
+
+  /**
+   * Places a stone at the specified position.
    * Does not merge or remove groups.
-   * @param index Position number
-   * @param color Color of the stone
+   * @param index Position index
+   * @param color Stone color
    */
   void _put(int32_t index, int32_t color);
 
   /**
    * Merges the specified groups.
-   * @param srcIndex Position number of the source group
-   * @param dstIndex Position number of the destination group
+   * @param srcIndex Position index of the source group
+   * @param dstIndex Position index of the destination group
    */
   void _mergeRen(int32_t srcIndex, int32_t dstIndex);
 
   /**
    * Removes the specified group.
-   * @param index Position number
+   * @param index Position index
    */
   void _removeRen(int32_t index);
 
   /**
-   * Updates empty area information.
+   * Updates the empty area information.
    */
   void _updateArea();
 
   /**
-   * Updates atari information.
+   * Updates the ladder information.
    */
   void _updateShicho();
 
   /**
-   * Returns true if the specified group is a ladder (shicho).
-   * @param index Position number
-   * @return True if the group is a ladder (shicho)
+   * Returns true if the specified group is in a ladder.
+   * @param index Position index
+   * @return True if the group is in a ladder
    */
   bool _isShichoRen(int32_t index);
 
   /**
-   * Gets the color of the stone at the specified location.
-   * @param index Position number
-   * @return Color of the stone
+   * Returns the color of the stone at the specified position.
+   * @param index Position index
+   * @return Stone color
    */
-  int32_t _getColor(int32_t index);
+  int32_t _getColor(int32_t index) const;
 
   /**
-   * Returns true if a stone can be placed at the specified location.
-   * @param index Position number
-   * @param color Color of the stone
-   * @param checkSeki True to check for seki
-   * @return True if a stone can be placed
+   * Returns true if a stone can be placed at the specified position.
+   * @param index Position index
+   * @param color Stone color
+   * @param checkSeki true to check for seki
+   * @return true if the move is legal
    */
   bool _isEnabled(int32_t index, int32_t color, bool checkSeki);
 
   /**
-   * Returns true if the specified location is subject to seki.
-   * @param index Position number
-   * @param color Color of the stone
-   * @return True if subject to seki
+   * Returns true if the specified position is subject to seki.
+   * @param index Position index
+   * @param color Stone color
+   * @return True if the position is subject to seki
    */
   bool _isSeki(int32_t index, int32_t color);
 
   /**
-   * Returns true if the group created by placing a stone at the specified location is subject to seki.
-   * @param index Position number
-   * @param color Color of the stone
-   * @param renIds List of group IDs to be judged
-   * @param spaceIndex Position number of the empty area
+   * Returns true if the group formed by placing a stone at the specified position is subject to seki.
+   * @param index Position index
+   * @param color Stone color
+   * @param renIds List of group IDs to evaluate
+   * @param spaceIndex Position index of the empty area
    * @return True if subject to seki
    */
   bool _isSekiRen(int32_t index, int32_t color, std::set<int32_t>& renIds, int32_t spaceIndex);
 
   /**
-   * Returns true if the area created by placing a stone at the specified location is subject to seki.
-   * @param index Position number
-   * @param color Color of the stone
-   * @param renIds List of group IDs to be judged
-   * @param spacesIndices List of position numbers of empty areas
+   * Returns true if the area formed by placing a stone at the specified position is subject to seki.
+   * @param index Position index
+   * @param color Stone color
+   * @param renIds List of group IDs to evaluate
+   * @param spacesIndices List of empty area position indices
    * @return True if subject to seki
    */
   bool _isSekiArea(
       int32_t index, int32_t color, std::set<int32_t>& renIds, std::set<int32_t>& spacesIndices);
 
   /**
-   * Returns true if the specified list of position numbers forms a Nakade.
-   * @param positions List of position numbers
-   * @return True if it is a Nakade
+   * Returns true if the specified list of position indices forms a nakade.
+   * @param positions List of position indices
+   * @return True if the positions form a nakade
    */
   bool _isNakade(std::set<int32_t>& positions);
 
   /**
-   * Returns true if the specified list of position numbers is contained within a single area.
-   * @param positions List of position numbers
+   * Returns true if the specified list of position indices is contained within a single area.
+   * @param positions List of position indices
    * @param color Color of the stones surrounding the area
-   * @param excludedIndex Position number to exclude
-   * @return True if contained within a single area
+   * @param excludedIndex Position index to exclude
+   * @return True if all positions are in a single area
    */
   bool _isSingleArea(std::set<int32_t>& positions, int32_t color, int32_t excludedIndex);
 
   /**
-   * Returns whether the specified coordinates are a valid position.
+   * Returns the position index for the specified coordinates.
    * @param x X coordinate
    * @param y Y coordinate
-   * @return True if the position is valid
+   * @return Position index
    */
-  inline bool _isValidPosition(int32_t x, int32_t y);
+  inline int32_t _getIndex(int32_t x, int32_t y) const {
+    return ((y + 1) * _width) + (x + 1);
+  }
 
   /**
-   * Gets the position number for the specified coordinates.
-   * @param x X coordinate
-   * @param y Y coordinate
-   * @return Position number
-   */
-  inline int32_t _getIndex(int32_t x, int32_t y);
-
-  /**
-   * Gets the X coordinate for the specified position number.
-   * @param index Position number
+   * Returns the X coordinate of the specified position index.
+   * @param index Position index
    * @return X coordinate
    */
-  inline int32_t _getPosX(int32_t index);
+  inline int32_t _getPosX(int32_t index) const {
+    return (index % _width) - 1;
+  }
 
   /**
-   * Gets the Y coordinate for the specified position number.
-   * @param index Position number
+   * Returns the Y coordinate of the specified position index.
+   * @param index Position index
    * @return Y coordinate
    */
-  inline int32_t _getPosY(int32_t index);
+  inline int32_t _getPosY(int32_t index) const {
+    return (index / _width) - 1;
+  }
 };
 
 }  // namespace deepgo

@@ -4,7 +4,7 @@
 # Program name
 NAME = 'Maru'
 # Version number
-VERSION = '8.1'
+VERSION = '8.2'
 
 ################################################################
 # Board settings
@@ -46,8 +46,12 @@ MODEL_VALUES = 3
 
 # Size of data input to model
 MODEL_INPUT_SIZE = (MODEL_FEATURES + 1) * MODEL_SIZE * MODEL_SIZE + MODEL_INFOS
+# Size of input data to the model when embedded as int32
+MODEL_INPUT_PACK_SIZE = (MODEL_INPUT_SIZE + 31) // 32 + 1
 # Size of data output by model
 MODEL_OUTPUT_SIZE = MODEL_PREDICTIONS * MODEL_SIZE * MODEL_SIZE + MODEL_VALUES
+# Size of model output mask when embedded as int32
+MODEL_OUTPUT_PACK_SIZE = (MODEL_OUTPUT_SIZE + 31) // 32
 
 ################################################################
 # Default settings
@@ -56,6 +60,16 @@ MODEL_OUTPUT_SIZE = MODEL_PREDICTIONS * MODEL_SIZE * MODEL_SIZE + MODEL_VALUES
 DEFAULT_SIZE = 19
 # Default komi value
 DEFAULT_KOMI = 7.5
+# Default maximum visits for MCTS
+DEFAULT_MAX_VISITS = 1_000_000
+# Initial value applied to PUCB upper confidence bound
+DEFAULT_PUCB_CONSTANT_INIT = 0.6
+# Base value applied to PUCB upper confidence bound
+DEFAULT_PUCB_CONSTANT_BASE = 1600.0
+# Default number of threads per GPU
+DEFAULT_THREADS_PER_GPU = 2
+# Default batch size for board evaluation calculation
+DEFAULT_BATCH_SIZE = 32
 
 ################################################################
 # Logging settings

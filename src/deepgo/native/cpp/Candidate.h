@@ -1,7 +1,12 @@
 #pragma once
 
+#include <cmath>
 #include <cstdint>
+#include <ostream>
 #include <vector>
+
+#include "MctsNode.h"
+#include "Move.h"
 
 namespace deepgo {
 
@@ -12,87 +17,144 @@ class Candidate {
  public:
   /**
    * Creates candidate move data.
-   * @param x x coordinate
-   * @param y y coordinate
-   * @param color Stone color
-   * @param visits Number of visits
-   * @param playouts Number of playouts
-   * @param policy Predicted move probability
-   * @param value Evaluation value
-   * @param variations Predicted sequence
+   * @param move move
+   * @param visits number of visits
+   * @param playouts number of playouts
+   * @param policy predicted move probability
+   * @param value evaluation value
+   * @param variations predicted sequence of moves
+   * @param territories predicted territory probabilities
    */
   Candidate(
-      int32_t x, int32_t y, int32_t color,
-      int32_t visits, int32_t playouts, float policy, float value,
-      std::vector<std::pair<int32_t, int32_t>> variations);
+      Move move, int32_t visits, int32_t playouts,
+      float policy, float value, const std::vector<Move> variations,
+      const std::array<float, 3 * MODEL_SIZE * MODEL_SIZE>& territories);
 
   /**
-   * Destroys the instance.
+   * Creates candidate move data from a node object.
+   * @param node node object
+   */
+  Candidate(MctsNode* node);
+
+  /**
+   * Copies a candidate move object.
+   * @param other source candidate move object to copy from
+   */
+  Candidate(const Candidate& other);
+
+  /**
+   * Creates a candidate move object.
+   * Creates an object representing an invalid candidate move.
+   */
+  Candidate();
+
+  /**
+   * Returns the string representation of the candidate move.
+   * @return string representation of the candidate move
+   */
+  std::string toString() const;
+
+  /**
+   * Destructor.
    */
   virtual ~Candidate() = default;
 
   /**
-   * Gets the x coordinate.
-   * @return x coordinate
+   * Returns the move.
+   * @return move
    */
-  int32_t getX() const;
+  inline Move getMove() const {
+    return _move;
+  }
 
   /**
-   * Gets the y coordinate.
-   * @return y coordinate
+   * Returns the number of visits.
+   * @return number of visits
    */
-  int32_t getY() const;
+  inline int32_t getVisits() const {
+    return _visits;
+  }
 
   /**
-   * Gets the stone color.
-   * @return Stone color
+   * Returns the number of playouts.
+   * @return number of playouts
    */
-  int32_t getColor() const;
+  inline int32_t getPlayouts() const {
+    return _playouts;
+  }
 
   /**
-   * Gets the number of visits.
-   * @return Number of visits
+   * Returns the predicted move probability.
+   * @return predicted move probability
    */
-  int32_t getVisits() const;
+  inline float getPolicy() const {
+    return _policy;
+  }
 
   /**
-   * Gets the number of playouts.
-   * @return Number of playouts
+   * Returns the evaluation value.
+   * @return evaluation value
    */
-  int32_t getPlayouts() const;
+  inline float getValue() const {
+    return _value;
+  }
 
   /**
-   * Gets the predicted move probability.
-   * @return Predicted move probability
+   * Returns the predicted sequence of moves.
+   * @return predicted sequence of moves
    */
-  float getPolicy() const;
+  inline std::vector<Move> getVariations() const {
+    return _variations;
+  }
 
   /**
-   * Gets the evaluation value.
-   * @return Evaluation value
+   * Returns the predicted territory probabilities.
+   * @param territories array to store the predicted territory probabilities
    */
-  float getValue() const;
+  inline void getTerritories(float* territories) const {
+    std::copy(std::begin(_territories), std::end(_territories), territories);
+  }
 
   /**
-   * Gets the predicted sequence.
-   * @return Predicted sequence
+   * Returns the lower bound of the confidence interval for the evaluation value.
+   * @return lower bound of the confidence interval for the evaluation value
    */
-  std::vector<std::pair<int32_t, int32_t>> getVariations() const;
+  inline float getValueLCB() const {
+    return _value - _move.getColor() * 1.96f * 0.5f / std::sqrt(_visits + 1);
+  }
+
+  /**
+   * Returns the predicted win rate.
+   * @return predicted win rate
+   */
+  inline float getWinChance() const {
+    return _value * _move.getColor() * 0.5f + 0.5f;
+  }
+
+  /**
+   * Returns the lower bound of the confidence interval for the predicted win rate.
+   * @return lower bound of the confidence interval for the predicted win rate
+   */
+  inline float getWinChanceLCB() const {
+    return getValueLCB() * _move.getColor() * 0.5f + 0.5f;
+  }
+
+  /**
+   * Writes the string representation of the candidate move to an output stream.
+   * @param os output stream
+   * @param candidate candidate move object
+   * @return output stream
+   */
+  friend std::ostream& operator<<(std::ostream& os, const Candidate& candidate) {
+    os << candidate.toString();
+    return os;
+  }
 
  private:
   /**
-   * x coordinate.
+   * Move.
    */
-  int32_t _x;
-  /**
-   * y coordinate.
-   */
-  int32_t _y;
-
-  /**
-   * Stone color.
-   */
-  int32_t _color;
+  Move _move;
 
   /**
    * Number of visits.
@@ -115,9 +177,14 @@ class Candidate {
   float _value;
 
   /**
-   * Predicted sequence.
+   * Predicted sequence of moves.
    */
-  std::vector<std::pair<int32_t, int32_t>> _variations;
+  std::vector<Move> _variations;
+
+  /**
+   * Predicted territory probabilities.
+   */
+  std::array<float, 3 * MODEL_SIZE * MODEL_SIZE> _territories;
 };
 
 }  // namespace deepgo

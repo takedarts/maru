@@ -2,24 +2,36 @@
 
 #include <algorithm>
 #include <cstring>
+#include <iomanip>
+#include <sstream>
 
 #include "Config.h"
+#include "Constant.h"
 
 namespace deepgo {
 
 #define AROUNDS {-1, -_width, 1, _width}
 
 /**
- * Create a board object.
- * @param width Board width
- * @param height Board height
+ * Sets the specified bit.
+ * @param inputs Bit array
+ * @param index Position of the bit to set
+ */
+inline void setInputBit(int32_t* inputs, int32_t index, int32_t value = 1) {
+  inputs[index / 32] |= (value << (index % 32));
+}
+
+/**
+ * Creates a board object.
+ * @param width Width of the board
+ * @param height Height of the board
  */
 Board::Board(int width, int height)
     : _width(width + 2),
       _height(height + 2),
       _length(_width * _height),
-      _renIds(new int32_t[_length]),
-      _renObjs(new Ren[_length]),
+      _renIds(_length, -1),
+      _renObjs(_length),
       _areaIds(),
       _areaFlags(),
       _koIndex(-1),
@@ -27,17 +39,14 @@ Board::Board(int width, int height)
       _histories(),
       _pattern(width, height),
       _areaUpdated(false),
-      _shichoUpdated(false) {
+      _shichoUpdated(false),
+      _hash(0),
+      _bitBoard() {
   // Create arrays to store data
-  _areaIds[0].reset(new int32_t[_length]);
-  _areaIds[1].reset(new int32_t[_length]);
-  _areaFlags[0].reset(new bool[_length]);
-  _areaFlags[1].reset(new bool[_length]);
-
-  // Initialize ren data
-  for (int32_t i = 0; i < _length; i++) {
-    _renIds[i] = -1;
-  }
+  _areaIds[0].resize(_length);
+  _areaIds[1].resize(_length);
+  _areaFlags[0].resize(_length);
+  _areaFlags[1].resize(_length);
 
   // Set boundary data on the outside of the board
   _renObjs[0].color = EDGE;
@@ -53,18 +62,21 @@ Board::Board(int width, int height)
     _renIds[_width * i] = 0;
     _renIds[_width * i + _width - 1] = 0;
   }
+
+  // Initialize the bitboard
+  std::fill(std::begin(_bitBoard), std::end(_bitBoard), 0);
 }
 
 /**
- * Create a copied board object.
+ * Creates a copied board object.
  * @param board Source board object to copy from
  */
 Board::Board(const Board& board)
     : _width(board._width),
       _height(board._height),
       _length(board._length),
-      _renIds(new int32_t[_length]),
-      _renObjs(new Ren[_length]),
+      _renIds(board._renIds),
+      _renObjs(board._renObjs),
       _areaIds(),
       _areaFlags(),
       _koIndex(board._koIndex),
@@ -72,19 +84,21 @@ Board::Board(const Board& board)
       _histories(),
       _pattern(board._pattern),
       _areaUpdated(false),
-      _shichoUpdated(false) {
+      _shichoUpdated(false),
+      _hash(0),
+      _bitBoard() {
   // Create arrays to store data
-  _areaIds[0].reset(new int32_t[_length]);
-  _areaIds[1].reset(new int32_t[_length]);
-  _areaFlags[0].reset(new bool[_length]);
-  _areaFlags[1].reset(new bool[_length]);
+  _areaIds[0].resize(_length);
+  _areaIds[1].resize(_length);
+  _areaFlags[0].resize(_length);
+  _areaFlags[1].resize(_length);
 
-  // Duplicate the board
+  // Copy the board
   copyFrom(&board);
 }
 
 /**
- * Initialize the board state.
+ * Initializes the board state.
  */
 void Board::clear() {
   // Initialize group information
@@ -107,88 +121,92 @@ void Board::clear() {
   _koColor = EMPTY;
 
   // Initialize history
-  _histories[0].clear();
-  _histories[1].clear();
+  _histories[0].clearMoves();
+  _histories[1].clearMoves();
 
   // Initialize stone arrangement information
   _pattern.clear();
+
+  // Initialize the board hash value
+  _hash = 0;
+
+  // Initialize the bitboard
+  std::fill(std::begin(_bitBoard), std::end(_bitBoard), 0);
 }
 
 /**
- * Get the board width.
- * @return Board width
+ * Returns the width of the board.
+ * @return Width of the board
  */
-int32_t Board::getWidth() {
+int32_t Board::getWidth() const {
   return _width - 2;
 }
 
 /**
- * Get the board height.
- * @return Board height
+ * Returns the height of the board.
+ * @return Height of the board
  */
-int32_t Board::getHeight() {
+int32_t Board::getHeight() const {
   return _height - 2;
 }
 
 /**
- * Place a stone.
- * @param x X coordinate to place the stone
- * @param y Y coordinate to place the stone
- * @param color Stone color
- * @return Number of captured stones (-1 if not allowed)
+ * Places a stone.
+ * @param move Move information
+ * @return Number of captured stones (or -1 if the move is illegal)
  */
-int32_t Board::play(int32_t x, int32_t y, int32_t color) {
-  // Reset ko information if pass
-  if (!_isValidPosition(x, y)) {
+int32_t Board::play(Move move) {
+  // If passing, reset ko information
+  if (!move.isValid(_width - 2, _height - 2)) {
     _koIndex = -1;
     _koColor = EMPTY;
     return 0;
   }
 
-  // Check if the specified coordinates are a valid move
-  int32_t index = _getIndex(x, y);
-  int32_t op_color = OPPOSITE(color);
+  // Validation
+  int32_t index = _getIndex(move.getX(), move.getY());
+  int8_t my_color = move.getColor();
+  int8_t op_color = OPPOSITE(my_color);
 
-  if (!_isEnabled(index, color, false)) {
+  if (!_isEnabled(index, my_color, false)) {
     return -1;
   }
 
   // Place the stone
-  _put(index, color);
+  _put(index, my_color);
 
-  // Add move coordinates to history
-  if (color == BLACK) {
-    _histories[0].add(index);
-  } else if (color == WHITE) {
-    _histories[1].add(index);
+  // Add the move coordinate to the history
+  if (my_color == BLACK) {
+    _histories[0].addMove(move);
+  } else if (my_color == WHITE) {
+    _histories[1].addMove(move);
   }
 
-  // Update the state around the move coordinates
+  // Update the state around the move coordinate
   int32_t remove_size = 0;
 
   for (auto a : AROUNDS) {
     int32_t ren_id = _renIds[index + a];
 
-    // Do nothing if empty coordinate
+    // Do nothing for empty positions
     if (ren_id == -1) {
       continue;
     }
-    // Merge if own group exists
-    else if (_renObjs[ren_id].color == color && ren_id != _renIds[index]) {
+    // If there is a friendly group, merge it
+    else if (_renObjs[ren_id].color == my_color && ren_id != _renIds[index]) {
       _mergeRen(index, index + a);
     }
-    // Remove if opponent's group exists and has no liberties
+    // If there is an opponent's group with no liberties, remove it
     else if (_renObjs[ren_id].color == op_color && _renObjs[ren_id].spaces.empty()) {
-      remove_size += _renObjs[ren_id].positions.size();
+      remove_size += static_cast<int32_t>(_renObjs[ren_id].positions.size());
       _removeRen(index + a);
       _koIndex = index + a;
     }
   }
 
-  // If two or more are removed, or the placed stone's group has two or more,
-  // or the placed stone has two or more liberties, clear ko judgment
-  int32_t position_size = _renObjs[_renIds[index]].positions.size();
-  int32_t space_size = _renObjs[_renIds[index]].spaces.size();
+  // Clear ko condition if 2 or more captured, or placed stone's group size > 1, or placed stone's liberties > 1
+  int32_t position_size = static_cast<int32_t>(_renObjs[_renIds[index]].positions.size());
+  int32_t space_size = static_cast<int32_t>(_renObjs[_renIds[index]].spaces.size());
 
   if (remove_size != 1 || position_size > 1 || space_size > 1) {
     _koIndex = -1;
@@ -197,7 +215,7 @@ int32_t Board::play(int32_t x, int32_t y, int32_t color) {
     _koColor = op_color;
   }
 
-  // Reset flags for territory and ladder information
+  // Reset flags for area information and ladder information
   _areaUpdated = false;
   _shichoUpdated = false;
 
@@ -205,12 +223,12 @@ int32_t Board::play(int32_t x, int32_t y, int32_t color) {
 }
 
 /**
- * Get the ko coordinates.
- * If ko has not occurred, returns (-1, -1).
- * @param color Target stone color
- * @return Ko coordinates
+ * Returns the coordinates of the ko.
+ * Returns (-1, -1) if no ko is in effect.
+ * @param color Color of the stone in question
+ * @return Coordinates of the ko
  */
-std::pair<int32_t, int32_t> Board::getKo(int32_t color) {
+std::pair<int32_t, int32_t> Board::getKo(int32_t color) const {
   if (_koIndex != -1 && color == _koColor) {
     return std::make_pair(_getPosX(_koIndex), _getPosY(_koIndex));
   } else {
@@ -219,20 +237,17 @@ std::pair<int32_t, int32_t> Board::getKo(int32_t color) {
 }
 
 /**
- * Return the list of most recent move coordinates.
+ * Returns the list of most recent move coordinates.
  * @param color Stone color
  * @return List of move coordinates
  */
-std::vector<std::pair<int32_t, int32_t>> Board::getHistories(int color) {
-  std::vector<std::pair<int32_t, int32_t>> moves;
+std::vector<Move> Board::getHistories(int color) const {
   int32_t history_index = (color == BLACK) ? 0 : 1;
+  std::vector<Move> moves;
 
-  for (int32_t index : _histories[history_index].get()) {
-    int32_t x = _getPosX(index);
-    int32_t y = _getPosY(index);
-
-    if (_isValidPosition(x, y)) {
-      moves.push_back(std::make_pair(x, y));
+  for (const Move& move : _histories[history_index].getMoves()) {
+    if (move.isValid(_width - 2, _height - 2)) {
+      moves.push_back(move);
     }
   }
 
@@ -240,17 +255,17 @@ std::vector<std::pair<int32_t, int32_t>> Board::getHistories(int color) {
 }
 
 /**
- * Get the color of the stone at the specified coordinates.
+ * Returns the color of the stone at the specified coordinates.
  * @param x X coordinate
  * @param y Y coordinate
  * @return Stone color
  */
-int32_t Board::getColor(int32_t x, int32_t y) {
+int32_t Board::getColor(int32_t x, int32_t y) const {
   return _getColor(_getIndex(x, y));
 }
 
 /**
- * Return the list of stone colors.
+ * Returns the list of stone colors.
  * @param colors Stone color data
  * @param color Stone color
  */
@@ -263,10 +278,10 @@ void Board::getColors(int32_t* colors, int32_t color) {
 }
 
 /**
- * Get the size of the group at the specified coordinates.
+ * Returns the size of the group at the specified coordinates.
  * @param x X coordinate
  * @param y Y coordinate
- * @return Group size
+ * @return Size of the group
  */
 int32_t Board::getRenSize(int32_t x, int32_t y) {
   int32_t ren_id = _renIds[_getIndex(x, y)];
@@ -274,15 +289,15 @@ int32_t Board::getRenSize(int32_t x, int32_t y) {
   if (ren_id == -1) {
     return 0;
   } else {
-    return _renObjs[ren_id].positions.size();
+    return static_cast<int32_t>(_renObjs[ren_id].positions.size());
   }
 }
 
 /**
- * Get the number of dead stones in the group at the specified coordinates.
+ * Returns the number of liberties of the group at the specified coordinates.
  * @param x X coordinate
  * @param y Y coordinate
- * @return Number of dead stones
+ * @return Number of liberties
  */
 int32_t Board::getRenSpace(int32_t x, int32_t y) {
   int32_t ren_id = _renIds[_getIndex(x, y)];
@@ -290,15 +305,15 @@ int32_t Board::getRenSpace(int32_t x, int32_t y) {
   if (ren_id == -1) {
     return 0;
   } else {
-    return _renObjs[ren_id].spaces.size();
+    return static_cast<int32_t>(_renObjs[ren_id].spaces.size());
   }
 }
 
 /**
- * Get the presence of a shicho (ladder) at the specified coordinates.
+ * Returns whether the group at the specified coordinates is in a ladder.
  * @param x X coordinate
  * @param y Y coordinate
- * @return True if shicho exists, false otherwise
+ * @return true if the group is in a ladder
  */
 bool Board::isShicho(int32_t x, int32_t y) {
   _updateShicho();
@@ -313,22 +328,22 @@ bool Board::isShicho(int32_t x, int32_t y) {
 }
 
 /**
- * Return true if a stone can be placed.
+ * Returns true if a stone can be placed at the specified position.
  * @param x X coordinate
  * @param y Y coordinate
  * @param color Stone color
- * @param checkSeki True to check for seki
- * @return True if a stone can be placed
+ * @param checkSeki true to check for seki
+ * @return true if the move is legal
  */
 bool Board::isEnabled(int32_t x, int32_t y, int32_t color, bool checkSeki) {
   return _isEnabled(_getIndex(x, y), color, checkSeki);
 }
 
 /**
- * Get the list of places where stones can be placed.
- * @param enableds List of places where stones can be placed
+ * Returns the list of positions where a stone can be placed.
+ * @param enableds List of legal positions
  * @param color Stone color
- * @param checkSeki True to check for seki
+ * @param checkSeki true to check for seki
  */
 void Board::getEnableds(int32_t* enableds, int32_t color, bool checkSeki) {
   for (int32_t y = 0; y < _height - 2; y++) {
@@ -343,33 +358,33 @@ void Board::getEnableds(int32_t* enableds, int32_t color, bool checkSeki) {
 }
 
 /**
- * Return the data of fixed territories.
- * @param territories Data of fixed territories
- * @param color Reference stone color (set WHITE to return data judged for black and white)
+ * Returns the settled territory data.
+ * @param territories Territory data
+ * @param color Reference stone color (setting WHITE returns data with black/white evaluated)
  */
 void Board::getTerritories(int32_t* territories, int32_t color) {
   // Update empty area data
   _updateArea();
 
-  // Set data for confirmed territories
+  // Set territory data
   for (int32_t y = 0; y < _height - 2; y++) {
     for (int32_t x = 0; x < _width - 2; x++) {
       int32_t index = _getIndex(x, y);
       int32_t ren_id = _renIds[index];
 
-      // Set fixed group
+      // Set settled groups
       if (ren_id != -1 && _renObjs[ren_id].fixed) {
         territories[y * (_width - 2) + x] = _renObjs[ren_id].color * color;
       }
-      // Set confirmed territory for black
+      // Set black settled territory
       else if (_areaIds[0][index] != -1 && _areaFlags[0][_areaIds[0][index]]) {
         territories[y * (_width - 2) + x] = BLACK * color;
       }
-      // Set confirmed territory for white
+      // Set white settled territory
       else if (_areaIds[1][index] != -1 && _areaFlags[1][_areaIds[1][index]]) {
         territories[y * (_width - 2) + x] = WHITE * color;
       }
-      // Set unconfirmed territory
+      // Set unsettled territory
       else {
         territories[y * (_width - 2) + x] = EMPTY;
       }
@@ -378,16 +393,16 @@ void Board::getTerritories(int32_t* territories, int32_t color) {
 }
 
 /**
- * Get the owner data for each coordinate.
+ * Returns the owner data for each coordinate.
  * @param owners Owner data
- * @param color Reference stone color (set WHITE to return data judged for black and white)
- * @param rule Calculation rule (RULE_CH: Chinese rule, RULE_JP: Japanese rule, RULE_COM: Automatic match rule)
+ * @param color Reference stone color (setting WHITE returns data with black/white inverted)
+ * @param rule Scoring rule (RULE_CH: Chinese rules, RULE_JP: Japanese rules, RULE_COM: auto-match rules)
  */
 void Board::getOwners(int32_t* owners, int32_t color, int32_t rule) {
-  // Get data of fixed territories
+  // Get territory data
   getTerritories(owners, color);
 
-  // Set owner of stones in unfixed territories
+  // Set the owner for stones in unsettled territory
   for (int32_t y = 0; y < _height - 2; y++) {
     for (int32_t x = 0; x < _width - 2; x++) {
       int32_t owner_index = y * (_width - 2) + x;
@@ -398,27 +413,22 @@ void Board::getOwners(int32_t* owners, int32_t color, int32_t rule) {
     }
   }
 
-  // If Japanese rule, finish setting owner list
+  // If Japanese rules, finish setting the owner list
   if (rule == RULE_JP) {
     return;
   }
 
-  // Create area data surrounded by a single color
-  std::unique_ptr<int32_t[]> areas(new int32_t[_length]);
-  std::unique_ptr<bool[]> checks(new bool[_length]);
-
-  for (int32_t i = 0; i < _length; i++) {
-    areas[i] = EMPTY;
-    checks[i] = false;
-  }
+  // Create area data for regions surrounded by a single color
+  std::vector<int32_t> areas(_length, EMPTY);
+  std::vector<bool> checks(_length, false);
 
   for (int32_t y = 0; y < _height - 2; y++) {
     for (int32_t x = 0; x < _width - 2; x++) {
       int32_t index = _getIndex(x, y);
       int32_t color = getColor(x, y);
 
-      // Do nothing if already checked
-      // Do nothing if empty coordinate
+      // Skip if already checked
+      // Skip if not an empty position
       if (checks[index] || color != EMPTY) {
         continue;
       }
@@ -462,7 +472,7 @@ void Board::getOwners(int32_t* owners, int32_t color, int32_t rule) {
     }
   }
 
-  // Reflect area data in owner data
+  // Apply area data to owner data
   for (int32_t y = 0; y < _height - 2; y++) {
     for (int32_t x = 0; x < _width - 2; x++) {
       int32_t index = _getIndex(x, y);
@@ -476,32 +486,33 @@ void Board::getOwners(int32_t* owners, int32_t color, int32_t rule) {
 }
 
 /**
- * Get the pattern representation of the stones.
- * @return Pattern representation of the stones
+ * Returns the value representing the stone arrangement.
+ * @return Value representing the stone arrangement
  */
 std::vector<int32_t> Board::getPatterns() {
   return _pattern.values();
 }
 
 /**
- * Get data to input to the model.
- * @param inputs Board data to input to the model
- * @param color Stone color to play
- * @param komi Komi value
- * @param rule Rule for determining winner
- * @param superko True to apply superko rule
+ * Returns the input data for the model.
+ * @param inputs Board data to feed into the model
+ * @param color Color of the stone to play
+ * @param komi Komi in points
+ * @param rule Rule for determining win/loss
+ * @param superko true to apply the superko rule
  */
-void Board::getInputs(float* inputs, int32_t color, float komi, int32_t rule, bool superko) {
+void Board::getInputs(
+    int32_t* inputs, int32_t color, float komi, int32_t rule, bool superko) {
   int length = MODEL_SIZE * MODEL_SIZE;
   int32_t offset_x = (MODEL_SIZE - _width + 2) / 2;
   int32_t offset_y = (MODEL_SIZE - _height + 2) / 2;
 
-  // Update ladder (shicho) information
+  // Update ladder information
   _updateShicho();
 
   // Initialize input data
-  for (int32_t i = 0; i < MODEL_INPUT_SIZE; i++) {
-    inputs[i] = 0.0;
+  for (int32_t i = 0; i < MODEL_INPUT_PACK_SIZE; i++) {
+    inputs[i] = 0;
   }
 
   // Set stone arrangement
@@ -511,61 +522,61 @@ void Board::getInputs(float* inputs, int32_t color, float komi, int32_t rule, bo
       int32_t index = (offset_y + y) * MODEL_SIZE + (offset_x + x);
 
       // Set mask
-      inputs[length * MODEL_FEATURES + index] = 1.0;
+      setInputBit(inputs, length * MODEL_FEATURES + index);
 
-      // Set value for empty coordinates
+      // Set value for empty positions.
       if (ren_id == -1) {
-        inputs[length * 0 + index] = 1.0;
+        setInputBit(inputs, length * 0 + index);
         continue;
       }
 
-      // Set value for coordinates with stones
-      int32_t shicho = (_renObjs[ren_id].shicho) ? 1.0 : 0.0;
-      int32_t size = std::min((int32_t)_renObjs[ren_id].spaces.size(), 8);
+      // Set value for positions with a stone placed.
+      int32_t shicho = (_renObjs[ren_id].shicho) ? 1 : 0;
+      int32_t size = std::min(static_cast<int32_t>(_renObjs[ren_id].spaces.size()), 8);
 
-      // Set value for black stone coordinates
+      // Set value for black stone positions.
       if (_renObjs[ren_id].color * color == BLACK) {
-        inputs[length * 1 + index] = 1.0;
-        inputs[length * 2 + index] = shicho;
-        inputs[length * (2 + size) + index] = 1.0;
+        setInputBit(inputs, length * 1 + index);
+        setInputBit(inputs, length * 2 + index, shicho);
+        setInputBit(inputs, length * (2 + size) + index);
       }
-      // Set value for white stone coordinates
+      // Set value for white stone positions.
       else if (_renObjs[ren_id].color * color == WHITE) {
-        inputs[length * 14 + index] = 1.0;
-        inputs[length * 15 + index] = shicho;
-        inputs[length * (15 + size) + index] = 1.0;
+        setInputBit(inputs, length * 14 + index);
+        setInputBit(inputs, length * 15 + index, shicho);
+        setInputBit(inputs, length * (15 + size) + index);
       }
     }
   }
 
   // Set move history
-  std::vector<int32_t> black_histotires = _histories[(1 - color) / 2].get();
-  std::vector<int32_t> white_histotires = _histories[(1 + color) / 2].get();
+  std::vector<Move> black_moves = _histories[(1 - color) / 2].getMoves();
+  std::vector<Move> white_moves = _histories[(1 + color) / 2].getMoves();
 
-  std::reverse(black_histotires.begin(), black_histotires.end());
-  std::reverse(white_histotires.begin(), white_histotires.end());
+  std::reverse(black_moves.begin(), black_moves.end());
+  std::reverse(white_moves.begin(), white_moves.end());
 
-  for (int32_t i = 0; i < black_histotires.size(); i++) {
-    if (black_histotires[i] > 0) {
-      int32_t x = _getPosX(black_histotires[i]);
-      int32_t y = _getPosY(black_histotires[i]);
+  for (int32_t i = 0; i < black_moves.size(); i++) {
+    if (black_moves[i].isValid(_width - 2, _height - 2)) {
+      int32_t x = black_moves[i].getX();
+      int32_t y = black_moves[i].getY();
       int32_t index = (offset_y + y) * MODEL_SIZE + (offset_x + x);
 
-      inputs[length * (11 + i) + index] = 1.0;
+      setInputBit(inputs, length * (11 + i) + index);
     }
   }
 
-  for (int32_t i = 0; i < white_histotires.size(); i++) {
-    if (white_histotires[i] > 0) {
-      int32_t x = _getPosX(white_histotires[i]);
-      int32_t y = _getPosY(white_histotires[i]);
+  for (int32_t i = 0; i < white_moves.size(); i++) {
+    if (white_moves[i].isValid(_width - 2, _height - 2)) {
+      int32_t x = white_moves[i].getX();
+      int32_t y = white_moves[i].getY();
       int32_t index = (offset_y + y) * MODEL_SIZE + (offset_x + x);
 
-      inputs[length * (24 + i) + index] = 1.0;
+      setInputBit(inputs, length * (24 + i) + index);
     }
   }
 
-  // Set information for lines 1–4
+  // Set information for lines 1-4
   for (int i = 0; i < 4; i++) {
     int32_t begin_x = offset_x + i;
     int32_t end_x = offset_x + _width - 2 - i;
@@ -573,13 +584,13 @@ void Board::getInputs(float* inputs, int32_t color, float komi, int32_t rule, bo
     int32_t end_y = offset_y + _height - 2 - i;
 
     for (int y = begin_y; y < end_y; y++) {
-      inputs[length * (27 + i) + y * MODEL_SIZE + begin_x] = 1.0;
-      inputs[length * (27 + i) + y * MODEL_SIZE + end_x - 1] = 1.0;
+      setInputBit(inputs, length * (27 + i) + y * MODEL_SIZE + begin_x);
+      setInputBit(inputs, length * (27 + i) + y * MODEL_SIZE + end_x - 1);
     }
 
     for (int x = begin_x; x < end_x; x++) {
-      inputs[length * (27 + i) + begin_y * MODEL_SIZE + x] = 1.0;
-      inputs[length * (27 + i) + (end_y - 1) * MODEL_SIZE + x] = 1.0;
+      setInputBit(inputs, length * (27 + i) + begin_y * MODEL_SIZE + x);
+      setInputBit(inputs, length * (27 + i) + (end_y - 1) * MODEL_SIZE + x);
     }
   }
 
@@ -589,47 +600,47 @@ void Board::getInputs(float* inputs, int32_t color, float komi, int32_t rule, bo
     int32_t y = _getPosY(_koIndex);
     int32_t index = y * MODEL_SIZE + x;
 
-    inputs[length * 31 + index] = 1.0;
+    setInputBit(inputs, length * 31 + index);
   }
 
-  // Register turn
+  // Register the current turn
   int32_t info_offset = (MODEL_FEATURES + 1) * length;
 
   if (color == BLACK) {
-    inputs[info_offset + 0] = 1.0;
+    setInputBit(inputs, info_offset + 0);
   } else {
-    inputs[info_offset + 1] = 1.0;
+    setInputBit(inputs, info_offset + 1);
   }
 
-  // Register komi value
-  inputs[info_offset + 2] = (komi * color) / 13.0;
+  // Register komi in points
+  inputs[MODEL_INPUT_PACK_SIZE - 1] = (int32_t)((komi * color) / 13.0 * 0xfffff);
 
-  // Register whether superko rule is applied
+  // Register whether superko rule applies
   if (superko) {
-    inputs[info_offset + 3] = 1.0;
+    setInputBit(inputs, info_offset + 3);
   }
 
   // Register whether ko has occurred
   if (_koColor == color && _koIndex > 0) {
-    inputs[info_offset + 4] = 1.0;
+    setInputBit(inputs, info_offset + 4);
   }
 
-  // Register rule for determining winner
+  // Register the win/loss rule
   if (rule != RULE_JP) {
-    inputs[info_offset + 5] = 1.0;
+    setInputBit(inputs, info_offset + 5);
   } else {
-    inputs[info_offset + 6] = 1.0;
+    setInputBit(inputs, info_offset + 6);
   }
 }
 
 /**
- * Get the board state.
+ * Returns the board state.
  * @return Board state
  */
 std::vector<int32_t> Board::getState() {
   std::vector<int32_t> state;
 
-  // Register values representing stone arrangement
+  // Register the value representing the stone arrangement
   for (int32_t v : _pattern.values()) {
     state.push_back(v);
   }
@@ -638,23 +649,23 @@ std::vector<int32_t> Board::getState() {
   state.push_back((_koIndex + 1) << 2 | (_koColor + 1));
 
   // Register move history
-  std::vector<int32_t> black_histotires = _histories[0].get();
-  std::vector<int32_t> white_histotires = _histories[1].get();
+  std::vector<Move> black_moves = _histories[0].getMoves();
+  std::vector<Move> white_moves = _histories[1].getMoves();
 
   state.push_back(
-      (black_histotires[0] + 1) << 20 |
-      (black_histotires[1] + 1) << 10 |
-      (black_histotires[2] + 1));
+      (_getIndex(black_moves[0].getX(), black_moves[0].getY()) + 1) << 20 |
+      (_getIndex(black_moves[1].getX(), black_moves[1].getY()) + 1) << 10 |
+      (_getIndex(black_moves[2].getX(), black_moves[2].getY()) + 1));
   state.push_back(
-      (white_histotires[0] + 1) << 20 |
-      (white_histotires[1] + 1) << 10 |
-      (white_histotires[2] + 1));
+      (_getIndex(white_moves[0].getX(), white_moves[0].getY()) + 1) << 20 |
+      (_getIndex(white_moves[1].getX(), white_moves[1].getY()) + 1) << 10 |
+      (_getIndex(white_moves[2].getX(), white_moves[2].getY()) + 1));
 
   return state;
 }
 
 /**
- * Restore the board state.
+ * Restores the board state.
  * @param state Board state
  */
 void Board::loadState(std::vector<int32_t> state) {
@@ -670,9 +681,9 @@ void Board::loadState(std::vector<int32_t> state) {
       int32_t value = state[index] >> shift & 3;
 
       if (value == 1) {
-        play(x, y, BLACK);
+        play(Move(x, y, BLACK));
       } else if (value == 2) {
-        play(x, y, WHITE);
+        play(Move(x, y, WHITE));
       }
     }
   }
@@ -684,19 +695,21 @@ void Board::loadState(std::vector<int32_t> state) {
   _koColor = (ko_info & 3) - 1;
 
   // Restore history
-  _histories[0].clear();
-  _histories[1].clear();
+  _histories[0].clearMoves();
+  _histories[1].clearMoves();
 
   for (int32_t i = 0; i < 3; i++) {
     int32_t black_history = (state[state.size() - 2] >> (20 - i * 10) & 0x3FF) - 1;
     int32_t white_history = (state[state.size() - 1] >> (20 - i * 10) & 0x3FF) - 1;
 
     if (black_history != -1) {
-      _histories[0].add(black_history);
+      _histories[0].addMove(
+          Move(_getPosX(black_history), _getPosY(black_history), BLACK));
     }
 
     if (white_history != -1) {
-      _histories[1].add(white_history);
+      _histories[1].addMove(
+          Move(_getPosX(white_history), _getPosY(white_history), WHITE));
     }
   }
 
@@ -706,12 +719,12 @@ void Board::loadState(std::vector<int32_t> state) {
 }
 
 /**
- * Copy the board state.
- * @param board Source board
+ * Copies the board state.
+ * @param board Source board to copy from
  */
 void Board::copyFrom(const Board* board) {
   // Copy group information
-  memcpy(_renIds.get(), board->_renIds.get(), sizeof(int32_t) * _length);
+  _renIds = board->_renIds;
 
   for (int32_t i = 0; i < _length; i++) {
     _renObjs[i] = board->_renObjs[i];
@@ -728,80 +741,98 @@ void Board::copyFrom(const Board* board) {
   _histories[0] = board->_histories[0];
   _histories[1] = board->_histories[1];
 
+  // Copy the board hash value
+  _hash = board->_hash;
+
+  // Copy the bitboard
+  for (int i = 0; i < BITBOARD_SIZE; i++) {
+    _bitBoard[i] = board->_bitBoard[i];
+  }
+
   // Initialize flags
   _areaUpdated = false;
   _shichoUpdated = false;
 }
 
 /**
- * Output the board state.
- * @param os Output destination
+ * Converts the board state to a string.
+ * @return String representation of the board state
  */
-void Board::print(std::ostream& os) {
-  os << "   ";
-  for (int32_t x = 0; x < _width - 2; x++) {
-    printf("%2d", x);
-  }
-  os << std::endl;
+std::string Board::toString() const {
+  std::stringstream ss;
 
-  os << "  +";
+  ss << "   ";
   for (int32_t x = 0; x < _width - 2; x++) {
-    os << "--";
+    ss << std::setw(2) << x;
   }
-  os << "-+" << std::endl;
+  ss << std::endl;
+
+  ss << "  +";
+  for (int32_t x = 0; x < _width - 2; x++) {
+    ss << "--";
+  }
+  ss << "-+" << std::endl;
 
   for (int32_t y = 0; y < _height - 2; y++) {
-    printf("%2d|", y);
+    ss << std::setw(2) << y << "|";
     for (int32_t x = 0; x < _width - 2; x++) {
       int32_t index = _getIndex(x, y);
       int32_t color = getColor(x, y);
 
       if (index == _koIndex) {
-        os << " K";
+        ss << " K";
       } else if (color == BLACK) {
-        os << " X";
+        ss << " X";
       } else if (color == WHITE) {
-        os << " O";
+        ss << " O";
       } else {
-        os << " .";
+        ss << " .";
       }
     }
-    os << " |" << std::endl;
+    ss << " |" << std::endl;
   }
 
-  os << "  +";
+  ss << "  +";
   for (int32_t x = 0; x < _width - 2; x++) {
-    os << "--";
+    ss << "--";
   }
-  os << "-+" << std::endl;
+  ss << "-+";
+
+  return ss.str();
 }
 
 /**
- * Place a stone at the specified location.
+ * Places a stone at the specified position.
  * Does not merge or remove groups.
- * @param index Position number
+ * @param index Position index
  * @param color Stone color
  */
 void Board::_put(int32_t index, int32_t color) {
   int32_t op_color = OPPOSITE(color);
 
-  // Change arrangement representation value
+  // Update the stone arrangement value
   _pattern.put(_getPosX(index), _getPosY(index), color);
+
+  // Update the hash value
+  _hash ^= BOARD_HASH_VALUES[(color == BLACK) ? 0 : 1][index];
+
+  // Update the bitboard
+  _bitBoard[index / 64] |= (1ULL << (index % 64));
 
   // Create group information
   _renIds[index] = index;
   _renObjs[index].color = color;
   _renObjs[index].positions.insert(index);
 
-  // Register information to adjacent groups (do not merge)
+  // Register information to adjacent groups (no merging)
   for (auto a : AROUNDS) {
     int32_t ren_id = _renIds[index + a];
 
-    // Register as liberty if there are empty coordinates around
+    // If there is an empty position nearby, register as liberty
     if (ren_id == -1) {
       _renObjs[index].spaces.insert(index + a);
     }
-    // Remove liberty if there are groups around
+    // If there is a group nearby, remove liberty
     else {
       _renObjs[ren_id].spaces.erase(index);
     }
@@ -809,9 +840,9 @@ void Board::_put(int32_t index, int32_t color) {
 }
 
 /**
- * Merge the specified groups.
- * @param srcIndex Source group position number
- * @param dstIndex Destination group position number
+ * Merges the specified groups.
+ * @param srcIndex Position index of the source group
+ * @param dstIndex Position index of the destination group
  */
 void Board::_mergeRen(int32_t srcIndex, int32_t dstIndex) {
   int32_t src_id = _renIds[srcIndex];
@@ -823,7 +854,7 @@ void Board::_mergeRen(int32_t srcIndex, int32_t dstIndex) {
   _renObjs[dst_id].spaces.insert(
       _renObjs[src_id].spaces.begin(), _renObjs[src_id].spaces.end());
 
-  // Change identification number
+  // Update ID numbers
   for (auto pos : _renObjs[src_id].positions) {
     _renIds[pos] = dst_id;
   }
@@ -835,20 +866,26 @@ void Board::_mergeRen(int32_t srcIndex, int32_t dstIndex) {
 }
 
 /**
- * Remove the specified group.
- * @param index Position number
+ * Removes the specified group.
+ * @param index Position index
  */
 void Board::_removeRen(int32_t index) {
   int32_t ren_id = _renIds[index];
   int32_t color = _renObjs[ren_id].color;
 
-  // Execute removal process for all coordinates
+  // Execute removal process for all positions
   for (auto pos : _renObjs[ren_id].positions) {
-    // Change identification number
+    // Update ID numbers
     _renIds[pos] = -1;
 
-    // Change value
+    // Update the stone arrangement value
     _pattern.remove(_getPosX(pos), _getPosY(pos), color);
+
+    // Update the hash value
+    _hash ^= BOARD_HASH_VALUES[(color == BLACK) ? 0 : 1][pos];
+
+    // Update the bitboard
+    _bitBoard[pos / 64] &= ~(1ULL << (pos % 64));
 
     // Add liberties to surrounding groups
     for (auto a : AROUNDS) {
@@ -867,7 +904,7 @@ void Board::_removeRen(int32_t index) {
 }
 
 /**
- * Update empty area information.
+ * Updates the empty area information.
  */
 void Board::_updateArea() {
   // Do nothing if already updated
@@ -880,7 +917,7 @@ void Board::_updateArea() {
     int32_t color = (c == 0) ? BLACK : WHITE;
     int32_t op_color = OPPOSITE(color);
 
-    // Create list of group IDs
+    // Create a list of group IDs
     std::set<int32_t> ren_ids;
 
     for (int32_t index = 0; index < _length; index++) {
@@ -892,27 +929,23 @@ void Board::_updateArea() {
     }
 
     // Initialize adjacent area information for groups
-    // Initialize all groups to confirmed state
+    // Initialize all groups as settled
     for (int32_t ren_id : ren_ids) {
       _renObjs[ren_id].areas.clear();
       _renObjs[ren_id].fixed = true;
     }
 
-    // Initialize check state for each coordinate
-    std::unique_ptr<bool[]> checks(new bool[_length]);
+    // Initialize the check state for each position
+    std::vector<bool> checks(_length, false);
 
+    // Create area information and register it to group objects
     for (int32_t index = 0; index < _length; index++) {
-      checks[index] = false;
-    }
-
-    // Create area information and register to group objects
-    for (int32_t index = 0; index < _length; index++) {
-      // Do nothing if already checked
+      // Skip if already checked
       if (checks[index]) {
         continue;
       }
 
-      // Do nothing if not empty area
+      // Skip if not an empty area
       int32_t index_color = _getColor(index);
 
       if (index_color != EMPTY && index_color != op_color) {
@@ -920,7 +953,7 @@ void Board::_updateArea() {
         continue;
       }
 
-      // Create list of connected group IDs
+      // Create a list of IDs of connected groups
       std::set<int32_t> connected_ren_ids;
 
       for (auto a : AROUNDS) {
@@ -936,21 +969,21 @@ void Board::_updateArea() {
       _areaFlags[c][index] = true;
 
       while (!stack.empty()) {
-        // Get position number
+        // Get the position index
         int32_t pos = stack.back();
         stack.pop_back();
 
-        // Do nothing if already checked
+        // Skip if already checked
         if (checks[pos]) {
           continue;
         }
 
         checks[pos] = true;
 
-        // Set area ID
+        // Set the area ID
         _areaIds[c][pos] = index;
 
-        // Get list of surrounding group IDs
+        // Get the list of group IDs in the surrounding area
         std::set<int32_t> around_ren_ids;
 
         for (auto a : AROUNDS) {
@@ -961,17 +994,17 @@ void Board::_updateArea() {
           }
         }
 
-        // If there are no surrounding groups, mark as unconfirmed area
+        // If no adjacent groups, mark as unsettled area
         if (around_ren_ids.empty()) {
           _areaFlags[c][pos] = false;
         }
 
-        // If surrounding group IDs and connected group IDs differ, mark as unconfirmed area
+        // If the surrounding and connected group ID lists differ, mark as unsettled area
         if (around_ren_ids != connected_ren_ids) {
           _areaFlags[c][index] = false;
         }
 
-        // Add surrounding empty areas to stack
+        // Add surrounding empty areas to the stack
         for (auto a : AROUNDS) {
           int32_t around = pos + a;
           int32_t around_color = _getColor(around);
@@ -982,7 +1015,7 @@ void Board::_updateArea() {
         }
       }
 
-      // Register area information to group objects
+      // Register area information to the group objects
       if (_areaFlags[c][index]) {
         for (int32_t ren_id : connected_ren_ids) {
           _renObjs[ren_id].areas.insert(index);
@@ -990,23 +1023,22 @@ void Board::_updateArea() {
       }
     }
 
-    // Set confirmation information for groups and areas
+    // Set confirmed status for groups and areas
     bool updated = true;
 
     while (updated) {
       updated = false;
 
       // Update group information
-      // Only confirm if connected to two or more confirmed areas
-      // If connected confirmed areas are less than two,
-      // mark connected areas as unconfirmed
+      // Mark as settled only if connected to 2 or more settled areas
+      // If connected to fewer than 2 settled areas, mark connected areas as unsettled
       for (int32_t ren_id : ren_ids) {
-        // Do nothing if group is unconfirmed
+        // Do nothing for unsettled groups
         if (!_renObjs[ren_id].fixed) {
           continue;
         }
 
-        // Count connected confirmed areas
+        // Count the number of connected settled areas
         int32_t fixed_count = 0;
 
         for (int32_t area_id : _renObjs[ren_id].areas) {
@@ -1015,14 +1047,12 @@ void Board::_updateArea() {
           }
         }
 
-        // Do nothing if connected confirmed areas are two or more
-        // (group remains confirmed)
+        // If 2 or more connected settled areas, do nothing (group remains settled)
         if (fixed_count >= 2) {
           continue;
         }
 
-        // If connected confirmed areas are less than two,
-        // mark connected areas as unconfirmed
+        // If fewer than 2 connected settled areas, mark connected areas as unsettled
         _renObjs[ren_id].fixed = false;
 
         for (int32_t area_id : _renObjs[ren_id].areas) {
@@ -1035,12 +1065,12 @@ void Board::_updateArea() {
     }
   }
 
-  // Set update flag
+  // Set the update flag
   _areaUpdated = true;
 }
 
 /**
- * Update ladder (shicho) information.
+ * Updates the ladder information.
  */
 void Board::_updateShicho() {
   // Do nothing if already updated
@@ -1048,51 +1078,51 @@ void Board::_updateShicho() {
     return;
   }
 
-  // Update ladder (shicho) information
+  // Update ladder information
   for (int32_t index = 0; index < _length; index++) {
     int32_t ren_id = _renIds[index];
 
-    // Do nothing if coordinate number and group number differ
-    // One of the coordinate numbers belonging to the group is always the same as the group number
+    // Skip if the position index differs from the group index
+    // One of the position indices in a group always matches the group index
     if (ren_id != index) {
       continue;
     }
 
-    // Determine ladder (shicho)
+    // Determine if the group is in a ladder
     _renObjs[ren_id].shicho = _isShichoRen(index);
   }
 
-  // Set update flag
+  // Set the update flag
   _shichoUpdated = true;
 }
 
 /**
- * Return True if the specified group is a ladder (shicho).
- * @param index Position number
- * @return True if ladder
+ * Returns true if the specified group is in a ladder.
+ * @param index Position index
+ * @return true if the group is in a ladder
  */
 bool Board::_isShichoRen(int32_t index) {
-  // Not a ladder if number of liberties is not 1
+  // If the number of liberties is not 1, it is not a ladder
   if (_renObjs[index].spaces.size() > 1) {
     return false;
   }
 
-  // Use depth-first search to check all moves
-  // If the escaping side has one candidate move and the following search is OK, ladder is confirmed
-  // If the chasing side has two candidate moves and the following search is NG, check other branches
+  // Verify all moves using depth-first search
+  // The escaping side has 1 candidate move, so if the search returns OK, the ladder is confirmed
+  // The chasing side has 2 candidate moves, so if the search returns NG, check other branches
   std::vector<Board> stack({*this});
 
   while (!stack.empty()) {
-    // Get board
+    // Get the board
     Board board = stack.back();
     stack.pop_back();
 
-    // Get group ID
+    // Get the group ID
     int32_t ren_id = board._renIds[index];
     int32_t color = board._renObjs[ren_id].color;
     int32_t op_color = OPPOSITE(color);
 
-    // If adjacent opponent's group has 1 liberty -> NG (opponent's stone can be captured)
+    // Adjacent opponent group has 1 liberty -> NG (can capture opponent stones)
     bool escaped = false;
 
     for (int32_t pos : board._renObjs[ren_id].positions) {
@@ -1116,19 +1146,19 @@ bool Board::_isShichoRen(int32_t index) {
       continue;
     }
 
-    // Create board after placing stone
+    // Create the board after placing the stone
     // No candidate move to escape -> OK (ladder)
     Board curr_board(board);
     int32_t curr_pos = *board._renObjs[ren_id].spaces.begin();
     int32_t curr_pos_x = curr_board._getPosX(curr_pos);
     int32_t curr_pos_y = curr_board._getPosY(curr_pos);
 
-    if (curr_board.play(curr_pos_x, curr_pos_y, color) < 0) {
+    if (curr_board.play(Move(curr_pos_x, curr_pos_y, color)) < 0) {
       return true;
     }
 
-    // If escaped board has 1 liberty -> OK (ladder)
-    // If escaped board has 3 or more liberties -> NG (not ladder)
+    // Board after escape has 1 liberty -> OK (ladder)
+    // Board after escape has 3 or more liberties -> NG (not a ladder)
     int32_t curr_ren_id = curr_board._renIds[index];
 
     if (curr_board._renObjs[curr_ren_id].spaces.size() == 1) {
@@ -1137,13 +1167,13 @@ bool Board::_isShichoRen(int32_t index) {
       continue;
     }
 
-    // Create board by placing opponent's stone in liberty and add to search queue
+    // Place opponent stones at the liberties and add the resulting boards to the search queue
     for (int32_t next_pos : curr_board._renObjs[curr_ren_id].spaces) {
       Board next_board(curr_board);
       int32_t next_pos_x = next_board._getPosX(next_pos);
       int32_t next_pos_y = next_board._getPosY(next_pos);
 
-      next_board.play(next_pos_x, next_pos_y, op_color);
+      next_board.play(Move(next_pos_x, next_pos_y, op_color));
       stack.push_back(next_board);
     }
   }
@@ -1153,11 +1183,11 @@ bool Board::_isShichoRen(int32_t index) {
 }
 
 /**
- * Get the color of the stone at the specified location.
- * @param index Position number
+ * Returns the stone color at the specified position.
+ * @param index Position index
  * @return Stone color
  */
-int32_t Board::_getColor(int32_t index) {
+int32_t Board::_getColor(int32_t index) const {
   int32_t ren_id = _renIds[index];
 
   if (ren_id == -1) {
@@ -1168,24 +1198,24 @@ int32_t Board::_getColor(int32_t index) {
 }
 
 /**
- * Return true if a stone can be placed at the specified location.
- * @param index Position number
+ * Returns true if a stone can be placed at the specified position.
+ * @param index Position index
  * @param color Stone color
- * @param checkSeki True to check for seki
- * @return True if a stone can be placed
+ * @param checkSeki true to check for seki
+ * @return true if a stone can be placed
  */
 bool Board::_isEnabled(int32_t index, int32_t color, bool checkSeki) {
-  // If there is already a stone -> cannot place
+  // Already has a stone -> cannot place
   if (_renIds[index] != -1) {
     return false;
   }
 
-  // If ko -> cannot place
+  // Ko target -> cannot place
   if (index == _koIndex && color == _koColor) {
     return false;
   }
 
-  // If seki -> cannot place
+  // Seki target -> cannot place
   if (checkSeki && _isSeki(index, color)) {
     return false;
   }
@@ -1201,15 +1231,15 @@ bool Board::_isEnabled(int32_t index, int32_t color, bool checkSeki) {
       return true;
     }
 
-    // Check groups around
-    Ren ren = _renObjs[_renIds[target]];
+    // Check groups nearby
+    BoardRen ren = _renObjs[_renIds[target]];
 
-    // If there is an allied stone with liberties around -> can place
+    // Friendly stone with spare liberties nearby -> can place
     if (ren.color == color && ren.spaces.size() > 1) {
       return true;
     }
 
-    // If there is a capturable enemy stone around -> can place
+    // Capturable opponent stone nearby -> can place
     if (ren.color == op_color && ren.spaces.size() == 1) {
       return true;
     }
@@ -1220,14 +1250,14 @@ bool Board::_isEnabled(int32_t index, int32_t color, bool checkSeki) {
 }
 
 /**
- * Return True if the specified location is subject to seki.
- * @param index Position number
+ * Returns true if the specified position is subject to seki.
+ * @param index Position index
  * @param color Stone color
- * @return True if subject to seki
+ * @return true if subject to seki
  */
 bool Board::_isSeki(int32_t index, int32_t color) {
   // Check adjacent opponent groups
-  // If there is an opponent group with 1 liberty around the move coordinate -> NG (opponent's stone can be captured)
+  // An adjacent opponent group with only 1 liberty at the move position -> NG (can capture opponent stone)
   int32_t op_color = OPPOSITE(color);
 
   for (auto a : AROUNDS) {
@@ -1240,7 +1270,7 @@ bool Board::_isSeki(int32_t index, int32_t color) {
     }
   }
 
-  // Create list of adjacent groups
+  // Create a list of adjacent groups
   std::set<int32_t> ren_ids;
 
   for (auto a : AROUNDS) {
@@ -1251,19 +1281,13 @@ bool Board::_isSeki(int32_t index, int32_t color) {
     }
   }
 
-  // If there is no allied group around the move coordinate -> NG (not subject to seki)
+  // No own groups around the move position -> NG (not a seki candidate)
   if (ren_ids.size() == 0) {
     return false;
   }
 
-  // Check liberty coordinates (if 9 or more liberties (8 or more after move), not subject to judgment)
+  // Pre-move liberty count of the group is 9 or more -> NG (not a seki candidate)
   std::set<int32_t> spaces;
-
-  for (auto a : AROUNDS) {
-    if (_renIds[index + a] == -1) {
-      spaces.insert(index + a);
-    }
-  }
 
   for (auto id : ren_ids) {
     spaces.insert(_renObjs[id].spaces.begin(), _renObjs[id].spaces.end());
@@ -1273,35 +1297,40 @@ bool Board::_isSeki(int32_t index, int32_t color) {
     }
   }
 
-  // Remove own coordinate from liberties
+  // Pre-move liberty count of the group is 1 -> NG (not a seki candidate)
+  if (spaces.size() == 1) {
+    return false;
+  }
+
+  // Remove own position from liberties
   spaces.erase(index);
 
-  // If liberties are 0, not seki (cannot place stone)
+  // 0 liberties remaining is not seki (cannot place stone)
   if (spaces.size() == 0) {
     return false;
   }
-  // If there is 1 liberty
+  // 1 liberty remaining
   else if (spaces.size() == 1) {
     return _isSekiRen(index, color, ren_ids, *spaces.begin());
   }
-  // If there are 2 to 7 liberties
+  // 2 to 7 liberties remaining
   else {
     return _isSekiArea(index, color, ren_ids, spaces);
   }
 }
 
 /**
- * Return True if the group created by placing a stone at the specified location is subject to seki.
- * @param index Position number
+ * Returns true if the group created by placing a stone at the specified position would be subject to seki.
+ * @param index Position index
  * @param color Stone color
- * @param renIds List of group IDs to judge
- * @param spaceIndex Position number of empty area
- * @return True if subject to seki
+ * @param renIds List of group IDs to check
+ * @param spaceIndex Position index of the empty area
+ * @return true if subject to seki
  */
 bool Board::_isSekiRen(
     int32_t index, int32_t color, std::set<int32_t>& renIds, int32_t spaceIndex) {
-  // Create list of opponent groups adjacent to move coordinate and liberty
-  // If there are empty coordinates around move coordinate and liberty -> NG (not subject to seki)
+  // Create a list of opponent groups adjacent to the move position and the liberty
+  // Empty position around the move position and liberty -> NG (not a seki candidate)
   int32_t op_color = OPPOSITE(color);
   std::set<int32_t> op_ren_ids;
 
@@ -1321,21 +1350,21 @@ bool Board::_isSekiRen(
     }
   }
 
-  // If there are no opponent groups around move coordinate and liberty -> NG (not subject to seki)
+  // No opponent groups around the move position and liberty -> NG (not a seki candidate)
   if (op_ren_ids.size() == 0) {
     return false;
   }
 
-  // If the number of liberties of opponent groups adjacent to move coordinate is not 2 -> NG (not subject to seki)
-  // If the number of liberties of opponent groups adjacent to own liberty is not 2 -> NG (not subject to seki)
+  // Opponent group adjacent to move position does not have exactly 2 liberties -> NG (not a seki candidate)
+  // Opponent group adjacent to own liberty does not have exactly 2 liberties -> NG (not a seki candidate)
   for (auto ren_id : op_ren_ids) {
     if (_renObjs[ren_id].spaces.size() != 2) {
       return false;
     }
   }
 
-  // Check group coordinates
-  // If own group size is 7 or more -> OK (seki)
+  // Check group positions
+  // Own group size is 7 or more -> OK (seki)
   std::set<int32_t> positions;
 
   positions.insert(index);
@@ -1349,12 +1378,24 @@ bool Board::_isSekiRen(
     }
   }
 
-  // If own group shape is not nakade -> OK (seki)
+  // Own group shape is not nakade -> OK (seki)
   if (positions.size() >= 4 && !_isNakade(positions)) {
     return true;
   }
 
-  // Create list of liberties of opponent groups adjacent to move point and liberty
+  // Add opponent groups adjacent to own group to the list
+  for (auto position : positions) {
+    for (auto a : AROUNDS) {
+      int32_t ren_id = _renIds[position + a];
+
+      if (ren_id != -1 &&
+          _renObjs[ren_id].color == op_color) {
+        op_ren_ids.insert(ren_id);
+      }
+    }
+  }
+
+  // Create a list of liberties of opponent groups adjacent to the move position, own liberty, and own group
   std::set<int32_t> op_spaces;
 
   for (auto ren_id : op_ren_ids) {
@@ -1362,8 +1403,9 @@ bool Board::_isSekiRen(
         _renObjs[ren_id].spaces.begin(), _renObjs[ren_id].spaces.end());
   }
 
-  // If opponent groups adjacent to move coordinate have liberties other than own liberty -> OK (seki)
-  // If opponent groups adjacent to own liberty have liberties other than own liberty -> OK (seki)
+  // Opponent group adjacent to move position has liberty other than move position and own liberty -> OK (seki)
+  // Opponent group adjacent to own liberty has liberty other than move position and own liberty -> OK (seki)
+  // Opponent group adjacent to own group has liberty other than move position and own liberty -> OK (seki)
   op_spaces.erase(index);
   op_spaces.erase(spaceIndex);
 
@@ -1376,16 +1418,16 @@ bool Board::_isSekiRen(
 }
 
 /**
- * Return True if the area created by placing a stone at the specified location is subject to seki.
- * @param index Position number
+ * Returns true if the area created by placing a stone at the specified position would be subject to seki.
+ * @param index Position index
  * @param color Stone color
- * @param renIds List of group IDs to judge
- * @param spacesIndices List of empty area position numbers
- * @return True if subject to seki
+ * @param renIds List of group IDs to check
+ * @param spacesIndices List of position indices in the empty area
+ * @return true if subject to seki
  */
 bool Board::_isSekiArea(
     int32_t index, int32_t color, std::set<int32_t>& renIds, std::set<int32_t>& spacesIndices) {
-  // Create a list of area coordinates and adjacent groups on the board before the move
+  // Create area and adjacent group lists for the board before placing
   int32_t op_color = OPPOSITE(color);
   std::set<int32_t> positions;
   std::set<int32_t> ren_ids;
@@ -1418,19 +1460,19 @@ bool Board::_isSekiArea(
       }
     }
 
-    // If size of adjacent area is 9 or more -> NG (not seki)
+    // Adjacent area size is 9 or more -> NG (not seki)
     if (positions.size() >= 9) {
       return false;
     }
   }
 
-  // If adjacent area is connected to groups other than those connected to move coordinate -> NG (not seki)
+  // Adjacent area is connected to groups other than those connected to the move position -> NG (not seki)
   if (ren_ids != renIds) {
     return false;
   }
 
-  // If group connected to move coordinate is connected to only one area
-  // If any of the coordinate lists excluding any empty coordinate from area coordinates is nakade -> NG (not subject to seki)
+  // Groups connected to the move position are connected to only one area, and
+  // removing any empty position from the area positions yields nakade -> NG (not a seki candidate)
   if (_isSingleArea(positions, color, -1)) {
     for (int32_t pos : positions) {
       if (_renIds[pos] != -1) {
@@ -1446,15 +1488,15 @@ bool Board::_isSekiArea(
     }
   }
 
-  // Check adjacent area after move
+  // Check the adjacent area after placing the stone
   positions.erase(index);
 
-  // If group connected to move coordinate is connected to multiple areas -> NG (not seki)
+  // Groups connected to the move position are connected to multiple areas -> NG (not seki)
   if (!_isSingleArea(positions, color, index)) {
     return false;
   }
 
-  // If any of the coordinate lists excluding any empty coordinate from area coordinates is nakade -> OK (seki)
+  // Removing any empty position from the area positions yields nakade -> OK (seki)
   for (int32_t pos : positions) {
     if (_renIds[pos] != -1) {
       continue;
@@ -1473,9 +1515,9 @@ bool Board::_isSekiArea(
 }
 
 /**
- * Returns true if the specified list of position numbers forms a Nakade.
- * @param positions List of position numbers
- * @return True if it is a Nakade
+ * Returns true if the specified list of position indices represents nakade.
+ * @param positions List of position indices
+ * @return true if nakade
  */
 bool Board::_isNakade(std::set<int32_t>& positions) {
   const int32_t length = 5;
@@ -1483,17 +1525,17 @@ bool Board::_isNakade(std::set<int32_t>& positions) {
   const int32_t horizontals[] = {1, -1, 1, -1};
   const int32_t verticals[] = {length, length, -length, -length};
 
-  // If the number of positions is 0, it is not a Nakade
+  // If the number of positions is 0, it is not nakade
   if (positions.size() == 0) {
     return false;
   }
 
-  // If the size of the group is 7 or more -> NG (not a Nakade)
+  // Group size is 7 or more -> NG (not nakade)
   if (positions.size() >= 7) {
     return false;
   }
 
-  // Check the upper left and lower right of the positions
+  // Check the top-left and bottom-right of the positions
   int32_t start_x = _width - 2;
   int32_t start_y = _height - 2;
   int32_t end_x = 0;
@@ -1509,13 +1551,13 @@ bool Board::_isNakade(std::set<int32_t>& positions) {
     end_y = std::max(y, end_y);
   }
 
-  // Check the distance between the upper left and lower right
-  // If it is 3x3 or larger, there is no vital point -> not a Nakade
+  // Check the distance from top-left to bottom-right
+  // If 3x3 or larger, no vital point exists -> not nakade
   if (end_x - start_x > 3 || end_y - start_y > 3) {
     return false;
   }
 
-  // Create a board for calculation
+  // Create a working board
   int32_t board[length * length] = {0};
   int32_t corner[length * length] = {0};
 
@@ -1533,24 +1575,24 @@ bool Board::_isNakade(std::set<int32_t>& positions) {
     }
   }
 
-  // Search for vital points
+  // Find the vital point
   for (int32_t y = 1; y < length - 1; y++) {
     for (int32_t x = 1; x < length - 1; x++) {
       int32_t p = y * length + x;
 
-      // If it is not a target position for calculation
+      // Skip if not a target position
       if (board[p] != 1) {
         continue;
       }
 
-      // Calculate the number of direct (vertical/horizontal) connections
+      // Count orthogonal connections
       int32_t direct_connections = 0;
 
       for (auto a : arounds) {
         direct_connections += board[p + a];
       }
 
-      // Calculate the number of diagonal connections
+      // Count diagonal connections
       int32_t skew_connections = 0;
       int32_t corner_connections = 0;
 
@@ -1558,28 +1600,28 @@ bool Board::_isNakade(std::set<int32_t>& positions) {
         int32_t v = verticals[i];
         int32_t h = horizontals[i];
 
-        // Check the target
+        // Check target
         if (board[p + v + h] != 1) {
           continue;
         }
 
-        // If it is a connection to a corner
+        // Corner connection case
         if (corner_connections == 0 && corner[p + v] == 1 && board[p + v] == 1) {
           corner_connections = 1;
         } else if (corner_connections == 0 && corner[p + h] == 1 && board[p + h] == 1) {
           corner_connections = 1;
         }
-        // If it is a diagonal connection
+        // Diagonal connection case
         else if (skew_connections == 0 && board[p + v] == 1 && board[p + h] == 1) {
           skew_connections = 1;
         }
       }
 
-      // If the number of connections is greater than or equal to the specified value, judge as a vital point
-      // If there is a position (vital point) that satisfies the following conditions -> OK (Nakade)
-      // (1) Stones adjacent in vertical/horizontal directions
-      // (2) Stones adjacent in diagonal directions (up to 1 place)
-      // (3) Corner stones adjacent in diagonal directions (up to 1 place)
+      // If the number of connections is greater than or equal to the specified value, it is determined to be a vital point
+      // A position (vital point) satisfying the following conditions exists -> OK (nakade)
+      // (1) Stones orthogonally adjacent
+      // (2) Stones diagonally adjacent (up to 1)
+      // (3) Corner stones diagonally adjacent (up to 1)
       if (direct_connections + skew_connections + corner_connections >= int(positions.size()) - 1) {
         return true;
       }
@@ -1590,11 +1632,11 @@ bool Board::_isNakade(std::set<int32_t>& positions) {
 }
 
 /**
- * Returns true if the specified list of position numbers is contained within a single area.
- * @param positions List of position numbers
- * @param color Color of the stones surrounding the area
- * @param excludedIndex Position number to exclude
- * @return True if contained within a single area
+ * Returns true if the specified list of position indices is contained in a single area.
+ * @param positions List of position indices
+ * @param color Color of stones surrounding the area
+ * @param excludedIndex Position index to exclude
+ * @return true if contained in a single area
  */
 bool Board::_isSingleArea(
     std::set<int32_t>& positions, int32_t color, int32_t excludedIndex) {
@@ -1628,44 +1670,6 @@ bool Board::_isSingleArea(
   }
 
   return true;
-}
-
-/**
- * Returns whether the specified coordinates are a valid position.
- * @param x X coordinate
- * @param y Y coordinate
- * @return True if the position is valid
- */
-inline bool Board::_isValidPosition(int32_t x, int32_t y) {
-  return (x >= 0 && x < _width - 2 && y >= 0 && y < _height - 2);
-}
-
-/**
- * Gets the position number for the specified coordinates.
- * @param x X coordinate
- * @param y Y coordinate
- * @return Position number
- */
-inline int32_t Board::_getIndex(int32_t x, int32_t y) {
-  return ((y + 1) * _width) + (x + 1);
-}
-
-/**
- * Gets the X coordinate for the specified position number.
- * @param index Position number
- * @return X coordinate
- */
-inline int32_t Board::_getPosX(int32_t index) {
-  return (index % _width) - 1;
-}
-
-/**
- * Gets the Y coordinate for the specified position number.
- * @param index Position number
- * @return Y coordinate
- */
-inline int32_t Board::_getPosY(int32_t index) {
-  return (index / _width) - 1;
 }
 
 }  // namespace deepgo
