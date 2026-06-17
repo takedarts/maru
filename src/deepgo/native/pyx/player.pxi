@@ -88,8 +88,7 @@ cdef class NativePlayer:
         cdef np.ndarray[np.float32_t, ndim=1, mode='c'] territories
 
         with nogil:
-            candidates = self.player.getPass()
-            candidate = candidates[0]
+            candidate = self.player.getPass()
 
         territories = np.zeros((3 * MODEL_SIZE * MODEL_SIZE,), dtype=np.float32)
         candidate.getTerritories(<float*> &territories[0])

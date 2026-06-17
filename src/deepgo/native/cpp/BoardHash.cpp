@@ -9,6 +9,7 @@ namespace deepgo {
  */
 BoardHash::BoardHash(const Board* board, int32_t color) {
   _hash = board->_hash;
+  _size = board->_width << 16 | board->_height;
 
   for (int i = 0; i < BITBOARD_SIZE; i++) {
     _bitBoard[i] = board->_bitBoard[i];

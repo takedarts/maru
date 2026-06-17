@@ -40,7 +40,7 @@ Board::Board(int width, int height)
       _pattern(width, height),
       _areaUpdated(false),
       _shichoUpdated(false),
-      _hash(0),
+      _hash(_width << 16 | _height),
       _bitBoard() {
   // Create arrays to store data
   _areaIds[0].resize(_length);
@@ -75,17 +75,17 @@ Board::Board(const Board& board)
     : _width(board._width),
       _height(board._height),
       _length(board._length),
-      _renIds(board._renIds),
-      _renObjs(board._renObjs),
+      _renIds(_length, -1),
+      _renObjs(_length),
       _areaIds(),
       _areaFlags(),
-      _koIndex(board._koIndex),
-      _koColor(board._koColor),
+      _koIndex(-1),
+      _koColor(EMPTY),
       _histories(),
-      _pattern(board._pattern),
+      _pattern(_width - 2, _height - 2),
       _areaUpdated(false),
       _shichoUpdated(false),
-      _hash(0),
+      _hash(_width << 16 | _height),
       _bitBoard() {
   // Create arrays to store data
   _areaIds[0].resize(_length);
@@ -128,7 +128,7 @@ void Board::clear() {
   _pattern.clear();
 
   // Initialize the board hash value
-  _hash = 0;
+  _hash = _width << 16 | _height;
 
   // Initialize the bitboard
   std::fill(std::begin(_bitBoard), std::end(_bitBoard), 0);

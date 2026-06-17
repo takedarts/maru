@@ -131,10 +131,20 @@ class MctsNode {
 
   /**
    * Returns the node corresponding to the specified move.
+   * Returns nullptr if the child node does not exist.
    * @param move Move
    * @return Node
    */
   MctsNode* getChild(Move move);
+
+  /**
+   * Creates a node corresponding to the specified move.
+   * Even if a child node exists, a new node is created.
+   * The newly created node does not have a parent-child relationship with this node.
+   * @param move Move
+   * @return Created node
+   */
+  MctsNode* createNode(Move move);
 
   /**
    * Removes the child node corresponding to the specified move.
@@ -364,15 +374,6 @@ class MctsNode {
    * @return Next node to evaluate
    */
   MctsNode* _pickupNextNode(bool equally, int32_t width, float temperature, float noise);
-
-  /**
-   * Returns the index corresponding to the move.
-   * @param move Move
-   * @return Index
-   */
-  inline int32_t _getMoveIndex(Move move) const {
-    return (move.getY() * _board.getWidth() + move.getX()) * 3 + move.getColor();
-  }
 };
 
 }  // namespace deepgo

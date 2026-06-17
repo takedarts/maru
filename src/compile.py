@@ -88,6 +88,7 @@ def save_tensorrt_model(
             ir='torchscript',
             inputs=[input_spec],
             enabled_precisions={dtype},
+            workspace_size=1 << 30,
             require_full_compilation=require_full_compilation,
             truncate_long_and_double=truncate_long_and_double,
         )

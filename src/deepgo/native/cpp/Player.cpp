@@ -110,9 +110,15 @@ int32_t Player::play(Move move) {
   });
 
   // Set the child node at the played move as the new root
+  // Create a new node if no child node exists at the played move
   MctsNode* old_root = _root;
 
   _root = old_root->getChild(move);
+
+  if (_root == nullptr) {
+    _root = old_root->createNode(move);
+  }
+
   _root->setAsRootNode();
 
   // Detach the new root from the old search tree and release the rest
@@ -131,29 +137,39 @@ int32_t Player::play(Move move) {
  * Gets the pass candidate move.
  * @return Pass candidate move
  */
-std::vector<Candidate> Player::getPass() {
-  std::unique_lock<std::mutex> lock(_mutex);
+Candidate Player::getPass() {
+  // Create a pass node
+  // Create an unevaluated node that is not associated with the root node
+  // No need to pause the search thread as it does not affect other searches
+  Move pass_move;
+  MctsNode* pass_node;
 
-  // Pause the search thread
-  _paused = true;
-  _canceled.store(true, std::memory_order_release);
-  _stopCondition.wait(lock, [this]() {
-    return _runnings == 0 && _evaluatingNodes.empty();
-  });
+  {
+    std::unique_lock<std::mutex> lock(_mutex);
 
-  // Create the pass candidate move
-  std::vector<Candidate> candidates;
+    pass_move = Move::createPassMove(_root->getNextColor());
+    pass_node = _root->createNode(pass_move);
+  }
 
-  candidates.emplace_back(
-      Move::createPassMove(_root->getNextColor()), 0, 0, 1.0f,
-      _root->getMctsValue(), std::vector<Move>(), _root->getTerritories());
+  // Create synchronization object and condition variable
+  // for waiting node evaluation completion
+  std::mutex mutex;
+  std::condition_variable cv;
 
-  // Resume the search thread
-  _paused = false;
-  _canceled.store(false, std::memory_order_release);
-  _searchCondition.notify_one();
+  // Execute node evaluation and wait for the node value to be updated
+  {
+    std::unique_lock<std::mutex> lock(mutex);
 
-  return candidates;
+    _processor->submit(pass_node, [&cv](MctsNode*) { cv.notify_one(); });
+    cv.wait(lock, [pass_node] { return pass_node->isEvaluated(); });
+  }
+
+  // Get the node value and create a candidate move object
+  Candidate candidate(
+      pass_move, 1, 1, 0.0, pass_node->getNodeValue(),
+      std::vector<Move>(), pass_node->getTerritories());
+
+  return candidate;
 }
 
 /**

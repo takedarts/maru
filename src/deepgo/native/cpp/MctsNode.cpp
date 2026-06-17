@@ -296,25 +296,37 @@ MctsNode* MctsNode::getParent() {
 
 /**
  * Returns the node corresponding to the specified move.
+ * Returns nullptr if the child node does not exist.
  * @param move Move
  * @return Node
  */
 MctsNode* MctsNode::getChild(Move move) {
   std::unique_lock<std::shared_mutex> lock(_mutex);
-  int32_t index = _getMoveIndex(move);
 
   // If the child node exists, return it
-  if (_children.find(index) != _children.end()) {
-    return _children[index];
+  int32_t hash = move.getHash();
+
+  if (_children.find(hash) != _children.end()) {
+    return _children[hash];
   }
 
-  // If no child node exists, create a new node object and return it
-  // The created node is not registered as a child node of this node
+  // If the child node does not exist, return nullptr
+  return nullptr;
+}
+
+/**
+ * Creates a node corresponding to the specified move.
+ * Even if a child node exists, a new node is created.
+ * The newly created node does not have a parent-child relationship with this node.
+ * @param move Move
+ * @return Created node
+ */
+MctsNode* MctsNode::createNode(Move move) {
   MctsNode* node = _manager->createNode();
 
   node->_resetNode();
   node->_board.copyFrom(&_board);
-  node->_captured = std::max(node->_board.play(move), 0);
+  node->_captured = node->_board.play(move);
   node->_board.updateStatus();
   node->_move = move;
   node->_probability = 0.0f;
@@ -328,8 +340,7 @@ MctsNode* MctsNode::getChild(Move move) {
  */
 void MctsNode::removeChild(Move move) {
   std::unique_lock<std::shared_mutex> lock(_mutex);
-  int32_t index = _getMoveIndex(move);
-  _children.erase(index);
+  _children.erase(move.getHash());
 }
 
 /**
@@ -537,15 +548,15 @@ MctsNode* MctsNode::_pickupNextNode(bool equally, int32_t width, float temperatu
   // no pass child node exists, and no pass candidate is in the waiting list,
   // add a pass candidate with probability 0 to the waiting list
   Move pass_move = Move::createPassMove(getNextColor());
-  int32_t pass_move_index = _getMoveIndex(pass_move);
+  int32_t pass_move_hash = pass_move.getHash();
 
   if (_parent == nullptr && _manager->getParameter().getRule() == RULE_JP &&
-      !_children.empty() && _children.find(pass_move_index) == _children.end() &&
-      _waitingMoves.find(pass_move_index) == _waitingMoves.end()) {
+      !_children.empty() && _children.find(pass_move_hash) == _children.end() &&
+      _waitingMoves.find(pass_move_hash) == _waitingMoves.end()) {
     Policy pass_policy(pass_move, 0.0f, 0);
 
     _waitingPolicies.push(pass_policy);
-    _waitingMoves.insert(pass_move_index);
+    _waitingMoves.insert(pass_move_hash);
   }
 
   // If there are remaining Policy candidates and search width allows, add a new move as an expansion candidate
@@ -585,10 +596,10 @@ MctsNode* MctsNode::_pickupNextNode(bool equally, int32_t width, float temperatu
 
       // If configured to equalize visit counts, lower the priority of already-registered candidates
       if (equally) {
-        int32_t policy_index = _getMoveIndex(policy.getMove());
+        int32_t policy_hash = policy.getMove().getHash();
 
-        if (_children.find(policy_index) != _children.end() ||
-            _waitingMoves.find(policy_index) != _waitingMoves.end()) {
+        if (_children.find(policy_hash) != _children.end() ||
+            _waitingMoves.find(policy_hash) != _waitingMoves.end()) {
           priority_type = 0;
         }
       }
@@ -604,12 +615,12 @@ MctsNode* MctsNode::_pickupNextNode(bool equally, int32_t width, float temperatu
 
     // If the selected candidate is not yet registered, add it to the waiting list
     Policy& max_policy = _policies[max_index];
-    int32_t max_policy_index = _getMoveIndex(max_policy.getMove());
+    int32_t max_policy_hash = max_policy.getMove().getHash();
 
-    if (_children.find(max_policy_index) == _children.end() &&
-        _waitingMoves.find(max_policy_index) == _waitingMoves.end()) {
+    if (_children.find(max_policy_hash) == _children.end() &&
+        _waitingMoves.find(max_policy_hash) == _waitingMoves.end()) {
       _waitingPolicies.push(max_policy);
-      _waitingMoves.insert(max_policy_index);
+      _waitingMoves.insert(max_policy_hash);
     }
 
     _policies[max_index].incrementVisits();
@@ -620,27 +631,27 @@ MctsNode* MctsNode::_pickupNextNode(bool equally, int32_t width, float temperatu
   if (_waitingPolicies.size() > 0 && (width <= 0 || _children.size() < width)) {
     // Get the first registered candidate from the waiting list
     Policy policy = _waitingPolicies.front();
-    int32_t policy_index = _getMoveIndex(policy.getMove());
+    int32_t policy_hash = policy.getMove().getHash();
 
     _waitingPolicies.pop();
-    _waitingMoves.erase(policy_index);
+    _waitingMoves.erase(policy_hash);
 
-    // If this is an unregistered candidate, create a new child node and return it as the next search target
-    // Tentatively set the lowest evaluation value for the node
-    if (_children.find(policy_index) == _children.end()) {
+    // If this is an unregistered candidate,
+    // create a new child node and return it as the next search target
+    if (_children.find(policy_hash) == _children.end()) {
       // Create a new child node
       MctsNode* node = _manager->createNode();
 
       node->_resetNode();
       node->_board.copyFrom(&_board);
-      node->_captured = std::max(node->_board.play(policy.getMove()), 0);
+      node->_captured = node->_board.play(policy.getMove());
       node->_board.updateStatus();
       node->_move = policy.getMove();
       node->_probability = policy.getProbability();
       node->_nodeValue = _move.getColor();
       node->_parent = this;
       node->_firstChild = (_children.size() == 0);
-      _children[policy_index] = node;
+      _children[policy_hash] = node;
 
       // Increment visit count
       node->_mctsSelects.fetch_add(1, std::memory_order_relaxed);

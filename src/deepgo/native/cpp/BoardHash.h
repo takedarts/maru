@@ -38,6 +38,10 @@ class BoardHash {
       return _hash < other._hash;
     }
 
+    if (_size != other._size) {
+      return _size < other._size;
+    }
+
     for (int i = 0; i < BITBOARD_SIZE; i++) {
       if (_bitBoard[i] != other._bitBoard[i]) {
         return _bitBoard[i] < other._bitBoard[i];
@@ -60,6 +64,11 @@ class BoardHash {
    * Hash value of the board.
    */
   uint64_t _hash;
+
+  /**
+   * Board size.
+   */
+  uint32_t _size;
 
   /**
    * Bitboard representing where stones are placed.

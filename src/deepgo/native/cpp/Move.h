@@ -78,6 +78,14 @@ class Move {
   }
 
   /**
+   * Returns the hash value of the move object.
+   * @return hash value of the move object
+   */
+  inline int32_t getHash() const {
+    return (std::max(_x + 1, 0) << 16) | (std::max(_y + 1, 0) << 8) | std::max(_color + 1, 0);
+  }
+
+    /**
    * Returns whether the move object holds a valid value.
    * @param width board width
    * @param height board height

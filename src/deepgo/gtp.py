@@ -15,7 +15,7 @@ from .board import (Board, get_array_string, get_color_name,
                     get_handicap_positions, get_opposite_color, is_valid_position)
 from .config import (BLACK, DEFAULT_KOMI, DEFAULT_PUCB_CONSTANT_BASE,
                      DEFAULT_PUCB_CONSTANT_INIT, DEFAULT_SIZE, EMPTY,
-                     MODEL_SIZE, NAME, PASS, RULE_CH, RULE_JP, VERSION, WHITE)
+                     MODEL_SIZE, NAME, PASS, RULE_CH, RULE_COM, RULE_JP, VERSION, WHITE)
 from .exception import GoException
 from .player import Candidate, Player
 from .processor import Processor
@@ -661,13 +661,13 @@ class GTPEngine(object):
         self,
         candidates: List[Candidate],
     ) -> Tuple[Tuple[int, int] | None, float, np.ndarray]:
-        '''Get move coordinates.
-        Candidate moves are expected to be ordered by priority (highest first).
-        Returns None as coordinates in case of resignation.
+        '''Get the move coordinate.
+        Candidate moves are assumed to be sorted in order of priority.
+        If resigning, returns None as the coordinate.
         Args:
             candidates (List[Candidate]): List of candidate moves
         Returns:
-            Tuple[int, int]: Move coordinates, predicted score difference, predicted territory
+            Tuple[Tuple[int, int] | None, float, np.ndarray]: Move, score, territory
         '''
         # Check player object
         if self.player is None:
@@ -677,59 +677,30 @@ class GTPEngine(object):
         if len(candidates) == 0:
             raise GoException('No candidates')
 
-        # Get the move coordinates of the first candidate
-        pos = candidates[0].pos
-        score = candidates[0].get_score(self.player.get_board()) - self.komi
-        territories = candidates[0].territories
-        win_chance = candidates[0].win_chance
+        # Get move under Japanese rules
+        if self.rule == RULE_JP:
+            pos = self._get_move_in_jp_rule(candidates)
+        # Get move under COM rules
+        elif self.rule == RULE_COM:
+            pos = self._get_move_in_com_rule(candidates)
+        # Get move under Chinese rules
+        else:
+            pos = self._get_move_in_ch_rule(candidates)
 
-        # In Japanese rule, if all candidate moves have the same predicted territory, pass as move
-        if self.rule == RULE_JP and len(candidates) > 1:
-            board = self.player.get_board()
-            fixed_territories = territories.argmax(axis=0) - 1
-            fixed_territories += (fixed_territories == EMPTY) * board.get_owners()
-            candidate_pass = None
-            all_equals = True
+        # If the move is included in the candidate moves,
+        #  use the score and territory of that candidate.
+        # If the move is not included in the candidate moves,
+        # use the score and territory of the first candidate.
+        selected_candidates = [c for c in candidates if c.pos == pos]
 
-            for candidate in candidates[1:]:
-                if candidate.pos == PASS:
-                    candidate_pass = candidate
+        if len(selected_candidates) > 0:
+            candidate = selected_candidates[0]
+        else:
+            candidate = candidates[0]
 
-                terrs = candidate.territories
-                fixed_terrs = terrs.argmax(axis=0) - 1
-                fixed_terrs += (fixed_terrs == EMPTY) * board.get_owners()
-
-                if not np.array_equal(fixed_territories, fixed_terrs):
-                    all_equals = False
-                    break
-
-            if all_equals and candidate_pass is not None:
-                pos = PASS
-                score = candidate_pass.get_score(board) - self.komi
-                territories = candidate_pass.territories
-                win_chance = candidate_pass.win_chance
-
-        # In Chinese rule, if passing, prioritize capturing opponent stones in territory
-        if self.rule == RULE_CH and pos == PASS:
-            my_color = candidates[0].color
-            op_color = get_opposite_color(my_color)
-
-            board = self.player.get_board()
-            board_enableds = board.get_enableds(my_color)
-            board_targets = (
-                (board.get_territories() == my_color)
-                & (board.get_colors() == op_color))
-
-            for y, x in np.argwhere(board_targets):
-                for ny, nx in [(y - 1, x), (y + 1, x), (y, x - 1), (y, x + 1)]:
-                    if not board.is_valid_position((nx, ny)):
-                        continue
-                    elif board_enableds[ny, nx]:
-                        pos = (nx, ny)
-                        break
-
-                if pos != PASS:
-                    break
+        score = candidate.get_score(self.player.get_board()) - self.komi
+        territories = candidate.territories
+        win_chance = candidate.win_chance
 
         # If pass, calculate score with all territories confirmed
         if pos == PASS:
@@ -755,6 +726,201 @@ class GTPEngine(object):
 
         # If not resigning, return move coordinates
         return pos, score, territories
+
+    def _get_move_in_ch_rule(self, candidates: List[Candidate]) -> Tuple[int, int]:
+        '''Get the move according to Chinese rules.
+        Returns the first candidate as the move.
+        Args:
+            candidates (List[Candidate]): List of candidate moves
+        Returns:
+            Tuple[int, int]: Move coordinates
+        '''
+        return candidates[0].pos
+
+    def _get_move_in_com_rule(self, candidates: List[Candidate]) -> Tuple[int, int]:
+        '''Get the move according to COM rules.
+        Returns the candidate move if there is a non-pass candidate.
+        Otherwise, returns a move that captures the opponent's stones.
+        If there is no move to capture opponent's stones, returns a pass.
+        Args:
+            candidates (List[Candidate]): List of candidate moves
+        Returns:
+            Tuple[int, int]: Move coordinates
+        '''
+        # If there is a non-pass candidate move, return that candidate
+        for candidate in candidates:
+            if candidate.pos != PASS:
+                return candidate.pos
+
+        # Search for a move to capture opponent's stones
+        my_color = candidates[0].color
+        op_color = get_opposite_color(my_color)
+
+        assert self.player is not None
+        board = self.player.get_board()
+        board_enableds = board.get_enableds(my_color)
+        board_targets = (
+            (board.get_territories() == my_color)
+            & (board.get_colors() == op_color))
+
+        for y, x in np.argwhere(board_targets):
+            for ny, nx in [(y - 1, x), (y + 1, x), (y, x - 1), (y, x + 1)]:
+                if not board.is_valid_position((nx, ny)):
+                    continue
+                elif board_enableds[ny, nx]:
+                    return (nx, ny)
+
+        # If there is no move to capture opponent's stones, return a pass
+        return PASS
+
+    def _get_move_in_jp_rule(self, candidates: List[Candidate]) -> Tuple[int, int]:
+        '''Get a move in Japanese rules.
+        Args:
+            candidates (List[Candidate]): List of candidate moves
+        Returns:
+            Tuple[int, int]: Move coordinates
+        '''
+        assert self.player is not None
+
+        # Search for a pass candidate
+        pass_candidate = None
+
+        for candidate in candidates:
+            if candidate.pos == PASS:
+                pass_candidate = candidate
+                break
+
+        # If no pass candidate exists, create a new pass candidate
+        if pass_candidate is None:
+            pass_candidate = self.player.get_pass()
+
+        # Get non-pass candidates
+        candidates = [c for c in candidates if c.pos != PASS]
+
+        # If no non-pass candidates exist, return pass
+        if len(candidates) == 0:
+            return PASS
+
+        # Examine candidates
+        board = self.player.get_board()
+        colors = board.get_colors()
+        pass_value = pass_candidate.value
+        pass_score = pass_candidate.get_score(board) - self.komi
+        pass_territories = pass_candidate.territories.argmax(axis=0) - 1
+
+        # Calculate boundaries of predicted territory
+        vertical_borders = np.abs(pass_territories[:-1, :] - pass_territories[1:, :]) == 2
+        horizontal_borders = np.abs(pass_territories[:, :-1] - pass_territories[:, 1:]) == 2
+        borders = np.zeros_like(pass_territories)
+
+        borders[:-1, :] |= vertical_borders
+        borders[1:, :] |= vertical_borders
+        borders[:, :-1] |= horizontal_borders
+        borders[:, 1:] |= horizontal_borders
+
+        # Select a move if it meets the following conditions:
+        #  [Condition 1] Move value is 0.1 or higher than pass value
+        #  [Condition 2] Move territory is larger than pass territory
+        #  [Condition 3] Move position is in an area predicted as seki
+        #  [Condition 4] Own chain with size 1 and 1 liberty in border area exists near move position
+        # Exclude moves if they meet the following conditions:
+        #  [Condition 1] Move value is 0.05 or lower than pass value
+        #  [Condition 2] Move territory is smaller than pass territory
+        #  [Condition 3] Move score is 0.5 or worse than pass score
+        excludes = []
+
+        if LOGGER.isEnabledFor(logging.DEBUG):
+            LOGGER.debug(
+                'JP rule: pass candidate=%s, value=%.4f, score=%.1f',
+                pass_candidate.pos, pass_value, pass_score)
+
+        def is_near_atari_ren_in_border(pos: Tuple[int, int], color: int) -> bool:
+            for dy, dx in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+                ny, nx = pos[1] + dy, pos[0] + dx
+
+                if (board.is_valid_position((nx, ny))
+                        and board.get_ren_size((nx, ny)) == 1
+                        and board.get_ren_space((nx, ny)) == 1
+                        and colors[ny, nx] == color
+                        and borders[ny, nx]):
+                    return True
+
+            return False
+
+        for candidate in candidates:
+            value = candidate.value
+            score = candidate.get_score(board) - self.komi
+            territories = candidate.territories.argmax(axis=0) - 1
+
+            if LOGGER.isEnabledFor(logging.DEBUG):
+                LOGGER.debug(
+                    'JP rule: candidate=%s, value=%.4f, score=%.1f',
+                    candidate.pos, value, score)
+
+            # Move value is 0.1 or higher than pass value
+            if (value - pass_value) * candidate.color >= 0.1:
+                if LOGGER.isEnabledFor(logging.DEBUG):
+                    LOGGER.debug(
+                        'JP rule: select move=%s, value=%.4f',
+                        candidate.pos, value - pass_value)
+                return candidate.pos
+            # Move territory is larger than pass territory
+            elif np.any((territories - pass_territories) == (2 * candidate.color)):
+                if LOGGER.isEnabledFor(logging.DEBUG):
+                    LOGGER.debug(
+                        'JP rule: select move=%s, territory=%d', candidate.pos,
+                        ((territories - pass_territories) == (2 * candidate.color)).sum())
+                return candidate.pos
+            # Move position is in an area predicted as seki
+            elif pass_territories[candidate.pos[1], candidate.pos[0]] == EMPTY:
+                LOGGER.debug('JP rule: select move=%s, in seki territory', candidate.pos)
+                return candidate.pos
+            # Own chain with size 1 and 1 liberty in border area exists near move position
+            elif is_near_atari_ren_in_border(candidate.pos, candidate.color):
+                LOGGER.debug('JP rule: select move=%s, near atari ren', candidate.pos)
+                return candidate.pos
+            # Move value is 0.05 or lower than pass value
+            elif (value - pass_value) * candidate.color <= -0.05:
+                if LOGGER.isEnabledFor(logging.DEBUG):
+                    LOGGER.debug(
+                        'JP rule: exclude move=%s, value=%.4f',
+                        candidate.pos, value - pass_value)
+                excludes.append(True)
+            # Move territory is smaller than pass territory
+            elif np.any((territories - pass_territories) == (-2 * candidate.color)):
+                if LOGGER.isEnabledFor(logging.DEBUG):
+                    LOGGER.debug(
+                        'JP rule: exclude move=%s, territory=%d', candidate.pos,
+                        ((territories - pass_territories) == (2 * candidate.color)).sum())
+                excludes.append(True)
+            # Move score is 0.5 or worse than pass score
+            elif (score - pass_score) * candidate.color <= -0.5:
+                if LOGGER.isEnabledFor(logging.DEBUG):
+                    LOGGER.debug(
+                        'JP rule: exclude move=%s, score=%.1f',
+                        candidate.pos, score - pass_score)
+                excludes.append(True)
+            # Otherwise, do not exclude
+            else:
+                LOGGER.debug('JP rule: not exclude move=%s', candidate.pos)
+                excludes.append(False)
+
+        # If all borders of the predicted territory are occupied when passing, select pass
+        if not np.any(borders & (colors == EMPTY)):
+            LOGGER.debug('JP rule: select move=PASS, all borders have stones')
+            return PASS
+
+        # Look for dame moves (moves to the border)
+        for candidate, exclude in zip(candidates, excludes):
+            if exclude:
+                continue
+
+            if borders[candidate.pos[1], candidate.pos[0]]:
+                LOGGER.debug('JP rule: select move=%s, in dame zone', candidate.pos)
+                return candidate.pos
+
+        # If no dame moves are available, select pass
+        return PASS
 
     def _perform(self, number: str, command: str) -> None:
         '''Execute command.

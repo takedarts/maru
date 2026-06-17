@@ -285,9 +285,6 @@ class Player(object):
         Returns:
             Candidate: Pass candidate
         '''
-        self.native.start_evaluation(False, 0, 1.0, 0.0)
-        self.native.wait_evaluation(1, 0, 120.0, True)
-
         return Candidate(*self.native.get_pass())
 
     def get_random(

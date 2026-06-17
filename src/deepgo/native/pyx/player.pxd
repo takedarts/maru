@@ -15,7 +15,7 @@ cdef extern from "cpp/Player.h" namespace "deepgo":
             float pucbConstantInit, float pucbConstantBase) except +
         void initialize()
         int32_t play(Move move) nogil
-        vector[Candidate] getPass() nogil
+        Candidate getPass() nogil
         void startEvaluation(
             bool equally, int32_t candidateWidth, float temperature, float noise) nogil
         void waitEvaluation(int32_t visits, int32_t playouts, float timeout, bool stop) nogil

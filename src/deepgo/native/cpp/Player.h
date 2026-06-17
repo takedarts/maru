@@ -61,7 +61,7 @@ class Player {
    * Gets the pass candidate move.
    * @return Pass candidate move
    */
-  std::vector<Candidate> getPass();
+  Candidate getPass();
 
   /**
    * Starts board evaluation.
