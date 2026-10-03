@@ -15,3 +15,6 @@ __pycache__/
 src/deepgo/native/build/
 src/deepgo/native/CMakeLists.txt
 src/deepgo/native/cpp/Config.h
+
+# Instruction files for local development
+AGENTS.md
