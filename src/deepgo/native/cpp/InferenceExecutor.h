@@ -45,7 +45,7 @@ class InferenceExecutor {
   virtual ~InferenceExecutor();
 
   /**
-   * Executes inference synchronously.
+   * Run inference synchronously.
    * @param inputs Input data
    * @param outputs Output data
    * @param size Number of data samples to evaluate
@@ -53,8 +53,8 @@ class InferenceExecutor {
   void execute(int32_t* inputs, float* outputs, int32_t size);
 
   /**
-   * Gets the batch fill rate.
-   * @return The batch fill rate
+   * Get the ratio of inference requests included in the batch.
+   * @return Batch fill rate
    */
   inline float getBatchFillRate() const {
     float total_fill_rate = 0.0f;
@@ -68,7 +68,7 @@ class InferenceExecutor {
 
  private:
   /**
-   * Mutex for model synchronization.
+   * Mutex for synchronization.
    */
   std::mutex _mutex;
 

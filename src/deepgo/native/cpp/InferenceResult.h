@@ -2,27 +2,30 @@
 
 #include <array>
 #include <cstdint>
+#include <utility>
 #include <vector>
 
 #include "Config.h"
-#include "Policy.h"
+#include "Move.h"
 
 namespace deepgo {
 
 /**
- * A class representing an inference result.
+ * Structure representing an inference result.
  */
 class InferenceResult {
  public:
   /**
    * Creates an inference result.
    * @param value Evaluation value
+   * @param score Predicted score difference
    * @param policies Predicted probabilities of candidate moves
    * @param territories Predicted probabilities of territories
    */
   InferenceResult(
-      float value, const std::vector<Policy>& policies,
-      const std::array<float, 3 * MODEL_SIZE * MODEL_SIZE>& territories);
+      float value, float score,
+      const std::vector<std::pair<Move, float>>& policies,
+      const std::array<float, MODEL_TERRITORY_SIZE>& territories);
 
   /**
    * Copies an inference result.
@@ -49,10 +52,18 @@ class InferenceResult {
   }
 
   /**
-   * Returns the predicted probabilities of candidate moves.
-   * @return Predicted probabilities of candidate moves
+   * Return the predicted score difference.
+   * @return Predicted score difference
    */
-  inline const std::vector<Policy>& getPolicies() const {
+  inline float getScore() const {
+    return _score;
+  }
+
+  /**
+   * Return predicted candidate move probabilities.
+   * @return Predicted candidate move probabilities
+   */
+  inline const std::vector<std::pair<Move, float>>& getPolicies() const {
     return _policies;
   }
 
@@ -60,7 +71,7 @@ class InferenceResult {
    * Returns the predicted probabilities of territories.
    * @return Predicted probabilities of territories
    */
-  inline const std::array<float, 3 * MODEL_SIZE * MODEL_SIZE>& getTerritories() const {
+  inline const std::array<float, MODEL_TERRITORY_SIZE>& getTerritories() const {
     return _territories;
   }
 
@@ -71,14 +82,19 @@ class InferenceResult {
   float _value;
 
   /**
-   * Predicted probabilities of candidate moves.
+   * Predicted score difference.
    */
-  std::vector<Policy> _policies;
+  float _score;
 
   /**
-   * Predicted probabilities of territories.
+   * Predicted probabilities of candidate moves.
    */
-  std::array<float, 3 * MODEL_SIZE * MODEL_SIZE> _territories;
+  std::vector<std::pair<Move, float>> _policies;
+
+  /**
+   * Predicted territory probabilities.
+   */
+  std::array<float, MODEL_TERRITORY_SIZE> _territories;
 };
 
 }  // namespace deepgo

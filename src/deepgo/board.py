@@ -1,10 +1,8 @@
-import functools
-import struct
 from typing import List, Tuple
 
 import numpy as np
 
-from .config import BLACK, DEFAULT_KOMI, RULE_CH, WHITE
+from .config import COLOR_BLACK, COLOR_WHITE, DEFAULT_KOMI, RULE_CH
 from .exception import GoException
 from .native import NativeBoard
 
@@ -26,9 +24,9 @@ def get_color_name(color: int) -> str:
     Returns:
         str: String representing the stone color
     '''
-    if color == BLACK:
+    if color == COLOR_BLACK:
         return 'black'
-    elif color == WHITE:
+    elif color == COLOR_WHITE:
         return 'white'
     else:
         return 'empty'
@@ -41,9 +39,9 @@ def get_color_mark(color: int) -> str:
     Returns:
         str: Symbol representing the stone color
     '''
-    if color == BLACK:
+    if color == COLOR_BLACK:
         return 'X'
-    elif color == WHITE:
+    elif color == COLOR_WHITE:
         return 'O'
     else:
         return '.'
@@ -132,6 +130,14 @@ def get_board_string(
 
 
 def get_handicap_positions(width: int, height: int, handicap: int) -> List[Tuple[int, int]]:
+    '''Return the standard fixed-handicap coordinates.
+    Args:
+        width (int): Board width
+        height (int): Board height
+        handicap (int): Number of handicap stones
+    Returns:
+        List[Tuple[int, int]]: Result of the operation.
+    '''
     positions: List[Tuple[int, int]] = []
     ver_line = 3 if width >= 13 else 2
     hor_line = 3 if height >= 13 else 2
@@ -167,11 +173,15 @@ def get_handicap_positions(width: int, height: int, handicap: int) -> List[Tuple
 
 
 class Board(object):
+    '''Go board backed by the native rules implementation.
+    '''
     def __init__(self, width: int, height: int) -> None:
         '''Initialize the board object.
         Args:
             width (int): Board width
             height (int): Board height
+        Returns:
+            None: No return value.
         '''
         self.native = NativeBoard(width, height)
 
@@ -202,25 +212,61 @@ class Board(object):
         '''Set handicap stones.
         Args:
             handicap (int): Number of handicap stones
+        Returns:
+            None: No return value.
         '''
         for pos in get_handicap_positions(self.get_width(), self.get_height(), handicap):
-            self.native.play(pos, BLACK)
+            self.native.play(pos, COLOR_BLACK)
 
-    def play(self, pos: tuple[int, int], color: int) -> int:
+    def play(
+        self,
+        pos: tuple[int, int],
+        color: int,
+    ) -> Tuple[
+        Tuple[int, int],
+        int,
+        int,
+        Tuple[bool, bool, bool, bool],
+        Tuple[int, int],
+    ]:
         '''Place a stone at the specified position.
         Args:
             pos (Tuple[int, int]): Position to place
             color (int): Stone color
         Returns:
-            int: Number of captured stones
+            Tuple[Tuple[int, int], int, int, Tuple[bool, bool, bool, bool],
+                  Tuple[int, int]]: Move result
         '''
-        captured = self.native.play(pos, color)
-
-        if captured < 0:
+        try:
+            return self.native.play(pos, color)
+        except ValueError as error:
             raise GoException(
-                f'Invalid move: {pos} {get_color_name(color)}\n{get_board_string(self)}')
+                f'Invalid move: {pos} {get_color_name(color)}: {error}\n'
+                f'{get_board_string(self)}') from error
 
-        return captured
+    def undo(
+        self,
+        result: Tuple[
+            Tuple[int, int],
+            int,
+            int,
+            Tuple[bool, bool, bool, bool],
+            Tuple[int, int],
+        ],
+    ) -> None:
+        '''Undo the specified move.
+        Args:
+            result (Tuple[Tuple[int, int], int, int, Tuple[bool, bool, bool, bool],
+            Tuple[int, int]]): Result of the move to undo
+        Returns:
+            None: No return value.
+        '''
+        try:
+            self.native.undo(result)
+        except ValueError as error:
+            raise GoException(
+                f'Invalid undo result: {result}: {error}\n'
+                f'{get_board_string(self)}') from error
 
     def get_ko(self, color: int) -> tuple[int, int]:
         '''Get the ko position.
@@ -231,15 +277,6 @@ class Board(object):
         '''
         return self.native.get_ko(color)
 
-    def get_histories(self, color: int) -> List[tuple[int, int]]:
-        '''Get move history.
-        Args:
-            color (int): Move color
-        Returns:
-            List[Tuple[int, int]]: List of moves
-        '''
-        return self.native.get_histories(color)
-
     def get_color(self, pos: tuple[int, int]) -> int:
         '''Get the stone color at the specified position.
         Args:
@@ -249,7 +286,7 @@ class Board(object):
         '''
         return self.native.get_color(pos)
 
-    def get_colors(self, color: int = BLACK) -> np.ndarray:
+    def get_colors(self, color: int = COLOR_BLACK) -> np.ndarray:
         '''Get the list of stone colors.
         If WHITE is specified as an argument, returns the board with black and white reversed.
         Args:
@@ -258,6 +295,13 @@ class Board(object):
             np.ndarray: List of stone colors
         '''
         return self.native.get_colors(color)
+
+    def get_pattern(self) -> Tuple[int, ...]:
+        '''Get values representing the stone arrangement.
+        Returns:
+            Tuple[int, ...]: Black and white bitboards split into 32-bit words
+        '''
+        return self.native.get_pattern()
 
     def get_ren_size(self, pos: tuple[int, int]) -> int:
         '''Get the size of the group at the specified position.
@@ -316,50 +360,63 @@ class Board(object):
         '''
         return self.native.get_enableds(color, check_seki)
 
-    def get_territories(self, color: int = BLACK) -> np.ndarray:
+    def get_fixed_territories(self) -> np.ndarray:
         '''Get the list of confirmed territories.
-        Args:
-            color (int): Reference stone color (if WHITE, returns with black and white reversed)
         Returns:
             np.ndarray: List of confirmed territories
         '''
-        return self.native.get_territories(color)
+        return self.native.get_fixed_territories()
 
-    def get_owners(self, color: int = BLACK, rule: int = RULE_CH) -> np.ndarray:
+    def get_owners(
+        self,
+        territories: np.ndarray,
+        rule: int = RULE_CH,
+    ) -> np.ndarray:
         '''Get the list of owners for each position.
         Args:
-            color (int): Reference stone color (if WHITE, returns with black and white reversed)
+            territories (np.ndarray): Territory data
             rule (int): Rule for determining the winner
         Returns:
             np.ndarray: List of owners
         '''
-        return self.native.get_owners(color, rule)
+        # Pass territory data with the same shape as the board to C++
+        territory_shape = (self.get_height(), self.get_width())
+
+        if territories.shape != territory_shape:
+            raise ValueError(
+                f'territories shape must be {territory_shape}: {territories.shape}')
+
+        territory_data = np.ascontiguousarray(territories, dtype=np.int32)
+
+        return self.native.get_owners(territory_data, rule)
 
     def get_score(
         self,
-        color: int = BLACK,
+        color: int = COLOR_BLACK,
         rule: int = RULE_CH,
         komi: float = DEFAULT_KOMI,
+        territories: np.ndarray | None = None,
     ) -> float:
         '''Get the score for the specified color.
         Args:
             color (int): Stone color to calculate score
             rule (int): Rule for determining the winner
             komi (float): Komi points
+            territories (np.ndarray | None): Territory data
         Returns:
             float: Score
         '''
-        if color == BLACK:
-            return self.get_owners(color, rule).sum() - komi
-        else:
-            return self.get_owners(color, rule).sum() + komi
+        # Use the board's settled territories if no territory data is supplied
+        if territories is None:
+            territories = self.get_fixed_territories()
 
-    def get_patterns(self) -> List[int]:
-        '''Get values representing the arrangement of stones.
-        Returns:
-            List[int]: Values representing the arrangement of stones
-        '''
-        return self.native.get_patterns()
+        # Calculate ownership from territory data
+        score = self.get_owners(territories, rule).sum() - komi
+
+        if color == COLOR_BLACK:
+            return score
+        else:
+            return -1 * score
 
     def get_inputs(
         self,
@@ -379,48 +436,33 @@ class Board(object):
         '''
         return self.native.get_inputs(color, komi, rule, superko)
 
-    def get_state(self) -> List[int]:
-        '''Return the serialized value of the board state.
-        Returns:
-            List[int]: Board state value
-        '''
-        return self.native.get_state()
-
-    def load_state(self, state: List[int]) -> None:
-        '''Deserialize the board state.
-        Args:
-            state (List[int]): Board state value
-        '''
-        self.native.load_state(state)
-
     def copy_from(self, board: 'Board') -> None:
         '''Copy the board.
         Args:
             board (Board): Source board to copy from
+        Returns:
+            None: No return value.
         '''
         self.native.copy_from(board.native)
 
-    def __getstate__(self) -> bytes:
-        width = self.get_width()
-        height = self.get_height()
-        values = self.native.get_state()
-        return struct.pack(f'>bb{len(values)}i', width, height, *values)
-
-    def __setstate__(self, state: bytes) -> None:
-        values = list(struct.unpack(f'>bb{(len(state) - 2) // 4}i', state))
-        width = values[0]
-        height = values[1]
-        self.native = NativeBoard(width, height)
-        self.native.load_state(values[2:])
-
     def __hash__(self) -> int:
-        return int(functools.reduce(lambda x, y: x ^ y, self.native.get_state()))
+        '''Reject hashing because board hashing is not implemented.
+        Returns:
+            int: Result of the operation.
+        '''
+        raise NotImplementedError('not implemented yet')
 
     def __eq__(self, other: object) -> bool:
+        '''Compare board types; board-state equality is not implemented.
+        Args:
+            other (object): Object to compare
+        Returns:
+            bool: Result of the operation.
+        '''
         if not isinstance(other, Board):
             return False
 
-        return (self.native.get_state() == other.native.get_state()).all()
+        raise NotImplementedError('not implemented yet')
 
     def __str__(self) -> str:
         '''Represent the board as a string.

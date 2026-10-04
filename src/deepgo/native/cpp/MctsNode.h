@@ -8,15 +8,17 @@
 #include <queue>
 #include <set>
 #include <shared_mutex>
+#include <utility>
 #include <vector>
 
 #include "Board.h"
+#include "BoardHash.h"
 #include "Config.h"
 #include "InferenceResult.h"
 #include "MctsParameter.h"
+#include "MctsPolicy.h"
 #include "MctsValue.h"
 #include "Move.h"
-#include "Policy.h"
 
 namespace deepgo {
 
@@ -72,8 +74,15 @@ class MctsNode {
 
   /**
    * Sets this node as the root node.
+   * Detach the parent and reset evaluation and statistics when needed.
    */
   void setAsRootNode();
+
+  /**
+   * Inherit the historical positions when the root changes.
+   * @param oldRootNode Previous root node
+   */
+  void copyAppearedBoardHashes(const MctsNode* oldRootNode);
 
   /**
    * Returns true if this node has been evaluated.
@@ -86,6 +95,12 @@ class MctsNode {
    * @return Board evaluation value
    */
   float getNodeValue();
+
+  /**
+   * Get the board's predicted score difference.
+   * @return Predicted score difference of the board
+   */
+  float getNodeScore();
 
   /**
    * Sets the color of the previously played stone.
@@ -131,26 +146,18 @@ class MctsNode {
 
   /**
    * Returns the node corresponding to the specified move.
-   * Returns nullptr if the child node does not exist.
+   * Return a newly created node if the child does not exist.
+   * Do not register the newly created node in the child list.
    * @param move Move
-   * @return Node
+   * @return Node corresponding to the move
    */
-  MctsNode* getChild(Move move);
-
-  /**
-   * Creates a node corresponding to the specified move.
-   * Even if a child node exists, a new node is created.
-   * The newly created node does not have a parent-child relationship with this node.
-   * @param move Move
-   * @return Created node
-   */
-  MctsNode* createNode(Move move);
+  MctsNode* getChild(const Move& move);
 
   /**
    * Removes the child node corresponding to the specified move.
    * @param move Move
    */
-  void removeChild(Move move);
+  void removeChild(const Move& move);
 
   /**
    * Returns the visit count of this node.
@@ -159,16 +166,17 @@ class MctsNode {
   int32_t getVisits();
 
   /**
-   * Returns the playout count.
-   * @return Playout count
+   * Get the maximum visit count among the immediate children.
+   * @return Maximum child visit count
    */
-  int32_t getPlayouts();
+  int32_t getPvVisits();
 
   /**
-   * Updates the MCTS evaluation value.
+   * Update the MCTS evaluation and predicted score difference.
    * @param value Evaluation value
+   * @param score Predicted score difference
    */
-  void updateMctsValue(float value);
+  void updateMctsValue(float value, float score);
 
   /**
    * Returns the MCTS evaluation value.
@@ -177,7 +185,13 @@ class MctsNode {
   float getMctsValue();
 
   /**
-   * Returns the lower confidence bound of the MCTS evaluation value.
+   * Get the predicted score difference aggregated by MCTS.
+   * @return Mean predicted score difference
+   */
+  float getMctsScore();
+
+  /**
+   * Get the lower confidence bound of the MCTS evaluation.
    * @return Lower confidence bound
    */
   float getMctsValueLCB();
@@ -185,9 +199,11 @@ class MctsNode {
   /**
    * Returns the priority based on PUCB.
    * @param totalVisits Total visit count
-   * @return Priority
+   * @param childrenSize Number of children of the parent node
+   * @return Pair of minimum-visit eligibility and PUCB priority
    */
-  float getPriorityByPUCB(int32_t totalVisits);
+  std::pair<bool, float> getPriorityByPUCB(
+      int32_t totalVisits, int32_t childrenSize);
 
   /**
    * Returns the predicted variation from this node.
@@ -197,21 +213,15 @@ class MctsNode {
 
   /**
    * Returns the predicted territory probabilities.
-   * @return Predicted territory probabilities
+   * @return Predicted territory probabilities with settled territories applied
    */
-  std::array<float, 3 * MODEL_SIZE * MODEL_SIZE> getTerritories();
+  std::array<float, MODEL_TERRITORY_SIZE> getTerritories();
 
   /**
    * Returns the board state.
    * @return Board state
    */
-  std::vector<int32_t> getBoardState();
-
-  /**
-   * Returns the board.
-   * @return Board
-   */
-  inline const Board& getBoard() {
+  inline const Board& getBoard() const {
     return _board;
   }
 
@@ -219,12 +229,12 @@ class MctsNode {
    * Returns the move information.
    * @return Move information
    */
-  inline const Move& getMove() {
+  inline const Move& getMove() const {
     return _move;
   }
 
   /**
-   * Returns the color of the next stone to play.
+   * Get the color of the next stone to play.
    * @return Color of the next stone to play
    */
   inline int32_t getNextColor() const {
@@ -274,19 +284,24 @@ class MctsNode {
   Move _move;
 
   /**
+   * Komi used to evaluate this node's position.
+   */
+  float _komi;
+
+  /**
    * Number of captured stones.
    */
   int32_t _captured;
 
   /**
+   * Number of consecutive passes.
+   */
+  int32_t _passed;
+
+  /**
    * Predicted move probability.
    */
   float _probability;
-
-  /**
-   * True if this is the first created child node.
-   */
-  bool _firstChild;
 
   /**
    * True if currently being evaluated.
@@ -304,9 +319,14 @@ class MctsNode {
   float _nodeValue;
 
   /**
-   * List of next move probabilities.
+   * Predicted score difference of the board.
    */
-  std::vector<Policy> _policies;
+  float _nodeScore;
+
+  /**
+   * List of next-move probabilities.
+   */
+  std::vector<MctsPolicy> _policies;
 
   /**
    * Parent node.
@@ -319,17 +339,23 @@ class MctsNode {
   std::map<int32_t, MctsNode*> _children;
 
   /**
-   * Visit count.
+   * Board hashes of positions that occurred before the root node.
+   * Only valid for the root node.
+   */
+  std::set<BoardHash> _appearedBoardHashes;
+
+  /**
+   * Search count.
    */
   std::atomic<int32_t> _visits;
 
   /**
-   * Playout count.
+   * Maximum visit count among the immediate children.
    */
-  std::atomic<int32_t> _playouts;
+  std::atomic<int32_t> _pvVisits;
 
   /**
-   * MCTS evaluation value.
+   * MCTS evaluation and predicted score difference.
    */
   MctsValue _mctsValue;
 
@@ -348,12 +374,12 @@ class MctsNode {
   /**
    * List of predicted territory probabilities.
    */
-  std::array<float, 3 * MODEL_SIZE * MODEL_SIZE> _territories;
+  std::array<float, MODEL_TERRITORY_SIZE> _territories;
 
   /**
    * Queue of candidate moves waiting to be registered as child nodes.
    */
-  std::queue<Policy> _waitingPolicies;
+  std::queue<MctsPolicy> _waitingPolicies;
 
   /**
    * Set of candidate moves waiting to be registered as child nodes.
@@ -366,11 +392,36 @@ class MctsNode {
   void _resetNode();
 
   /**
-   * Returns the next node to evaluate.
-   * @param equally True to equalize the visit count
+   * Update this node's visit count and its parent's maximum child visit count.
+   */
+  void _incrementVisits();
+
+  /**
+   * Get the komi used to evaluate the position after the specified move.
+   * @param move Move
+   * @return Komi used to evaluate the position after the move
+   */
+  float _getChildKomi(const Move& move) const;
+
+  /**
+   * Return true if the specified board violates superko.
+   * @param board Board to check
+   * @return True if the board violates superko
+   */
+  bool _isSuperkoBoard(const Board* board) const;
+
+  /**
+   * Calculate the predicted score difference from predicted territories.
+   * @return Predicted score difference from Black's perspective
+   */
+  float _calculateScoreFromTerritories();
+
+  /**
+   * Gets the next node to evaluate.
+   * @param equally True if search count should be equally distributed
    * @param width Search width
    * @param temperature Temperature parameter for search
-   * @param noise Gumbel noise strength
+   * @param noise Strength of Gumbel noise
    * @return Next node to evaluate
    */
   MctsNode* _pickupNextNode(bool equally, int32_t width, float temperature, float noise);

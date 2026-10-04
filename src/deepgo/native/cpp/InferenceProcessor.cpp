@@ -19,18 +19,14 @@ namespace deepgo {
 InferenceProcessor::InferenceProcessor(
     std::string model, std::vector<int32_t> gpus, bool fp16, bool deterministic,
     int32_t batchSize, int32_t threadsPerGpu, int32_t cacheSize)
-    : _cacheMutex(),
-      _queueMutex(),
+    : _queueMutex(),
       _queueCondition(),
       _queue(),
+      _cache(cacheSize),
       _executors(),
-      _cacheSize(cacheSize),
-      _cacheKeys(),
-      _cacheResults(),
       _terminated(false),
       _threadSize(static_cast<int32_t>(gpus.size()) * threadsPerGpu),
-      _batchSize(batchSize),
-      _cacheHitRate(0.0f) {
+      _batchSize(batchSize) {
   for (int32_t gpu : gpus) {
     _executors.emplace_back(std::make_unique<InferenceExecutor>(
         this, model, gpu, fp16, deterministic, batchSize, threadsPerGpu));
@@ -58,63 +54,27 @@ InferenceProcessor::~InferenceProcessor() {
  * @param callback Callback invoked when inference completes
  */
 void InferenceProcessor::submit(MctsNode* node, std::function<void(MctsNode*)> callback) {
-  // Variable to store the cached inference result
+  // Create the cache key for the board in the inference request
+  InferenceHash inference_hash(
+      &node->getBoard(), node->getNextColor(), node->getKomi(),
+      node->getRule(), node->getSuperko());
+
+  // Variable holding the cached inference result
   InferenceResult cached_result;
-  // Flag indicating whether a cached inference result was found
-  bool cached_result_found = false;
 
-  // Acquires a lock for synchronization
-  {
-    std::lock_guard<std::mutex> lock(_cacheMutex);
-
-    // Checks whether a cached inference result exists
-    // If a cached inference result exists, stores it and sets the flag
-    // Applying to the node and calling the callback are done outside the lock
-    BoardHash hash(&node->getBoard(), node->getNextColor());
-    auto it = _cacheResults.find(hash);
-
-    if (it != _cacheResults.end()) {
-      cached_result = it->second;
-      cached_result_found = true;
-    }
-
-    // Updates the cache hit rate
-    float hit_rate_increment = cached_result_found ? 1.0f : 0.0f;
-    float old_hit_rate = _cacheHitRate.load(std::memory_order_relaxed);
-    float new_hit_rate = old_hit_rate * 0.99f + hit_rate_increment * 0.01f;
-
-    _cacheHitRate.store(new_hit_rate, std::memory_order_relaxed);
-  }
-
-  // If a cached inference result was found,
-  // applies it to the node and calls the callback function
-  if (cached_result_found) {
+  // Use the cached inference result when available
+  if (_cache.get(inference_hash, cached_result)) {
     node->applyInferenceResult(cached_result);
     callback(node);
     return;
   }
 
   // Defines the callback function to invoke when inference completes
-  auto exec_callback = [this, node, callback](MctsNode*, const InferenceResult& result) {
-    {
-      std::lock_guard<std::mutex> lock(_cacheMutex);
-
-      // Checks whether a result exists in the cache
-      // If no result exists, saves it to the cache
-      BoardHash hash(&node->getBoard(), node->getNextColor());
-      auto it = _cacheResults.find(hash);
-
-      if (it == _cacheResults.end() && _cacheSize > 0) {
-        _cacheResults.insert({hash, result});
-        _cacheKeys.push(hash);
-      }
-
-      // Removes the oldest entries when the cache size is exceeded
-      while (_cacheSize > 0 && _cacheKeys.size() >= static_cast<size_t>(_cacheSize)) {
-        _cacheResults.erase(_cacheKeys.front());
-        _cacheKeys.pop();
-      }
-    }
+  auto exec_callback =
+      [this, node, callback, inference_hash](
+          MctsNode*, const InferenceResult& result) {
+    // Insert an inference result that is not already cached
+    _cache.put(inference_hash, result);
 
     // Applies the inference result to the node
     node->applyInferenceResult(result);
@@ -133,7 +93,7 @@ void InferenceProcessor::submit(MctsNode* node, std::function<void(MctsNode*)> c
 
 /**
  * Gets the evaluation value for the specified board.
- * @param board Board
+ * @param board Board state
  * @param color Color of the stone to play next
  * @param komi Komi
  * @param rule Rule
@@ -144,7 +104,8 @@ float InferenceProcessor::predict(
     Board* board, int32_t color, float komi, int32_t rule, bool superko) {
   // Creates a temporary MCTS node for synchronous evaluation, reusing the standard inference path
   MctsParameter parameter(
-      board->getWidth(), board->getHeight(), komi, rule, superko, 1.0f, 18200.0f);
+      board->getWidth(), board->getHeight(), komi, rule, superko,
+      1.0f, 18200.0f, 0.0f);
   MctsManager manager(parameter);
   MctsNode* node = manager.createNode();
 
@@ -167,7 +128,7 @@ float InferenceProcessor::predict(
 }
 
 /**
- * Executes inference synchronously.
+ * Run inference synchronously.
  * @param inputs Input data
  * @param outputs Output data
  * @param size Number of data samples to evaluate

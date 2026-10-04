@@ -9,8 +9,8 @@ cdef extern from "cpp/Candidate.h" namespace "deepgo":
         Candidate(const Candidate& other) except +
         Move getMove()
         int32_t getVisits()
-        int32_t getPlayouts()
         float getPolicy()
         float getValue()
+        float getScore()
         vector[Move] getVariations()
         void getTerritories(float* territories)

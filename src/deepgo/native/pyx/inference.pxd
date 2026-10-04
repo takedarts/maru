@@ -3,7 +3,6 @@ from libcpp cimport bool as cpp_bool
 from libcpp.string cimport string
 from libcpp.vector cimport vector
 from pyx.board cimport Board
-from pyx.policy cimport Policy
 
 
 cdef extern from "cpp/InferenceModel.h" namespace "deepgo":
@@ -32,5 +31,4 @@ cdef extern from "cpp/InferenceResult.h" namespace "deepgo":
     cdef cppclass InferenceResult:
         InferenceResult() except +
         float getValue() except +
-        vector[Policy] getPolicies() except +
         void getTerritories(float* buffer) except +

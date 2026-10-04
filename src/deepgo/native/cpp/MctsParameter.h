@@ -17,11 +17,13 @@ class MctsParameter {
    * @param rule Win/loss determination rule
    * @param superko True if the superko rule is applied
    * @param pucbConstantInit Initial value of the constant multiplied by the PUCB confidence bound
-   * @param pucbConstantBase Incremental value of the constant multiplied by the PUCB confidence bound
+   * @param pucbConstantBase Incremental value of the constant multiplied by the PUCB confidence
+   * bound
+   * @param pucbMinVisitsRate Minimum child visit ratio prioritized by PUCB
    */
   MctsParameter(
       int32_t width, int32_t height, float komi, int32_t rule, bool superko,
-      float pucbConstantInit, float pucbConstantBase);
+      float pucbConstantInit, float pucbConstantBase, float pucbMinVisitsRate);
 
   /**
    * Returns the board width.
@@ -65,6 +67,12 @@ class MctsParameter {
    */
   float getPucbConstantBase() const;
 
+  /**
+   * Return the minimum child visit ratio prioritized by PUCB.
+   * @return Minimum child visit ratio prioritized by PUCB
+   */
+  float getPucbMinVisitsRate() const;
+
  private:
   /**
    * Board width.
@@ -100,6 +108,11 @@ class MctsParameter {
    * Incremental value of the constant multiplied by the PUCB confidence bound.
    */
   float _pucbConstantBase;
+
+  /**
+   * Minimum child visit ratio prioritized by PUCB.
+   */
+  float _pucbMinVisitsRate;
 };
 
 }  // namespace deepgo

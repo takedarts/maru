@@ -12,6 +12,7 @@ namespace deepgo {
 MctsValue::MctsValue()
     : _mutex(),
       _value(0.0f),
+      _score(0.0f),
       _count(0) {
 }
 
@@ -22,25 +23,29 @@ MctsValue::MctsValue()
 MctsValue::MctsValue(const MctsValue& other)
     : _mutex(),
       _value(other._value),
+      _score(other._score),
       _count(other._count) {
 }
 
 /**
- * Resets the evaluation value.
+ * Reset the evaluation and predicted score difference.
  */
 void MctsValue::reset() {
   std::lock_guard<std::mutex> lock(_mutex);
   _value = 0.0f;
+  _score = 0.0f;
   _count = 0;
 }
 
 /**
- * Updates the evaluation value.
+ * Update the evaluation and predicted score difference.
  * @param value Evaluation value
+ * @param score Predicted score difference
  */
-void MctsValue::update(float value) {
+void MctsValue::update(float value, float score) {
   std::lock_guard<std::mutex> lock(_mutex);
   _value += value;
+  _score += score;
   _count++;
 }
 
@@ -52,6 +57,16 @@ void MctsValue::update(float value) {
 float MctsValue::getValue(float defaultValue) {
   std::lock_guard<std::mutex> lock(_mutex);
   return (_count != 0) ? _value / _count : defaultValue;
+}
+
+/**
+ * Get the mean predicted score difference.
+ * @param defaultScore Predicted score to return when no evaluations exist
+ * @return Mean predicted score difference
+ */
+float MctsValue::getScore(float defaultScore) {
+  std::lock_guard<std::mutex> lock(_mutex);
+  return (_count != 0) ? _score / _count : defaultScore;
 }
 
 /**

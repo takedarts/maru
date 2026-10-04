@@ -17,22 +17,22 @@ class Candidate {
  public:
   /**
    * Creates candidate move data.
-   * @param move move
+   * @param move Move
    * @param visits number of visits
-   * @param playouts number of playouts
    * @param policy predicted move probability
-   * @param value evaluation value
+   * @param value Evaluation value
+   * @param score Predicted score difference
    * @param variations predicted sequence of moves
    * @param territories predicted territory probabilities
    */
   Candidate(
-      Move move, int32_t visits, int32_t playouts,
-      float policy, float value, const std::vector<Move> variations,
-      const std::array<float, 3 * MODEL_SIZE * MODEL_SIZE>& territories);
+      Move move, int32_t visits, float policy, float value, float score,
+      const std::vector<Move> variations,
+      const std::array<float, MODEL_TERRITORY_SIZE>& territories);
 
   /**
    * Creates candidate move data from a node object.
-   * @param node node object
+   * @param node Node object
    */
   Candidate(MctsNode* node);
 
@@ -76,16 +76,8 @@ class Candidate {
   }
 
   /**
-   * Returns the number of playouts.
-   * @return number of playouts
-   */
-  inline int32_t getPlayouts() const {
-    return _playouts;
-  }
-
-  /**
-   * Returns the predicted move probability.
-   * @return predicted move probability
+   * Get the predicted move probability.
+   * @return Predicted move probability
    */
   inline float getPolicy() const {
     return _policy;
@@ -93,15 +85,23 @@ class Candidate {
 
   /**
    * Returns the evaluation value.
-   * @return evaluation value
+   * @return Evaluation value
    */
   inline float getValue() const {
     return _value;
   }
 
   /**
+   * Get the predicted score difference.
+   * @return Predicted score difference
+   */
+  inline float getScore() const {
+    return _score;
+  }
+
+  /**
    * Returns the predicted sequence of moves.
-   * @return predicted sequence of moves
+   * @return Predicted variation
    */
   inline std::vector<Move> getVariations() const {
     return _variations;
@@ -116,8 +116,8 @@ class Candidate {
   }
 
   /**
-   * Returns the lower bound of the confidence interval for the evaluation value.
-   * @return lower bound of the confidence interval for the evaluation value
+   * Returns the lower confidence bound of the evaluation value.
+   * @return Lower confidence bound of the evaluation value
    */
   inline float getValueLCB() const {
     return _value - _move.getColor() * 1.96f * 0.5f / std::sqrt(_visits + 1);
@@ -162,11 +162,6 @@ class Candidate {
   int32_t _visits;
 
   /**
-   * Number of playouts.
-   */
-  int32_t _playouts;
-
-  /**
    * Predicted move probability.
    */
   float _policy;
@@ -177,14 +172,19 @@ class Candidate {
   float _value;
 
   /**
-   * Predicted sequence of moves.
+   * Predicted score difference.
+   */
+  float _score;
+
+  /**
+   * Predicted variation.
    */
   std::vector<Move> _variations;
 
   /**
    * Predicted territory probabilities.
    */
-  std::array<float, 3 * MODEL_SIZE * MODEL_SIZE> _territories;
+  std::array<float, MODEL_TERRITORY_SIZE> _territories;
 };
 
 }  // namespace deepgo

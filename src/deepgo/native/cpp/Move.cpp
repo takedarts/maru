@@ -23,7 +23,7 @@ Move::Move(int8_t x, int8_t y, int8_t color)
 Move::Move()
     : _x(-2),
       _y(-2),
-      _color(EMPTY) {
+      _color(COLOR_EMPTY) {
 }
 
 /**
@@ -32,9 +32,9 @@ Move::Move()
  */
 std::string Move::toString() const {
   std::stringstream ss;
-  char color_char = (_color == BLACK)   ? 'B'
-                    : (_color == WHITE) ? 'W'
-                                        : 'E';
+  char color_char = (_color == COLOR_BLACK)   ? 'B'
+                    : (_color == COLOR_WHITE) ? 'W'
+                                              : 'E';
 
   ss << "x=" << static_cast<int32_t>(_x)
      << ", y=" << static_cast<int32_t>(_y)

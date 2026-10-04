@@ -4,13 +4,19 @@ from pathlib import Path
 from typing import Dict, List, Tuple
 
 from .board import Board, get_color_mark, is_valid_position
-from .config import BLACK, DEFAULT_SIZE, PASS, WHITE
+from .config import COLOR_BLACK, COLOR_WHITE, DEFAULT_SIZE, MOVE_PASS
 from .exception import GoException
 
 CHARSETS = ('utf-8', 'shift-jis', 'euc-jp', 'iso-2022-jp')
 
 
 def _read_text(file: str | Path | IOBase) -> str:
+    '''Read SGF text from a path or stream.
+    Args:
+        file (str | Path | IOBase): Input path or stream
+    Returns:
+        str: Result of the operation.
+    '''
     if isinstance(file, IOBase):
         binary = file.read()
     else:
@@ -34,6 +40,12 @@ def _read_text(file: str | Path | IOBase) -> str:
 
 
 def _parse_text(text: str) -> List[Dict[str, str]]:
+    '''Parse SGF nodes into property dictionaries.
+    Args:
+        text (str): SGF text
+    Returns:
+        List[Dict[str, str]]: Result of the operation.
+    '''
     values_list: List[Dict[str, str]] = []
     index = 0
     state = 0
@@ -74,26 +86,72 @@ def _parse_text(text: str) -> List[Dict[str, str]]:
 
 
 def _escape_value(value: str) -> str:
+    '''Escape SGF property delimiters and backslashes.
+    Args:
+        value (str): Property value
+    Returns:
+        str: Result of the operation.
+    '''
     return value.replace('\\', '\\\\').replace(']', '\\]')
 
 
 class Properties(dict[str, str]):
+    '''Case-insensitive SGF property dictionary.
+    '''
     def get(self, key: str, default: str = '') -> str:  # type: ignore
+        '''Get a property using a case-insensitive key.
+        Args:
+            key (str): Property key
+            default (str): Value for an absent key
+        Returns:
+            str: Result of the operation.
+        '''
         return self[key.lower()] if key.lower() in self else default
 
     def __getitem__(self, key: str) -> str:
+        '''Read a property using a case-insensitive key.
+        Args:
+            key (str): Property key
+        Returns:
+            str: Result of the operation.
+        '''
         return super().__getitem__(key.lower())
 
     def __setitem__(self, key: str, value: str) -> None:
+        '''Set a property using a case-insensitive key.
+        Args:
+            key (str): Property key
+            value (str): Property value
+        Returns:
+            None: No return value.
+        '''
         super().__setitem__(key.lower(), value)
 
     def __delitem__(self, key: str) -> None:
+        '''Delete a property using a case-insensitive key.
+        Args:
+            key (str): Property key
+        Returns:
+            None: No return value.
+        '''
         return super().__delitem__(str(key).lower())
 
     def __contains__(self, key: object) -> bool:
+        '''Check whether a case-insensitive property key exists.
+        Args:
+            key (object): Property key
+        Returns:
+            bool: Result of the operation.
+        '''
         return super().__contains__(str(key).lower())
 
     def update(self, values: Dict[str, str]) -> None:  # type: ignore
+        '''Merge property values using case-insensitive keys.
+        Args:
+            values (Dict[str, str]): Properties to merge
+        Returns:
+            None: No return value.
+        '''
         for k, v in values.items():
             self[k] = v
 
@@ -105,6 +163,8 @@ class Record(object):
         '''Initialize game record data object.
         Args:
             file (str | Path | TextIOBase | None): Input file
+        Returns:
+            None: No return value.
         '''
         self.properties = Properties()
         self.moves: List[Tuple[Tuple[int, int], int, str | None]] = []
@@ -114,9 +174,19 @@ class Record(object):
 
     @property
     def size(self) -> int:
+        '''Return the board size stored in the SGF properties.
+        Returns:
+            int: Result of the operation.
+        '''
         return int(self.properties.get('sz', str(DEFAULT_SIZE)))
 
     def _parse(self, text: str) -> None:
+        '''Load SGF properties and moves from text.
+        Args:
+            text (str): SGF text
+        Returns:
+            None: No return value.
+        '''
         values = _parse_text(text)
 
         self.properties.clear()
@@ -129,10 +199,10 @@ class Record(object):
 
         for v in values[1:]:
             if 'b' in v:
-                color = BLACK
+                color = COLOR_BLACK
                 coord = v['b']
             elif 'w' in v:
-                color = WHITE
+                color = COLOR_WHITE
                 coord = v['w']
             else:
                 continue
@@ -140,10 +210,10 @@ class Record(object):
             if len(coord) == 2:
                 pos = (ord(coord[0]) - 97, ord(coord[1]) - 97)
             else:
-                pos = PASS
+                pos = MOVE_PASS
 
             if not is_valid_position(pos, self.size, self.size):
-                pos = PASS
+                pos = MOVE_PASS
 
             if 'c' in v:
                 message = v['c']
@@ -156,6 +226,8 @@ class Record(object):
         '''Write data to game record file.
         Args:
             file (str | Path | IOBase): Output file
+        Returns:
+            None: No return value.
         '''
         if isinstance(file, IOBase):
             file.write(self.dumps())
@@ -179,7 +251,7 @@ class Record(object):
         text = f'(;{props_text}'
 
         for pos, color, message in self.moves:
-            c = 'B' if color == BLACK else 'W'
+            c = 'B' if color == COLOR_BLACK else 'W'
 
             if is_valid_position(pos, self.size, self.size):
                 p = struct.pack('BB', 97 + pos[0], 97 + pos[1]).decode('utf-8')
@@ -213,6 +285,10 @@ class Record(object):
         return board
 
     def __str__(self) -> str:
+        '''Return a readable string representation.
+        Returns:
+            str: Result of the operation.
+        '''
         text = ['komi: {}'.format(self.properties.get('km', 'N/A')),
                 'player[X]: {}'.format(self.properties.get('pb', 'N/A')),
                 'player[O]: {}'.format(self.properties.get('pw', 'N/A')),

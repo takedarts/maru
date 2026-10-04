@@ -11,6 +11,7 @@ from pyx.inference cimport InferenceModel, InferenceProcessor
 
 
 cdef class NativeInferenceModel:
+    '''Expose LibTorch inference to Python.'''
     cdef InferenceModel *model
 
     @staticmethod
@@ -32,10 +33,11 @@ cdef class NativeInferenceModel:
         self.model = new InferenceModel(model.encode('utf-8'), gpu, fp16, deterministic)
 
     def __dealloc__(self) -> None:
+        '''Release the native object; return None.'''
         del self.model
 
     def forward(self, inputs: numpy.ndarray) -> numpy.ndarray:
-        '''Run inference.
+        '''Execute inference.
         Args:
             inputs (numpy.ndarray): Input data
         Returns:
@@ -61,6 +63,7 @@ cdef class NativeInferenceModel:
 
 
 cdef class NativeInferenceProcessor:
+    '''Expose batched inference and caching to Python.'''
     cdef InferenceProcessor *processor
 
     def __cinit__(
@@ -81,7 +84,7 @@ cdef class NativeInferenceProcessor:
             deterministic (bool): True to make computation results reproducible
             batch_size (int): Batch size for inference
             threads_per_gpu (int): Number of threads per GPU
-            cache_size (int): Cache size for inference results
+            cache_size (int): Cache size for board evaluation
         '''
         cdef vector[int32_t] gpu_vector
 
@@ -93,6 +96,7 @@ cdef class NativeInferenceProcessor:
             batch_size, threads_per_gpu, cache_size)
 
     def __dealloc__(self) -> None:
+        '''Release the native object; return None.'''
         del self.processor
 
     def predict(
@@ -107,7 +111,7 @@ cdef class NativeInferenceProcessor:
         Args:
             board (NativeBoard): Board object
             color (int): Color of the next stone to play
-            komi (float): Komi value
+            komi (float): Komi points
             rule (int): Rule
             superko (bool): True to use the superko rule
         Returns:

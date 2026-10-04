@@ -13,6 +13,10 @@ SRC_PATH = Path(__file__).parent.absolute()
 
 
 def parse_args() -> argparse.Namespace:
+    '''Parse command-line options.
+    Returns:
+        argparse.Namespace: Result of the operation.
+    '''
     parser = argparse.ArgumentParser(
         description='Build native codes',
         formatter_class=argparse.RawTextHelpFormatter)
@@ -30,7 +34,14 @@ def make_files(
     torch_path: str | None = None,
     debug: bool = False,
 ) -> None:
-    '''Create Config.h'''
+    '''Create Config.h
+    Args:
+        path (str): Path.
+        torch_path (str | None): Torch path.
+        debug (bool): Debug.
+    Returns:
+        None: No return value.
+    '''
     work_path = Path(__file__).parent / path
 
     # If the libtorch path is not specified, infer it from `torch.__file__`
@@ -79,7 +90,12 @@ def make_files(
 
 
 def run_cmake(path: str) -> None:
-    '''Run cmake to create the Cython library'''
+    '''Run cmake to create the Cython library
+    Args:
+        path (str): Path.
+    Returns:
+        None: No return value.
+    '''
     # Get the path to the cmake executable
     if hasattr(cmake, 'CMAKE_BIN_DIR'):
         cmake_path = os.path.join(cmake.CMAKE_BIN_DIR, 'cmake')
@@ -129,6 +145,12 @@ def run_cmake(path: str) -> None:
 
 
 def _clean(paths: List[Path]) -> None:
+    '''Remove generated files and directories recursively.
+    Args:
+        paths (List[Path]): Generated paths to remove
+    Returns:
+        None: No return value.
+    '''
     for path in paths:
         if path.is_dir():
             _clean(list(path.iterdir()))
@@ -138,6 +160,12 @@ def _clean(paths: List[Path]) -> None:
 
 
 def clean(path: str) -> None:
+    '''Remove native build products for the requested source directory.
+    Args:
+        path (str): Source directory relative to src
+    Returns:
+        None: No return value.
+    '''
     work_path = Path(__file__).parent / path
     targets = [
         work_path / 'build',
@@ -151,6 +179,10 @@ def clean(path: str) -> None:
 
 
 def main() -> None:
+    '''Run the command-line entry point.
+    Returns:
+        None: No return value.
+    '''
     args = parse_args()
     path = 'deepgo/native'
 

@@ -1,9 +1,12 @@
 #include "Board.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <iomanip>
+#include <iterator>
 #include <sstream>
+#include <stdexcept>
 
 #include "Config.h"
 #include "Constant.h"
@@ -22,9 +25,9 @@ inline void setInputBit(int32_t* inputs, int32_t index, int32_t value = 1) {
 }
 
 /**
- * Creates a board object.
- * @param width Width of the board
- * @param height Height of the board
+ * Create board object.
+ * @param width Board width
+ * @param height Board height
  */
 Board::Board(int width, int height)
     : _width(width + 2),
@@ -35,13 +38,11 @@ Board::Board(int width, int height)
       _areaIds(),
       _areaFlags(),
       _koIndex(-1),
-      _koColor(EMPTY),
-      _histories(),
-      _pattern(width, height),
       _areaUpdated(false),
       _shichoUpdated(false),
       _hash(_width << 16 | _height),
-      _bitBoard() {
+      _blackBitBoard(),
+      _whiteBitBoard() {
   // Create arrays to store data
   _areaIds[0].resize(_length);
   _areaIds[1].resize(_length);
@@ -49,7 +50,7 @@ Board::Board(int width, int height)
   _areaFlags[1].resize(_length);
 
   // Set boundary data on the outside of the board
-  _renObjs[0].color = EDGE;
+  _renObjs[0].color = COLOR_EDGE;
   _renObjs[0].spaces.insert(-1);
   _renObjs[0].shicho = false;
 
@@ -64,7 +65,8 @@ Board::Board(int width, int height)
   }
 
   // Initialize the bitboard
-  std::fill(std::begin(_bitBoard), std::end(_bitBoard), 0);
+  _blackBitBoard.fill(0);
+  _whiteBitBoard.fill(0);
 }
 
 /**
@@ -80,13 +82,11 @@ Board::Board(const Board& board)
       _areaIds(),
       _areaFlags(),
       _koIndex(-1),
-      _koColor(EMPTY),
-      _histories(),
-      _pattern(_width - 2, _height - 2),
       _areaUpdated(false),
       _shichoUpdated(false),
       _hash(_width << 16 | _height),
-      _bitBoard() {
+      _blackBitBoard(),
+      _whiteBitBoard() {
   // Create arrays to store data
   _areaIds[0].resize(_length);
   _areaIds[1].resize(_length);
@@ -106,7 +106,7 @@ void Board::clear() {
     for (int32_t x = 0; x < _width - 2; x++) {
       int32_t index = _getIndex(x, y);
       _renIds[index] = -1;
-      _renObjs[index].color = EMPTY;
+      _renObjs[index].color = COLOR_EMPTY;
       _renObjs[index].positions.clear();
       _renObjs[index].spaces.clear();
     }
@@ -118,49 +118,86 @@ void Board::clear() {
 
   // Initialize ko
   _koIndex = -1;
-  _koColor = EMPTY;
-
-  // Initialize history
-  _histories[0].clearMoves();
-  _histories[1].clearMoves();
-
-  // Initialize stone arrangement information
-  _pattern.clear();
 
   // Initialize the board hash value
   _hash = _width << 16 | _height;
 
   // Initialize the bitboard
-  std::fill(std::begin(_bitBoard), std::end(_bitBoard), 0);
+  _blackBitBoard.fill(0);
+  _whiteBitBoard.fill(0);
 }
 
 /**
- * Returns the width of the board.
- * @return Width of the board
+ * Get the width of the board.
+ * @return Board width
  */
 int32_t Board::getWidth() const {
   return _width - 2;
 }
 
 /**
- * Returns the height of the board.
- * @return Height of the board
+ * Get the height of the board.
+ * @return Board height
  */
 int32_t Board::getHeight() const {
   return _height - 2;
 }
 
 /**
- * Places a stone.
- * @param move Move information
- * @return Number of captured stones (or -1 if the move is illegal)
+ * Return values representing the stone arrangement.
+ * Split each bitboard value into its lower and upper 32-bit words, in that order.
+ * Store black stone words followed by white stone words.
+ * @return Values representing the stone arrangement
  */
-int32_t Board::play(Move move) {
-  // If passing, reset ko information
-  if (!move.isValid(_width - 2, _height - 2)) {
+std::vector<uint32_t> Board::getPattern() const {
+  std::vector<uint32_t> pattern;
+  pattern.reserve(BITBOARD_SIZE * 4);
+
+  // Split the black stone bitboard into 32-bit words
+  for (uint64_t value : _blackBitBoard) {
+    pattern.push_back(static_cast<uint32_t>(value & 0xffffffffULL));
+    pattern.push_back(static_cast<uint32_t>(value >> 32));
+  }
+
+  // Split the white stone bitboard into 32-bit words
+  for (uint64_t value : _whiteBitBoard) {
+    pattern.push_back(static_cast<uint32_t>(value & 0xffffffffULL));
+    pattern.push_back(static_cast<uint32_t>(value >> 32));
+  }
+
+  return pattern;
+}
+
+/**
+ * Place a stone.
+ * @param move Move information
+ * @return Move result
+ * @throws std::invalid_argument If the move is illegal
+ */
+MoveResult Board::play(Move move) {
+  // Save the ko coordinate before the move changes it
+  std::pair<int32_t, int32_t> previous_ko = {-1, -1};
+
+  if (_koIndex != -1) {
+    previous_ko = {_getPosX(_koIndex), _getPosY(_koIndex)};
+  }
+
+  // Reset ko information for a pass
+  if (move.isPass() &&
+      (move.getColor() == COLOR_BLACK || move.getColor() == COLOR_WHITE)) {
     _koIndex = -1;
-    _koColor = EMPTY;
-    return 0;
+    return MoveResult(move, 0, {false, false, false, false}, previous_ko);
+  }
+
+  // Reject coordinates outside the board
+  if (move.getX() < 0 || move.getX() >= _width - 2 ||
+      move.getY() < 0 || move.getY() >= _height - 2) {
+    throw std::invalid_argument("Move position is outside the board.");
+  }
+
+  // Reject colors other than black or white
+  if (move.getColor() != COLOR_BLACK && move.getColor() != COLOR_WHITE) {
+    throw std::invalid_argument("Move color is invalid.");
   }
 
   // Validation
@@ -169,21 +206,28 @@ int32_t Board::play(Move move) {
   int8_t op_color = OPPOSITE(my_color);
 
   if (!_isEnabled(index, my_color, false)) {
-    return -1;
+    throw std::invalid_argument("Move is not legal.");
   }
 
   // Place the stone
   _put(index, my_color);
 
-  // Add the move coordinate to the history
-  if (my_color == BLACK) {
-    _histories[0].addMove(move);
-  } else if (my_color == WHITE) {
-    _histories[1].addMove(move);
-  }
-
-  // Update the state around the move coordinate
+  // Update the state around the played coordinate
   int32_t remove_size = 0;
+
+  // Record captured directions in the order up, right, down, left
+  const std::array<int32_t, 4> capture_arounds = {-_width, 1, _width, -1};
+  std::array<bool, 4> captured_directions = {false, false, false, false};
+
+  for (int32_t direction = 0; direction < 4; direction++) {
+    int32_t ren_id = _renIds[index + capture_arounds[direction]];
+
+    if (ren_id != -1 &&
+        _renObjs[ren_id].color == op_color &&
+        _renObjs[ren_id].spaces.empty()) {
+      captured_directions[direction] = true;
+    }
+  }
 
   for (auto a : AROUNDS) {
     int32_t ren_id = _renIds[index + a];
@@ -204,22 +248,131 @@ int32_t Board::play(Move move) {
     }
   }
 
-  // Clear ko condition if 2 or more captured, or placed stone's group size > 1, or placed stone's liberties > 1
+  // Clear ko condition if 2 or more captured, or placed stone's group size > 1, or placed stone's
+  // liberties > 1
   int32_t position_size = static_cast<int32_t>(_renObjs[_renIds[index]].positions.size());
   int32_t space_size = static_cast<int32_t>(_renObjs[_renIds[index]].spaces.size());
 
   if (remove_size != 1 || position_size > 1 || space_size > 1) {
     _koIndex = -1;
-    _koColor = EMPTY;
-  } else {
-    _koColor = op_color;
   }
 
   // Reset flags for area information and ladder information
   _areaUpdated = false;
   _shichoUpdated = false;
 
-  return remove_size;
+  return MoveResult(move, remove_size, captured_directions, previous_ko);
+}
+
+/**
+ * Undo a move.
+ * @param result Result of the move to undo
+ * @throws std::invalid_argument If the move result does not match the current board
+ */
+void Board::undo(const MoveResult& result) {
+  int32_t x = result.getX();
+  int32_t y = result.getY();
+  int32_t color = result.getColor();
+  std::pair<int32_t, int32_t> previous_ko = result.getPreviousKo();
+
+  // Validate the basic move result information
+  if (color != COLOR_BLACK && color != COLOR_WHITE) {
+    throw std::invalid_argument("Move result color is invalid.");
+  }
+
+  if (previous_ko.first != -1 || previous_ko.second != -1) {
+    if (previous_ko.first < 0 || previous_ko.first >= _width - 2 ||
+        previous_ko.second < 0 || previous_ko.second >= _height - 2) {
+      throw std::invalid_argument("Previous ko position is outside the board.");
+    }
+  }
+
+  // For a pass, restore only the previous ko without changing stones
+  if (x == -1 && y == -1) {
+    if (result.getCaptured() != 0) {
+      throw std::invalid_argument("Pass move result has captured stones.");
+    }
+
+    _koIndex = (previous_ko.first == -1)
+                   ? -1
+                   : _getIndex(previous_ko.first, previous_ko.second);
+    return;
+  }
+
+  // Validate the coordinate and current stone for an ordinary move
+  if (x < 0 || x >= _width - 2 || y < 0 || y >= _height - 2) {
+    throw std::invalid_argument("Move result position is outside the board.");
+  }
+
+  int32_t move_index = _getIndex(x, y);
+
+  if (_getColor(move_index) != color) {
+    throw std::invalid_argument("Move result does not match the board.");
+  }
+
+  // Save the current stone arrangement and remove the played stone
+  std::vector<int32_t> colors(_length, COLOR_EMPTY);
+
+  for (int32_t index = 0; index < _length; index++) {
+    colors[index] = _getColor(index);
+  }
+
+  colors[move_index] = COLOR_EMPTY;
+
+  // Restore captured groups from empty points in the recorded directions
+  const std::array<int32_t, 4> capture_arounds = {-_width, 1, _width, -1};
+  std::vector<bool> restored(_length, false);
+  int32_t restored_size = 0;
+
+  for (int32_t direction = 0; direction < 4; direction++) {
+    if (!result.getCapturedDirection(direction)) {
+      continue;
+    }
+
+    int32_t start = move_index + capture_arounds[direction];
+
+    if (_getColor(start) != COLOR_EMPTY) {
+      throw std::invalid_argument("Captured direction does not point to an empty position.");
+    }
+
+    // Avoid repeated traversal when the same group touches multiple directions
+    if (restored[start]) {
+      continue;
+    }
+
+    std::vector<int32_t> stack = {start};
+
+    while (!stack.empty()) {
+      int32_t index = stack.back();
+      stack.pop_back();
+
+      if (restored[index] || _getColor(index) != COLOR_EMPTY) {
+        continue;
+      }
+
+      restored[index] = true;
+      colors[index] = OPPOSITE(color);
+      restored_size++;
+
+      for (auto around : AROUNDS) {
+        int32_t target = index + around;
+
+        if (!restored[target] && _getColor(target) == COLOR_EMPTY) {
+          stack.push_back(target);
+        }
+      }
+    }
+  }
+
+  if (restored_size != result.getCaptured()) {
+    throw std::invalid_argument("Captured stone count does not match the board.");
+  }
+
+  // Rebuild groups, liberties, and hashes from the restored stone arrangement
+  _rebuild(colors);
+  _koIndex = (previous_ko.first == -1)
+                 ? -1
+                 : _getIndex(previous_ko.first, previous_ko.second);
 }
 
 /**
@@ -229,29 +382,11 @@ int32_t Board::play(Move move) {
  * @return Coordinates of the ko
  */
 std::pair<int32_t, int32_t> Board::getKo(int32_t color) const {
-  if (_koIndex != -1 && color == _koColor) {
+  if (_isActiveKo(color)) {
     return std::make_pair(_getPosX(_koIndex), _getPosY(_koIndex));
   } else {
     return std::make_pair(-1, -1);
   }
-}
-
-/**
- * Returns the list of most recent move coordinates.
- * @param color Stone color
- * @return List of move coordinates
- */
-std::vector<Move> Board::getHistories(int color) const {
-  int32_t history_index = (color == BLACK) ? 0 : 1;
-  std::vector<Move> moves;
-
-  for (const Move& move : _histories[history_index].getMoves()) {
-    if (move.isValid(_width - 2, _height - 2)) {
-      moves.push_back(move);
-    }
-  }
-
-  return moves;
 }
 
 /**
@@ -336,6 +471,11 @@ bool Board::isShicho(int32_t x, int32_t y) {
  * @return true if the move is legal
  */
 bool Board::isEnabled(int32_t x, int32_t y, int32_t color, bool checkSeki) {
+  // Reject moves outside the board
+  if (x < 0 || x >= _width - 2 || y < 0 || y >= _height - 2) {
+    return false;
+  }
+
   return _isEnabled(_getIndex(x, y), color, checkSeki);
 }
 
@@ -360,9 +500,8 @@ void Board::getEnableds(int32_t* enableds, int32_t color, bool checkSeki) {
 /**
  * Returns the settled territory data.
  * @param territories Territory data
- * @param color Reference stone color (setting WHITE returns data with black/white evaluated)
  */
-void Board::getTerritories(int32_t* territories, int32_t color) {
+void Board::getFixedTerritories(int32_t* territories) {
   // Update empty area data
   _updateArea();
 
@@ -374,19 +513,19 @@ void Board::getTerritories(int32_t* territories, int32_t color) {
 
       // Set settled groups
       if (ren_id != -1 && _renObjs[ren_id].fixed) {
-        territories[y * (_width - 2) + x] = _renObjs[ren_id].color * color;
+        territories[y * (_width - 2) + x] = _renObjs[ren_id].color;
       }
       // Set black settled territory
       else if (_areaIds[0][index] != -1 && _areaFlags[0][_areaIds[0][index]]) {
-        territories[y * (_width - 2) + x] = BLACK * color;
+        territories[y * (_width - 2) + x] = COLOR_BLACK;
       }
       // Set white settled territory
       else if (_areaIds[1][index] != -1 && _areaFlags[1][_areaIds[1][index]]) {
-        territories[y * (_width - 2) + x] = WHITE * color;
+        territories[y * (_width - 2) + x] = COLOR_WHITE;
       }
       // Set unsettled territory
       else {
-        territories[y * (_width - 2) + x] = EMPTY;
+        territories[y * (_width - 2) + x] = COLOR_EMPTY;
       }
     }
   }
@@ -395,20 +534,23 @@ void Board::getTerritories(int32_t* territories, int32_t color) {
 /**
  * Returns the owner data for each coordinate.
  * @param owners Owner data
- * @param color Reference stone color (setting WHITE returns data with black/white inverted)
- * @param rule Scoring rule (RULE_CH: Chinese rules, RULE_JP: Japanese rules, RULE_COM: auto-match rules)
+ * @param territories Territory data
+ * @param rule Scoring rule (RULE_CH: Chinese rules, RULE_JP: Japanese rules, RULE_COM: auto-match
+ * rules)
  */
-void Board::getOwners(int32_t* owners, int32_t color, int32_t rule) {
-  // Get territory data
-  getTerritories(owners, color);
+void Board::getOwners(int32_t* owners, const int32_t* territories, int32_t rule) {
+  // Copy the supplied territory data into the owner data
+  for (int32_t index = 0; index < (_width - 2) * (_height - 2); index++) {
+    owners[index] = territories[index];
+  }
 
   // Set the owner for stones in unsettled territory
   for (int32_t y = 0; y < _height - 2; y++) {
     for (int32_t x = 0; x < _width - 2; x++) {
       int32_t owner_index = y * (_width - 2) + x;
 
-      if (owners[owner_index] == EMPTY) {
-        owners[owner_index] = getColor(x, y) * color;
+      if (owners[owner_index] == COLOR_EMPTY) {
+        owners[owner_index] = getColor(x, y);
       }
     }
   }
@@ -419,7 +561,7 @@ void Board::getOwners(int32_t* owners, int32_t color, int32_t rule) {
   }
 
   // Create area data for regions surrounded by a single color
-  std::vector<int32_t> areas(_length, EMPTY);
+  std::vector<int32_t> areas(_length, COLOR_EMPTY);
   std::vector<bool> checks(_length, false);
 
   for (int32_t y = 0; y < _height - 2; y++) {
@@ -428,8 +570,8 @@ void Board::getOwners(int32_t* owners, int32_t color, int32_t rule) {
       int32_t color = getColor(x, y);
 
       // Skip if already checked
-      // Skip if not an empty position
-      if (checks[index] || color != EMPTY) {
+      // Skip occupied coordinates
+      if (checks[index] || color != COLOR_EMPTY) {
         continue;
       }
 
@@ -455,9 +597,9 @@ void Board::getOwners(int32_t* owners, int32_t color, int32_t rule) {
           int32_t target = pos + a;
           int32_t target_color = _getColor(target);
 
-          if (target_color == EMPTY) {
+          if (target_color == COLOR_EMPTY) {
             stack.push_back(target);
-          } else if (target_color != EDGE) {
+          } else if (target_color != COLOR_EDGE) {
             colors.insert(target_color);
           }
         }
@@ -478,34 +620,26 @@ void Board::getOwners(int32_t* owners, int32_t color, int32_t rule) {
       int32_t index = _getIndex(x, y);
       int32_t owner_index = y * (_width - 2) + x;
 
-      if (owners[owner_index] == EMPTY) {
-        owners[owner_index] = areas[index] * color;
+      if (owners[owner_index] == COLOR_EMPTY) {
+        owners[owner_index] = areas[index];
       }
     }
   }
 }
 
 /**
- * Returns the value representing the stone arrangement.
- * @return Value representing the stone arrangement
- */
-std::vector<int32_t> Board::getPatterns() {
-  return _pattern.values();
-}
-
-/**
  * Returns the input data for the model.
  * @param inputs Board data to feed into the model
  * @param color Color of the stone to play
- * @param komi Komi in points
- * @param rule Rule for determining win/loss
- * @param superko true to apply the superko rule
+ * @param komi Komi value
+ * @param rule Win/loss determination rule
+ * @param superko True if the superko rule is applied
  */
 void Board::getInputs(
     int32_t* inputs, int32_t color, float komi, int32_t rule, bool superko) {
-  int length = MODEL_SIZE * MODEL_SIZE;
-  int32_t offset_x = (MODEL_SIZE - _width + 2) / 2;
-  int32_t offset_y = (MODEL_SIZE - _height + 2) / 2;
+  constexpr int32_t length = MODEL_BOARD_SIZE * MODEL_BOARD_SIZE;
+  const int32_t offset_x = (MODEL_BOARD_SIZE - _width + 2) / 2;
+  const int32_t offset_y = (MODEL_BOARD_SIZE - _height + 2) / 2;
 
   // Update ladder information
   _updateShicho();
@@ -519,203 +653,101 @@ void Board::getInputs(
   for (int32_t y = 0; y < _height - 2; y++) {
     for (int32_t x = 0; x < _width - 2; x++) {
       int32_t ren_id = _renIds[_getIndex(x, y)];
-      int32_t index = (offset_y + y) * MODEL_SIZE + (offset_x + x);
+      int32_t index = (offset_y + y) * MODEL_BOARD_SIZE + (offset_x + x);
 
       // Set mask
-      setInputBit(inputs, length * MODEL_FEATURES + index);
+      setInputBit(inputs, MODEL_MASK_OFFSET + index);
 
-      // Set value for empty positions.
-      if (ren_id == -1) {
+      // If a stone is present
+      // Set stone colors, ladder status, and liberty counts
+      if (ren_id != -1) {
+        int32_t shicho = (_renObjs[ren_id].shicho) ? 1 : 0;
+        int32_t space = static_cast<int32_t>(_renObjs[ren_id].spaces.size());
+
+        // Set the value for a black stone coordinate
+        if (_renObjs[ren_id].color * color == COLOR_BLACK) {
+          setInputBit(inputs, length * 1 + index);
+          setInputBit(inputs, length * 2 + index, shicho);
+
+          if (0 < space && space <= 8) {
+            setInputBit(inputs, length * (3 + space - 1) + index);
+          }
+        }
+        // Set value for white stone positions.
+        else if (_renObjs[ren_id].color * color == COLOR_WHITE) {
+          setInputBit(inputs, length * 11 + index);
+          setInputBit(inputs, length * 12 + index, shicho);
+
+          if (0 < space && space <= 8) {
+            setInputBit(inputs, length * (13 + space - 1) + index);
+          }
+        }
+      }
+      // If no stone is present
+      else {
+        // Set the value for an empty coordinate
         setInputBit(inputs, length * 0 + index);
-        continue;
-      }
-
-      // Set value for positions with a stone placed.
-      int32_t shicho = (_renObjs[ren_id].shicho) ? 1 : 0;
-      int32_t size = std::min(static_cast<int32_t>(_renObjs[ren_id].spaces.size()), 8);
-
-      // Set value for black stone positions.
-      if (_renObjs[ren_id].color * color == BLACK) {
-        setInputBit(inputs, length * 1 + index);
-        setInputBit(inputs, length * 2 + index, shicho);
-        setInputBit(inputs, length * (2 + size) + index);
-      }
-      // Set value for white stone positions.
-      else if (_renObjs[ren_id].color * color == WHITE) {
-        setInputBit(inputs, length * 14 + index);
-        setInputBit(inputs, length * 15 + index, shicho);
-        setInputBit(inputs, length * (15 + size) + index);
       }
     }
   }
 
-  // Set move history
-  std::vector<Move> black_moves = _histories[(1 - color) / 2].getMoves();
-  std::vector<Move> white_moves = _histories[(1 + color) / 2].getMoves();
-
-  std::reverse(black_moves.begin(), black_moves.end());
-  std::reverse(white_moves.begin(), white_moves.end());
-
-  for (int32_t i = 0; i < black_moves.size(); i++) {
-    if (black_moves[i].isValid(_width - 2, _height - 2)) {
-      int32_t x = black_moves[i].getX();
-      int32_t y = black_moves[i].getY();
-      int32_t index = (offset_y + y) * MODEL_SIZE + (offset_x + x);
-
-      setInputBit(inputs, length * (11 + i) + index);
-    }
-  }
-
-  for (int32_t i = 0; i < white_moves.size(); i++) {
-    if (white_moves[i].isValid(_width - 2, _height - 2)) {
-      int32_t x = white_moves[i].getX();
-      int32_t y = white_moves[i].getY();
-      int32_t index = (offset_y + y) * MODEL_SIZE + (offset_x + x);
-
-      setInputBit(inputs, length * (24 + i) + index);
-    }
-  }
-
-  // Set information for lines 1-4
-  for (int i = 0; i < 4; i++) {
+  // Set distance-to-edge features for lines 1 through 10
+  for (int32_t i = 0; i < 10; i++) {
     int32_t begin_x = offset_x + i;
     int32_t end_x = offset_x + _width - 2 - i;
     int32_t begin_y = offset_y + i;
     int32_t end_y = offset_y + _height - 2 - i;
 
-    for (int y = begin_y; y < end_y; y++) {
-      setInputBit(inputs, length * (27 + i) + y * MODEL_SIZE + begin_x);
-      setInputBit(inputs, length * (27 + i) + y * MODEL_SIZE + end_x - 1);
-    }
+    if (begin_x < end_x && begin_y < end_y) {
+      for (int y = begin_y; y < end_y; y++) {
+        setInputBit(inputs, length * (21 + i) + y * MODEL_BOARD_SIZE + begin_x);
+        setInputBit(inputs, length * (21 + i) + y * MODEL_BOARD_SIZE + end_x - 1);
+      }
 
-    for (int x = begin_x; x < end_x; x++) {
-      setInputBit(inputs, length * (27 + i) + begin_y * MODEL_SIZE + x);
-      setInputBit(inputs, length * (27 + i) + (end_y - 1) * MODEL_SIZE + x);
-    }
-  }
-
-  // Set ko information
-  if (_koColor == color && _koIndex > 0) {
-    int32_t x = _getPosX(_koIndex);
-    int32_t y = _getPosY(_koIndex);
-    int32_t index = y * MODEL_SIZE + x;
-
-    setInputBit(inputs, length * 31 + index);
-  }
-
-  // Register the current turn
-  int32_t info_offset = (MODEL_FEATURES + 1) * length;
-
-  if (color == BLACK) {
-    setInputBit(inputs, info_offset + 0);
-  } else {
-    setInputBit(inputs, info_offset + 1);
-  }
-
-  // Register komi in points
-  inputs[MODEL_INPUT_PACK_SIZE - 1] = (int32_t)((komi * color) / 13.0 * 0xfffff);
-
-  // Register whether superko rule applies
-  if (superko) {
-    setInputBit(inputs, info_offset + 3);
-  }
-
-  // Register whether ko has occurred
-  if (_koColor == color && _koIndex > 0) {
-    setInputBit(inputs, info_offset + 4);
-  }
-
-  // Register the win/loss rule
-  if (rule != RULE_JP) {
-    setInputBit(inputs, info_offset + 5);
-  } else {
-    setInputBit(inputs, info_offset + 6);
-  }
-}
-
-/**
- * Returns the board state.
- * @return Board state
- */
-std::vector<int32_t> Board::getState() {
-  std::vector<int32_t> state;
-
-  // Register the value representing the stone arrangement
-  for (int32_t v : _pattern.values()) {
-    state.push_back(v);
-  }
-
-  // Register ko information
-  state.push_back((_koIndex + 1) << 2 | (_koColor + 1));
-
-  // Register move history
-  std::vector<Move> black_moves = _histories[0].getMoves();
-  std::vector<Move> white_moves = _histories[1].getMoves();
-
-  state.push_back(
-      (_getIndex(black_moves[0].getX(), black_moves[0].getY()) + 1) << 20 |
-      (_getIndex(black_moves[1].getX(), black_moves[1].getY()) + 1) << 10 |
-      (_getIndex(black_moves[2].getX(), black_moves[2].getY()) + 1));
-  state.push_back(
-      (_getIndex(white_moves[0].getX(), white_moves[0].getY()) + 1) << 20 |
-      (_getIndex(white_moves[1].getX(), white_moves[1].getY()) + 1) << 10 |
-      (_getIndex(white_moves[2].getX(), white_moves[2].getY()) + 1));
-
-  return state;
-}
-
-/**
- * Restores the board state.
- * @param state Board state
- */
-void Board::loadState(std::vector<int32_t> state) {
-  // Initialize the board
-  clear();
-
-  // Place stones
-  for (int32_t y = 0; y < _height - 2; y++) {
-    for (int32_t x = 0; x < _width - 2; x++) {
-      int32_t pos = y * (_width - 2) + x;
-      int32_t index = pos / 16;
-      int32_t shift = (pos % 16) * 2;
-      int32_t value = state[index] >> shift & 3;
-
-      if (value == 1) {
-        play(Move(x, y, BLACK));
-      } else if (value == 2) {
-        play(Move(x, y, WHITE));
+      for (int x = begin_x; x < end_x; x++) {
+        setInputBit(inputs, length * (21 + i) + begin_y * MODEL_BOARD_SIZE + x);
+        setInputBit(inputs, length * (21 + i) + (end_y - 1) * MODEL_BOARD_SIZE + x);
       }
     }
   }
 
-  // Restore ko information
-  int32_t ko_info = state[state.size() - 3];
+  // Set ko information
+  if (_isActiveKo(color)) {
+    int32_t x = _getPosX(_koIndex);
+    int32_t y = _getPosY(_koIndex);
+    int32_t index = (offset_y + y) * MODEL_BOARD_SIZE + (offset_x + x);
 
-  _koIndex = (ko_info >> 2 & 0x3FFFF) - 1;
-  _koColor = (ko_info & 3) - 1;
-
-  // Restore history
-  _histories[0].clearMoves();
-  _histories[1].clearMoves();
-
-  for (int32_t i = 0; i < 3; i++) {
-    int32_t black_history = (state[state.size() - 2] >> (20 - i * 10) & 0x3FF) - 1;
-    int32_t white_history = (state[state.size() - 1] >> (20 - i * 10) & 0x3FF) - 1;
-
-    if (black_history != -1) {
-      _histories[0].addMove(
-          Move(_getPosX(black_history), _getPosY(black_history), BLACK));
-    }
-
-    if (white_history != -1) {
-      _histories[1].addMove(
-          Move(_getPosX(white_history), _getPosY(white_history), WHITE));
-    }
+    setInputBit(inputs, length * 31 + index);
   }
 
-  // Initialize flags
-  _areaUpdated = false;
-  _shichoUpdated = false;
+  // Record whether superko is enabled
+  if (superko) {
+    setInputBit(inputs, MODEL_INFO_OFFSET + 0);
+  }
+
+  // Record whether a ko exists
+  if (_isActiveKo(color)) {
+    setInputBit(inputs, MODEL_INFO_OFFSET + 1);
+  }
+
+  // Record the scoring rule
+  if (rule == RULE_JP) {
+    setInputBit(inputs, MODEL_INFO_OFFSET + 2);
+  } else {
+    setInputBit(inputs, MODEL_INFO_OFFSET + 3);
+  }
+
+  // Record the board size
+  float board_size_float = (std::sqrt((_width - 2) * (_height - 2)) - 14.0) / 5.0;
+  int32_t board_size_int32 = static_cast<int32_t>(board_size_float * MODEL_VALUE_SCALE);
+
+  inputs[MODEL_INPUT_PACK_SIZE - 2] = board_size_int32;
+
+  // Record komi
+  float komi_float = (komi * color) / 10.0;
+  int32_t komi_int32 = static_cast<int32_t>(komi_float * MODEL_VALUE_SCALE);
+
+  inputs[MODEL_INPUT_PACK_SIZE - 1] = komi_int32;
 }
 
 /**
@@ -732,22 +764,13 @@ void Board::copyFrom(const Board* board) {
 
   // Copy ko information
   _koIndex = board->_koIndex;
-  _koColor = board->_koColor;
-
-  // Copy board information
-  _pattern.copyFrom(board->_pattern);
-
-  // Copy history
-  _histories[0] = board->_histories[0];
-  _histories[1] = board->_histories[1];
 
   // Copy the board hash value
   _hash = board->_hash;
 
   // Copy the bitboard
-  for (int i = 0; i < BITBOARD_SIZE; i++) {
-    _bitBoard[i] = board->_bitBoard[i];
-  }
+  _blackBitBoard = board->_blackBitBoard;
+  _whiteBitBoard = board->_whiteBitBoard;
 
   // Initialize flags
   _areaUpdated = false;
@@ -781,9 +804,9 @@ std::string Board::toString() const {
 
       if (index == _koIndex) {
         ss << " K";
-      } else if (color == BLACK) {
+      } else if (color == COLOR_BLACK) {
         ss << " X";
-      } else if (color == WHITE) {
+      } else if (color == COLOR_WHITE) {
         ss << " O";
       } else {
         ss << " .";
@@ -810,14 +833,15 @@ std::string Board::toString() const {
 void Board::_put(int32_t index, int32_t color) {
   int32_t op_color = OPPOSITE(color);
 
-  // Update the stone arrangement value
-  _pattern.put(_getPosX(index), _getPosY(index), color);
-
   // Update the hash value
-  _hash ^= BOARD_HASH_VALUES[(color == BLACK) ? 0 : 1][index];
+  _hash ^= BOARD_HASH_VALUES[(color == COLOR_BLACK) ? 0 : 1][index];
 
-  // Update the bitboard
-  _bitBoard[index / 64] |= (1ULL << (index % 64));
+  // Update the bitboard for the stone's color
+  if (color == COLOR_BLACK) {
+    _blackBitBoard[index / 64] |= 1ULL << (index % 64);
+  } else {
+    _whiteBitBoard[index / 64] |= 1ULL << (index % 64);
+  }
 
   // Create group information
   _renIds[index] = index;
@@ -837,6 +861,50 @@ void Board::_put(int32_t index, int32_t color) {
       _renObjs[ren_id].spaces.erase(index);
     }
   }
+}
+
+/**
+ * Rebuild the internal board state from the stone arrangement.
+ * @param colors Stone colors at internal board coordinates
+ */
+void Board::_rebuild(const std::vector<int32_t>& colors) {
+  // Initialize the board and place each stone as a separate group
+  clear();
+
+  for (int32_t y = 0; y < _height - 2; y++) {
+    for (int32_t x = 0; x < _width - 2; x++) {
+      int32_t index = _getIndex(x, y);
+
+      if (colors[index] == COLOR_BLACK || colors[index] == COLOR_WHITE) {
+        _put(index, colors[index]);
+      }
+    }
+  }
+
+  // Merge same-color groups adjacent horizontally or vertically
+  for (int32_t y = 0; y < _height - 2; y++) {
+    for (int32_t x = 0; x < _width - 2; x++) {
+      int32_t index = _getIndex(x, y);
+
+      if (_renIds[index] == -1) {
+        continue;
+      }
+
+      for (auto around : AROUNDS) {
+        int32_t target = index + around;
+
+        if (_renIds[target] != -1 &&
+            _renObjs[_renIds[target]].color == _renObjs[_renIds[index]].color &&
+            _renIds[target] != _renIds[index]) {
+          _mergeRen(index, target);
+        }
+      }
+    }
+  }
+
+  // Recompute derived information when it is next requested
+  _areaUpdated = false;
+  _shichoUpdated = false;
 }
 
 /**
@@ -860,7 +928,7 @@ void Board::_mergeRen(int32_t srcIndex, int32_t dstIndex) {
   }
 
   // Delete unused information
-  _renObjs[src_id].color = EMPTY;
+  _renObjs[src_id].color = COLOR_EMPTY;
   _renObjs[src_id].positions.clear();
   _renObjs[src_id].spaces.clear();
 }
@@ -878,14 +946,15 @@ void Board::_removeRen(int32_t index) {
     // Update ID numbers
     _renIds[pos] = -1;
 
-    // Update the stone arrangement value
-    _pattern.remove(_getPosX(pos), _getPosY(pos), color);
-
     // Update the hash value
-    _hash ^= BOARD_HASH_VALUES[(color == BLACK) ? 0 : 1][pos];
+    _hash ^= BOARD_HASH_VALUES[(color == COLOR_BLACK) ? 0 : 1][pos];
 
-    // Update the bitboard
-    _bitBoard[pos / 64] &= ~(1ULL << (pos % 64));
+    // Update the bitboard for the stone's color
+    if (color == COLOR_BLACK) {
+      _blackBitBoard[pos / 64] &= ~(1ULL << (pos % 64));
+    } else {
+      _whiteBitBoard[pos / 64] &= ~(1ULL << (pos % 64));
+    }
 
     // Add liberties to surrounding groups
     for (auto a : AROUNDS) {
@@ -898,7 +967,7 @@ void Board::_removeRen(int32_t index) {
   }
 
   // Delete information
-  _renObjs[ren_id].color = EMPTY;
+  _renObjs[ren_id].color = COLOR_EMPTY;
   _renObjs[ren_id].positions.clear();
   _renObjs[ren_id].spaces.clear();
 }
@@ -914,7 +983,7 @@ void Board::_updateArea() {
 
   // Create area information for both black and white
   for (int32_t c = 0; c < 2; c++) {
-    int32_t color = (c == 0) ? BLACK : WHITE;
+    int32_t color = (c == 0) ? COLOR_BLACK : COLOR_WHITE;
     int32_t op_color = OPPOSITE(color);
 
     // Create a list of group IDs
@@ -948,7 +1017,7 @@ void Board::_updateArea() {
       // Skip if not an empty area
       int32_t index_color = _getColor(index);
 
-      if (index_color != EMPTY && index_color != op_color) {
+      if (index_color != COLOR_EMPTY && index_color != op_color) {
         _areaIds[c][index] = -1;
         continue;
       }
@@ -1009,7 +1078,7 @@ void Board::_updateArea() {
           int32_t around = pos + a;
           int32_t around_color = _getColor(around);
 
-          if (around_color == EMPTY || around_color == op_color) {
+          if (around_color == COLOR_EMPTY || around_color == op_color) {
             stack.push_back(around);
           }
         }
@@ -1088,7 +1157,14 @@ void Board::_updateShicho() {
       continue;
     }
 
-    // Determine if the group is in a ladder
+    // Exclude groups other than black or white stones, such as board edges, from ladder checks
+    int32_t color = _renObjs[ren_id].color;
+
+    if (color != COLOR_BLACK && color != COLOR_WHITE) {
+      continue;
+    }
+
+    // Check for a ladder
     _renObjs[ren_id].shicho = _isShichoRen(index);
   }
 
@@ -1102,36 +1178,92 @@ void Board::_updateShicho() {
  * @return true if the group is in a ladder
  */
 bool Board::_isShichoRen(int32_t index) {
-  // If the number of liberties is not 1, it is not a ladder
-  if (_renObjs[index].spaces.size() > 1) {
+  // Exclude groups other than black or white stones from ladder checks
+  int32_t color = _renObjs[index].color;
+
+  if (color != COLOR_BLACK && color != COLOR_WHITE) {
     return false;
   }
 
-  // Verify all moves using depth-first search
-  // The escaping side has 1 candidate move, so if the search returns OK, the ladder is confirmed
-  // The chasing side has 2 candidate moves, so if the search returns NG, check other branches
-  std::vector<Board> stack({*this});
+  // A group without exactly one liberty is not in a ladder
+  if (_renObjs[index].spaces.size() != 1) {
+    return false;
+  }
+
+  // Represent the position at which the search resumes
+  enum class SearchState {
+    START,
+    TRY_CHASE,
+    WAIT_CHILD,
+  };
+
+  // Keep the depth-first search state
+  struct SearchFrame {
+    SearchState state = SearchState::START;
+    MoveResult escape_result;
+    MoveResult chase_result;
+    std::array<int32_t, 2> chase_positions = {-1, -1};
+    int32_t next_chase = 0;
+  };
+
+  // Copy the board once at the beginning of the search
+  Board search_board(*this);
+  std::vector<SearchFrame> stack(1);
 
   while (!stack.empty()) {
-    // Get the board
-    Board board = stack.back();
-    stack.pop_back();
+    SearchFrame& frame = stack.back();
+
+    // If a child fails, undo the chasing move and try the next candidate
+    if (frame.state == SearchState::WAIT_CHILD) {
+      search_board.undo(frame.chase_result);
+      frame.state = SearchState::TRY_CHASE;
+      continue;
+    }
+
+    // Check chasing candidates in order
+    if (frame.state == SearchState::TRY_CHASE) {
+      if (frame.next_chase >= 2) {
+        // Return to the parent if the group escapes every chasing move
+        search_board.undo(frame.escape_result);
+        stack.pop_back();
+        continue;
+      }
+
+      int32_t next_pos = frame.chase_positions[frame.next_chase];
+      frame.next_chase++;
+
+      int32_t next_pos_x = search_board._getPosX(next_pos);
+      int32_t next_pos_y = search_board._getPosY(next_pos);
+      int32_t ren_id = search_board._renIds[index];
+      int32_t op_color = OPPOSITE(search_board._renObjs[ren_id].color);
+
+      // Exclude illegal chasing moves
+      if (!search_board.isEnabled(next_pos_x, next_pos_y, op_color, false)) {
+        continue;
+      }
+
+      // Play the chasing move and search the child node
+      frame.chase_result = search_board.play(Move(next_pos_x, next_pos_y, op_color));
+      frame.state = SearchState::WAIT_CHILD;
+      stack.emplace_back();
+      continue;
+    }
 
     // Get the group ID
-    int32_t ren_id = board._renIds[index];
-    int32_t color = board._renObjs[ren_id].color;
+    int32_t ren_id = search_board._renIds[index];
+    int32_t color = search_board._renObjs[ren_id].color;
     int32_t op_color = OPPOSITE(color);
 
     // Adjacent opponent group has 1 liberty -> NG (can capture opponent stones)
     bool escaped = false;
 
-    for (int32_t pos : board._renObjs[ren_id].positions) {
+    for (int32_t pos : search_board._renObjs[ren_id].positions) {
       for (auto a : AROUNDS) {
-        int32_t target_ren_id = board._renIds[pos + a];
+        int32_t target_ren_id = search_board._renIds[pos + a];
 
         if (target_ren_id != -1 &&
-            board._renObjs[target_ren_id].color == op_color &&
-            board._renObjs[target_ren_id].spaces.size() == 1) {
+            search_board._renObjs[target_ren_id].color == op_color &&
+            search_board._renObjs[target_ren_id].spaces.size() == 1) {
           escaped = true;
           break;
         }
@@ -1143,39 +1275,43 @@ bool Board::_isShichoRen(int32_t index) {
     }
 
     if (escaped) {
+      stack.pop_back();
       continue;
     }
 
-    // Create the board after placing the stone
-    // No candidate move to escape -> OK (ladder)
-    Board curr_board(board);
-    int32_t curr_pos = *board._renObjs[ren_id].spaces.begin();
-    int32_t curr_pos_x = curr_board._getPosX(curr_pos);
-    int32_t curr_pos_y = curr_board._getPosY(curr_pos);
+    // No escape candidates -> captured by the ladder
+    int32_t curr_pos = *search_board._renObjs[ren_id].spaces.begin();
+    int32_t curr_pos_x = search_board._getPosX(curr_pos);
+    int32_t curr_pos_y = search_board._getPosY(curr_pos);
 
-    if (curr_board.play(Move(curr_pos_x, curr_pos_y, color)) < 0) {
+    if (!search_board.isEnabled(curr_pos_x, curr_pos_y, color, false)) {
       return true;
     }
+
+    frame.escape_result = search_board.play(Move(curr_pos_x, curr_pos_y, color));
 
     // Board after escape has 1 liberty -> OK (ladder)
     // Board after escape has 3 or more liberties -> NG (not a ladder)
-    int32_t curr_ren_id = curr_board._renIds[index];
+    int32_t curr_ren_id = search_board._renIds[index];
 
-    if (curr_board._renObjs[curr_ren_id].spaces.size() == 1) {
+    if (search_board._renObjs[curr_ren_id].spaces.size() == 1) {
       return true;
-    } else if (curr_board._renObjs[curr_ren_id].spaces.size() > 2) {
+    } else if (search_board._renObjs[curr_ren_id].spaces.size() > 2) {
+      search_board.undo(frame.escape_result);
+      stack.pop_back();
       continue;
     }
 
-    // Place opponent stones at the liberties and add the resulting boards to the search queue
-    for (int32_t next_pos : curr_board._renObjs[curr_ren_id].spaces) {
-      Board next_board(curr_board);
-      int32_t next_pos_x = next_board._getPosX(next_pos);
-      int32_t next_pos_y = next_board._getPosY(next_pos);
+    // Check chasing moves in the same order as the existing stack implementation
+    int32_t chase_index = 1;
 
-      next_board.play(Move(next_pos_x, next_pos_y, op_color));
-      stack.push_back(next_board);
+    for (int32_t next_pos : search_board._renObjs[curr_ren_id].spaces) {
+      frame.chase_positions[chase_index] = next_pos;
+      chase_index--;
     }
+
+    frame.next_chase = 0;
+    frame.state = SearchState::TRY_CHASE;
   }
 
   // Not a ladder
@@ -1191,10 +1327,45 @@ int32_t Board::_getColor(int32_t index) const {
   int32_t ren_id = _renIds[index];
 
   if (ren_id == -1) {
-    return EMPTY;
+    return COLOR_EMPTY;
   } else {
     return _renObjs[ren_id].color;
   }
+}
+
+/**
+ * Return true if ko is active for the specified color.
+ * @param color Stone color
+ * @return True if ko is active
+ */
+bool Board::_isActiveKo(int32_t color) const {
+  // Ko is inactive if no ko coordinate is set
+  if (_koIndex == -1) {
+    return false;
+  }
+
+  // Find opposing groups capturable at the ko coordinate
+  int32_t op_color = OPPOSITE(color);
+
+  for (auto a : AROUNDS) {
+    int32_t ren_id = _renIds[_koIndex + a];
+
+    // Do nothing for empty positions
+    if (ren_id == -1) {
+      continue;
+    }
+
+    // Ko is active if an opponent group's only liberty is the ko coordinate
+    const BoardRen& ren = _renObjs[ren_id];
+
+    if (ren.color == op_color &&
+        ren.spaces.size() == 1 &&
+        ren.spaces.contains(_koIndex)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 /**
@@ -1211,7 +1382,7 @@ bool Board::_isEnabled(int32_t index, int32_t color, bool checkSeki) {
   }
 
   // Ko target -> cannot place
-  if (index == _koIndex && color == _koColor) {
+  if (index == _koIndex && _isActiveKo(color)) {
     return false;
   }
 
@@ -1257,7 +1428,8 @@ bool Board::_isEnabled(int32_t index, int32_t color, bool checkSeki) {
  */
 bool Board::_isSeki(int32_t index, int32_t color) {
   // Check adjacent opponent groups
-  // An adjacent opponent group with only 1 liberty at the move position -> NG (can capture opponent stone)
+  // An adjacent opponent group with only 1 liberty at the move position -> NG (can capture opponent
+  // stone)
   int32_t op_color = OPPOSITE(color);
 
   for (auto a : AROUNDS) {
@@ -1320,7 +1492,8 @@ bool Board::_isSeki(int32_t index, int32_t color) {
 }
 
 /**
- * Returns true if the group created by placing a stone at the specified position would be subject to seki.
+ * Returns true if the group created by placing a stone at the specified position would be subject
+ * to seki.
  * @param index Position index
  * @param color Stone color
  * @param renIds List of group IDs to check
@@ -1355,8 +1528,10 @@ bool Board::_isSekiRen(
     return false;
   }
 
-  // Opponent group adjacent to move position does not have exactly 2 liberties -> NG (not a seki candidate)
-  // Opponent group adjacent to own liberty does not have exactly 2 liberties -> NG (not a seki candidate)
+  // Opponent group adjacent to move position does not have exactly 2 liberties -> NG (not a seki
+  // candidate)
+  // Opponent group adjacent to own liberty does not have exactly 2 liberties -> NG (not a seki
+  // candidate)
   for (auto ren_id : op_ren_ids) {
     if (_renObjs[ren_id].spaces.size() != 2) {
       return false;
@@ -1395,7 +1570,8 @@ bool Board::_isSekiRen(
     }
   }
 
-  // Create a list of liberties of opponent groups adjacent to the move position, own liberty, and own group
+  // Create a list of liberties of opponent groups adjacent to the move position, own liberty, and
+  // own group
   std::set<int32_t> op_spaces;
 
   for (auto ren_id : op_ren_ids) {
@@ -1403,9 +1579,12 @@ bool Board::_isSekiRen(
         _renObjs[ren_id].spaces.begin(), _renObjs[ren_id].spaces.end());
   }
 
-  // Opponent group adjacent to move position has liberty other than move position and own liberty -> OK (seki)
-  // Opponent group adjacent to own liberty has liberty other than move position and own liberty -> OK (seki)
-  // Opponent group adjacent to own group has liberty other than move position and own liberty -> OK (seki)
+  // Opponent group adjacent to move position has liberty other than move position and own liberty
+  // -> OK (seki)
+  // Opponent group adjacent to own liberty has liberty other than move position and own liberty ->
+  // OK (seki)
+  // Opponent group adjacent to own group has liberty other than move position and own liberty -> OK
+  // (seki)
   op_spaces.erase(index);
   op_spaces.erase(spaceIndex);
 
@@ -1418,7 +1597,8 @@ bool Board::_isSekiRen(
 }
 
 /**
- * Returns true if the area created by placing a stone at the specified position would be subject to seki.
+ * Returns true if the area created by placing a stone at the specified position would be subject to
+ * seki.
  * @param index Position index
  * @param color Stone color
  * @param renIds List of group IDs to check
@@ -1466,7 +1646,8 @@ bool Board::_isSekiArea(
     }
   }
 
-  // Adjacent area is connected to groups other than those connected to the move position -> NG (not seki)
+  // Adjacent area is connected to groups other than those connected to the move position -> NG (not
+  // seki)
   if (ren_ids != renIds) {
     return false;
   }
@@ -1617,7 +1798,8 @@ bool Board::_isNakade(std::set<int32_t>& positions) {
         }
       }
 
-      // If the number of connections is greater than or equal to the specified value, it is determined to be a vital point
+      // If the number of connections is greater than or equal to the specified value, it is
+      // determined to be a vital point
       // A position (vital point) satisfying the following conditions exists -> OK (nakade)
       // (1) Stones orthogonally adjacent
       // (2) Stones diagonally adjacent (up to 1)

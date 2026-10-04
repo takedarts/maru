@@ -8,7 +8,7 @@ namespace deepgo {
  * Creates a group object.
  */
 BoardRen::BoardRen()
-    : color(EMPTY),
+    : color(COLOR_EMPTY),
       positions(),
       spaces(),
       areas(),

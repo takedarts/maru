@@ -55,7 +55,7 @@ class Move {
 
   /**
    * Returns the x coordinate.
-   * @return x coordinate
+   * @return X coordinate
    */
   inline int8_t getX() const {
     return _x;
@@ -63,7 +63,7 @@ class Move {
 
   /**
    * Returns the y coordinate.
-   * @return y coordinate
+   * @return Y coordinate
    */
   inline int8_t getY() const {
     return _y;
@@ -71,7 +71,7 @@ class Move {
 
   /**
    * Returns the color of the placed stone.
-   * @return stone color
+   * @return Stone color
    */
   inline int8_t getColor() const {
     return _color;
@@ -85,16 +85,16 @@ class Move {
     return (std::max(_x + 1, 0) << 16) | (std::max(_y + 1, 0) << 8) | std::max(_color + 1, 0);
   }
 
-    /**
+  /**
    * Returns whether the move object holds a valid value.
-   * @param width board width
-   * @param height board height
+   * @param width Board width
+   * @param height Board height
    * @return true if the move holds a valid value
    */
   inline bool isValid(int8_t width, int8_t height) const {
     if (_x < 0 || _x >= width || _y < 0 || _y >= height) {
       return false;
-    } else if (_color != BLACK && _color != WHITE) {
+    } else if (_color != COLOR_BLACK && _color != COLOR_WHITE) {
       return false;
     } else {
       return true;

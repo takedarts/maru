@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <atomic>
 #include <condition_variable>
 #include <cstdint>
@@ -8,6 +9,7 @@
 #include <thread>
 #include <vector>
 
+#include "Board.h"
 #include "Candidate.h"
 #include "Config.h"
 #include "InferenceProcessor.h"
@@ -29,16 +31,18 @@ class Player {
    * @param maxVisits Maximum number of visits
    * @param width Board width
    * @param height Board height
-   * @param komi Komi points
+   * @param komi Komi value
    * @param rule Win/loss determination rule
-   * @param superko true to apply the superko rule
-   * @param pucbConstantInit Initial value of the constant multiplied by the PUCB confidence upper bound
-   * @param pucbConstantBase Change value of the constant multiplied by the PUCB confidence upper bound
+   * @param superko True if the superko rule is applied
+   * @param pucbConstantInit Initial value of the constant multiplied by the PUCB confidence bound
+   * @param pucbConstantBase Incremental value of the constant multiplied by the PUCB confidence
+   * bound
+   * @param pucbMinVisitsRate Minimum child visit ratio prioritized by PUCB
    */
   Player(
       InferenceProcessor* processor, int32_t threads, int32_t maxVisits,
       int32_t width, int32_t height, float komi, int32_t rule, bool superko,
-      float pucbConstantInit, float pucbConstantBase);
+      float pucbConstantInit, float pucbConstantBase, float pucbMinVisitsRate);
 
   /**
    * Destroys the player object.
@@ -52,16 +56,34 @@ class Player {
 
   /**
    * Places a stone on the board.
-   * @param move Move to play
-   * @return Number of captured stones
+   * @param move Move
    */
-  int32_t play(Move move);
+  void play(Move move);
 
   /**
-   * Gets the pass candidate move.
+   * Get the number of captured stones of the specified color.
+   * @param color Stone color
+   * @return Number of captured stones
+   */
+  int32_t getCaptured(int32_t color);
+
+  /**
+   * Get the pass candidate move.
    * @return Pass candidate move
    */
-  Candidate getPass();
+  Candidate getPassCandidate();
+
+  /**
+   * Get the root node's predicted territories.
+   * @param territories Array receiving predicted territories
+   */
+  void getPredictedTerritories(float* territories);
+
+  /**
+   * Get the root node's predicted score difference.
+   * @return Predicted score difference from Black's perspective
+   */
+  float getPredictedScore();
 
   /**
    * Starts board evaluation.
@@ -73,16 +95,15 @@ class Player {
   void startEvaluation(bool equally, int32_t width, float temperature, float noise);
 
   /**
-   * Waits until the specified visit count and playout count are reached.
+   * Wait until the specified search conditions are satisfied.
    * @param visits Number of visits
-   * @param playouts Number of playouts
    * @param timelimit Time limit
    * @param stop true to stop the search
    */
-  void waitEvaluation(int32_t visits, int32_t playouts, float timelimit, bool stop);
+  void waitEvaluation(int32_t visits, float timelimit, bool stop);
 
   /**
-   * Gets the list of candidate moves.
+   * Get the list of candidate moves.
    * @return List of candidate moves
    */
   std::vector<Candidate> getCandidates();
@@ -94,10 +115,10 @@ class Player {
   int32_t getColor();
 
   /**
-   * Gets the board state.
-   * @return Board state
+   * Copy the board state to the specified board object.
+   * @param board Destination board object
    */
-  std::vector<int32_t> getBoardState();
+  void copyBoardTo(Board* board);
 
   /**
    * Gets the string representation of the player object.
@@ -127,7 +148,7 @@ class Player {
   std::condition_variable _stopCondition;
 
   /**
-   * Condition variable to wait until the specified visit and playout counts are met.
+   * Condition variable for waiting until the requested visit count is reached.
    */
   std::condition_variable _waitCondition;
 
@@ -162,9 +183,14 @@ class Player {
   MctsNode* _root;
 
   /**
+   * Captured stone counts by color (Black, White).
+   */
+  std::array<int32_t, 2> _captureds;
+
+  /**
    * Maximum number of visits.
    */
-  int32_t _maxVisits;
+  int32_t _searchMaxVisits;
 
   /**
    * true to distribute search counts equally.
@@ -215,6 +241,24 @@ class Player {
    * Nodes awaiting evaluation.
    */
   std::queue<MctsNode*> _evaluatingNodes;
+
+  /**
+   * Number of nodes whose statistics are being updated after removal from the evaluation queue.
+   */
+  int32_t _updatingNodes;
+
+  /**
+   * Return true when both searching and node updates are idle.
+   * The caller must hold _mutex.
+   * @return True when both searching and node updates are idle
+   */
+  bool _isSearchIdle() const;
+
+  /**
+   * Evaluate the specified node synchronously if it has not been evaluated.
+   * @param node Node to evaluate
+   */
+  void _evaluateNode(MctsNode* node);
 
   /**
    * Launches the search process.

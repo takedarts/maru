@@ -15,7 +15,7 @@ class BoardHash {
    * Creates an object that manages the hash value of a board object.
    * @param board Board object
    */
-  BoardHash(const Board* board, int32_t color = EMPTY);
+  explicit BoardHash(const Board* board);
 
   /**
    * Creates a copy of the object that manages the hash value of a board object.
@@ -42,21 +42,19 @@ class BoardHash {
       return _size < other._size;
     }
 
-    for (int i = 0; i < BITBOARD_SIZE; i++) {
-      if (_bitBoard[i] != other._bitBoard[i]) {
-        return _bitBoard[i] < other._bitBoard[i];
+    for (int32_t i = 0; i < BITBOARD_SIZE; i++) {
+      if (_blackBitBoard[i] != other._blackBitBoard[i]) {
+        return _blackBitBoard[i] < other._blackBitBoard[i];
       }
     }
 
-    if (_koIndex != other._koIndex) {
-      return _koIndex < other._koIndex;
+    for (int32_t i = 0; i < BITBOARD_SIZE; i++) {
+      if (_whiteBitBoard[i] != other._whiteBitBoard[i]) {
+        return _whiteBitBoard[i] < other._whiteBitBoard[i];
+      }
     }
 
-    if (_koColor != other._koColor) {
-      return _koColor < other._koColor;
-    }
-
-    return _color < other._color;
+    return false;
   }
 
  private:
@@ -71,24 +69,14 @@ class BoardHash {
   uint32_t _size;
 
   /**
-   * Bitboard representing where stones are placed.
+   * Bitboard representing black stone positions.
    */
-  uint64_t _bitBoard[BITBOARD_SIZE];
+  std::array<uint64_t, BITBOARD_SIZE> _blackBitBoard;
 
   /**
-   * Position where ko is in effect.
+   * Bitboard representing white stone positions.
    */
-  int32_t _koIndex;
-
-  /**
-   * Color subject to the ko restriction.
-   */
-  int32_t _koColor;
-
-  /**
-   * Current turn.
-   */
-  int32_t _color;
+  std::array<uint64_t, BITBOARD_SIZE> _whiteBitBoard;
 };
 
 }  // namespace deepgo

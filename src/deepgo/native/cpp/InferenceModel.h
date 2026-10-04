@@ -47,7 +47,7 @@ class InferenceModel {
   InferenceModel(std::string filename, int32_t gpu, bool fp16, bool deterministic);
 
   /**
-   * Executes inference.
+   * Execute inference.
    * @param inputs Input data
    * @param outputs Output data
    * @param size Number of data samples to evaluate

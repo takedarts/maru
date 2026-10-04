@@ -2,7 +2,6 @@
 
 #include <cstdint>
 #include <functional>
-#include <map>
 #include <memory>
 #include <mutex>
 #include <queue>
@@ -10,7 +9,7 @@
 #include <vector>
 
 #include "Board.h"
-#include "BoardHash.h"
+#include "InferenceCache.h"
 #include "InferenceExecutor.h"
 #include "InferenceResult.h"
 
@@ -53,7 +52,7 @@ class InferenceProcessor {
 
   /**
    * Gets the evaluation value for the specified board.
-   * @param board Board
+   * @param board Board state
    * @param color Color of the stone to play next
    * @param komi Komi
    * @param rule Rule
@@ -63,7 +62,7 @@ class InferenceProcessor {
   float predict(Board* board, int32_t color, float komi, int32_t rule, bool superko);
 
   /**
-   * Executes inference synchronously.
+   * Run inference synchronously.
    * @param inputs Input data
    * @param outputs Output data
    * @param size Number of data samples to evaluate
@@ -87,7 +86,7 @@ class InferenceProcessor {
   }
 
   /**
-   * Gets the batch fill rate.
+   *  Get the ratio of inference requests included in the batch.
    * @return Batch fill rate
    */
   inline float getBatchFillRate() const {
@@ -101,19 +100,14 @@ class InferenceProcessor {
   }
 
   /**
-   * Gets the cache hit rate for inference.
+   * Get the cache hit rate of inference.
    * @return Cache hit rate for inference
    */
   inline float getCacheHitRate() const {
-    return _cacheHitRate.load(std::memory_order_relaxed);
+    return _cache.getHitRate();
   }
 
  private:
-  /**
-   * Mutex for synchronizing the cache.
-   */
-  std::mutex _cacheMutex;
-
   /**
    * Mutex for synchronizing the queue.
    */
@@ -130,24 +124,14 @@ class InferenceProcessor {
   std::queue<std::pair<MctsNode*, InferenceExecutorCallback>> _queue;
 
   /**
+   * Inference result cache.
+   */
+  InferenceCache _cache;
+
+  /**
    * Inference executor objects.
    */
   std::vector<std::unique_ptr<InferenceExecutor>> _executors;
-
-  /**
-   * Cache size.
-   */
-  int32_t _cacheSize;
-
-  /**
-   * Queue of cache keys.
-   */
-  std::queue<BoardHash> _cacheKeys;
-
-  /**
-   * Inference result cache.
-   */
-  std::map<BoardHash, InferenceResult> _cacheResults;
 
   /**
    * True if the processor is terminated.
@@ -164,10 +148,6 @@ class InferenceProcessor {
    */
   int32_t _batchSize;
 
-  /**
-   * Cache hit rate for inference.
-   */
-  std::atomic<float> _cacheHitRate;
 };
 
 }  // namespace deepgo

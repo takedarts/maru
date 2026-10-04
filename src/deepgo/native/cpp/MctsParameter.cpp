@@ -11,17 +11,19 @@ namespace deepgo {
  * @param superko True if the superko rule is applied
  * @param pucbConstantInit Initial value of the constant multiplied by the PUCB confidence bound
  * @param pucbConstantBase Incremental value of the constant multiplied by the PUCB confidence bound
+ * @param pucbMinVisitsRate Minimum child visit ratio prioritized by PUCB
  */
 MctsParameter::MctsParameter(
     int32_t width, int32_t height, float komi, int32_t rule, bool superko,
-    float pucbConstantInit, float pucbConstantBase)
+    float pucbConstantInit, float pucbConstantBase, float pucbMinVisitsRate)
     : _width(width),
       _height(height),
       _komi(komi),
       _rule(rule),
       _superko(superko),
       _pucbConstantInit(pucbConstantInit),
-      _pucbConstantBase(pucbConstantBase) {
+      _pucbConstantBase(pucbConstantBase),
+      _pucbMinVisitsRate(pucbMinVisitsRate) {
 }
 
 /**
@@ -78,6 +80,14 @@ float MctsParameter::getPucbConstantInit() const {
  */
 float MctsParameter::getPucbConstantBase() const {
   return _pucbConstantBase;
+}
+
+/**
+ * Return the minimum child visit ratio prioritized by PUCB.
+ * @return Minimum child visit ratio prioritized by PUCB
+ */
+float MctsParameter::getPucbMinVisitsRate() const {
+  return _pucbMinVisitsRate;
 }
 
 }  // namespace deepgo

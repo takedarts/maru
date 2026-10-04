@@ -16,6 +16,9 @@ def start_logging(
     Args:
         file (str | Path | None): File to output logs
         debug (bool): True to output debug information
+        console (TextIO | None): Console.
+    Returns:
+        None: No return value.
     '''
     formatter = logging.Formatter(LOGGING_FORMAT, LOGGING_DATE_FORMAT)
 

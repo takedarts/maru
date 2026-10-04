@@ -6,7 +6,7 @@
 namespace deepgo {
 
 /**
- * Class for managing MCTS evaluation values.
+ * Class managing MCTS evaluations and predicted score differences.
  */
 class MctsValue {
  public:
@@ -22,15 +22,16 @@ class MctsValue {
   MctsValue(const MctsValue& other);
 
   /**
-   * Resets the evaluation value.
+   * Reset the evaluation and predicted score difference.
    */
   void reset();
 
   /**
-   * Updates the evaluation value.
+   * Update the evaluation and predicted score difference.
    * @param value Evaluation value
+   * @param score Predicted score difference
    */
-  void update(float value);
+  void update(float value, float score);
 
   /**
    * Returns the average evaluation value.
@@ -38,6 +39,13 @@ class MctsValue {
    * @return Average evaluation value
    */
   float getValue(float defaultValue);
+
+  /**
+   * Get the mean predicted score difference.
+   * @param defaultScore Predicted score to return when no evaluations exist
+   * @return Mean predicted score difference
+   */
+  float getScore(float defaultScore);
 
   /**
    * Returns the lower confidence bound of the evaluation value.
@@ -57,6 +65,11 @@ class MctsValue {
    * Sum of evaluation values.
    */
   float _value;
+
+  /**
+   * Sum of predicted score differences.
+   */
+  float _score;
 
   /**
    * Number of evaluations.

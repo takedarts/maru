@@ -1,7 +1,7 @@
 import logging
 from typing import List, Sequence, Tuple
 
-from deepgo.native import NativeInferenceModel
+from .native import NativeInferenceModel
 
 LOGGER = logging.getLogger(__name__)
 

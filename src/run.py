@@ -3,8 +3,10 @@ import sys
 
 import torch
 from deepgo.config import (DEFAULT_BATCH_SIZE, DEFAULT_KOMI,
+                           DEFAULT_MAX_VISITS,
                            DEFAULT_PUCB_CONSTANT_BASE,
-                           DEFAULT_PUCB_CONSTANT_INIT, DEFAULT_SIZE,
+                           DEFAULT_PUCB_CONSTANT_INIT,
+                           DEFAULT_PUCB_MIN_VISITS_RATE, DEFAULT_SIZE,
                            DEFAULT_THREADS_PER_GPU, NAME, RULE_CH, RULE_COM,
                            RULE_JP, VERSION)
 from deepgo.gpu import get_default_gpus
@@ -14,6 +16,10 @@ from deepgo.processor import Processor
 
 
 def parse_args() -> argparse.Namespace:
+    '''Parse command-line options.
+    Returns:
+        argparse.Namespace: Result of the operation.
+    '''
     parser = argparse.ArgumentParser(description='Run with GTP mode.')
     parser.add_argument(
         'model', type=str,
@@ -22,8 +28,8 @@ def parse_args() -> argparse.Namespace:
         '--visits', type=int, default=50,
         help='Number of visits (default: 50)')
     parser.add_argument(
-        '--playouts', type=int, default=0,
-        help='Number of playouts (default: 0)')
+        '--max-visits', type=int, default=DEFAULT_MAX_VISITS,
+        help=f'Maximum number of visits (default: {DEFAULT_MAX_VISITS})')
     parser.add_argument(
         '--criterion', type=str, default='value', choices=['value', 'visits'],
         help='Criterion for candidate prioritization (default: value)')
@@ -51,6 +57,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         '--pucb-constant-base', type=float, default=DEFAULT_PUCB_CONSTANT_BASE,
         help=f'Change value of the constant in PUCB (default: {DEFAULT_PUCB_CONSTANT_BASE})')
+    parser.add_argument(
+        '--pucb-min-visits-rate', type=float, default=DEFAULT_PUCB_MIN_VISITS_RATE,
+        help=f'Minimum visits rate in PUCB (default: {DEFAULT_PUCB_MIN_VISITS_RATE})')
     parser.add_argument(
         '--timelimit', type=float, default=120,
         help='Timelimit (sec) (default: 120 sec)')
@@ -98,21 +107,36 @@ def parse_args() -> argparse.Namespace:
         help=f'Number of threads per GPU (default: {DEFAULT_THREADS_PER_GPU})')
     parser.add_argument(
         '--cache-size', type=int, default=None,
-        help='Cache size for board evaluation (default: max(visits, playouts))')
+        help='Cache size for board evaluation (default: visits)')
     parser.add_argument(
         '--verbose', action='store_true',
         help='Verbose mode')
 
     args = parser.parse_args()
+
+    # Validate the requested visit counts
+    if args.visits < 0:
+        parser.error('--visits must be greater than or equal to 0')
+
+    if args.max_visits <= 0:
+        parser.error('--max-visits must be greater than 0')
+
+    if args.pucb_min_visits_rate < 0:
+        parser.error('--pucb-min-visits-rate must be greater than or equal to 0')
+
     args.gpus, args.fp16 = get_default_gpus(args.gpus, args.fp16)
 
     if args.cache_size is None:
-        args.cache_size = max(args.visits, args.playouts)
+        args.cache_size = args.visits
 
     return args
 
 
 def main() -> None:
+    '''Run the command-line entry point.
+    Returns:
+        None: No return value.
+    '''
     args = parse_args()
 
     # Set up log output
@@ -143,12 +167,12 @@ def main() -> None:
         threads_per_gpu=args.threads_per_gpu,
         cache_size=args.cache_size)
 
-    # Create GPT object
+    # Create the GTP engine
     engine = GTPEngine(
         processor=processor,
         threads=args.threads,
         visits=args.visits,
-        playouts=args.playouts,
+        max_visits=args.max_visits,
         temperature=args.temperature,
         randomness=args.randomness,
         criterion=args.criterion,
@@ -158,6 +182,7 @@ def main() -> None:
         superko=args.superko,
         pucb_constant_init=args.pucb_constant_init,
         pucb_constant_base=args.pucb_constant_base,
+        pucb_min_visits_rate=args.pucb_min_visits_rate,
         timelimit=args.timelimit,
         ponder=args.ponder,
         resign_threshold=args.resign,

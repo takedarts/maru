@@ -8,6 +8,8 @@ from .native import NativeInferenceProcessor
 
 
 class Processor(object):
+    '''Manage native model inference and result caching.
+    '''
     def __init__(
         self,
         model: str | Path,
@@ -27,6 +29,8 @@ class Processor(object):
             deterministic (bool): True to make results reproducible
             threads_per_gpu (int): Number of threads per GPU
             cache_size (int): Cache size for board evaluation
+        Returns:
+            None: No return value.
         '''
         if not Path(model).exists():
             raise FileNotFoundError(f'File not found: {model}')
@@ -38,6 +42,8 @@ class Processor(object):
         '''Execute inference.
         Args:
             inputs (np.ndarray): Input data
+        Returns:
+            np.ndarray: Computed result.
         '''
         return self.native.execute(inputs)
 

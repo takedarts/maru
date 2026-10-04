@@ -7,39 +7,37 @@ namespace deepgo {
 
 /**
  * Creates candidate move data.
- * @param x x coordinate
- * @param y y coordinate
- * @param color stone color
+ * @param move Move
  * @param visits number of visits
- * @param playouts number of playouts
  * @param policy predicted move probability
- * @param value evaluation value
+ * @param value Evaluation value
+ * @param score Predicted score difference
  * @param variations predicted sequence of moves
  * @param territories predicted territory probabilities
  */
 Candidate::Candidate(
-    Move move, int32_t visits, int32_t playouts,
-    float policy, float value, const std::vector<Move> variations,
-    const std::array<float, 3 * MODEL_SIZE * MODEL_SIZE>& territories)
+    Move move, int32_t visits, float policy, float value, float score,
+    const std::vector<Move> variations,
+    const std::array<float, MODEL_TERRITORY_SIZE>& territories)
     : _move(move),
       _visits(visits),
-      _playouts(playouts),
       _policy(policy),
       _value(value),
+      _score(score),
       _variations(variations),
       _territories(territories) {
 }
 
 /**
  * Creates candidate move data from a node object.
- * @param node node object
+ * @param node Node object
  */
 Candidate::Candidate(MctsNode* node)
     : _move(node->getMove()),
       _visits(node->getVisits()),
-      _playouts(node->getPlayouts()),
       _policy(node->getProbability()),
       _value(node->getMctsValue()),
+      _score(node->getMctsScore()),
       _variations(node->getVariations()),
       _territories(node->getTerritories()) {
 }
@@ -51,9 +49,9 @@ Candidate::Candidate(MctsNode* node)
 Candidate::Candidate(const Candidate& other)
     : _move(other._move),
       _visits(other._visits),
-      _playouts(other._playouts),
       _policy(other._policy),
       _value(other._value),
+      _score(other._score),
       _variations(other._variations),
       _territories(other._territories) {
 }
@@ -65,9 +63,9 @@ Candidate::Candidate(const Candidate& other)
 Candidate::Candidate()
     : _move(MOVE_INVALID),
       _visits(0),
-      _playouts(0),
       _policy(0.0f),
       _value(0.0f),
+      _score(0.0f),
       _variations(),
       _territories() {
   std::fill(std::begin(_territories), std::end(_territories), 0.0f);
@@ -82,9 +80,9 @@ std::string Candidate::toString() const {
 
   ss << "Move: (" << _move << ")";
   ss << ", Visits: " << _visits;
-  ss << ", Playouts: " << _playouts;
   ss << ", Policy: " << std::fixed << std::setprecision(4) << _policy;
   ss << ", Value: " << std::fixed << std::setprecision(4) << _value;
+  ss << ", Score: " << std::fixed << std::setprecision(2) << _score;
   ss << ", Variations: [";
 
   for (size_t i = 0; i < _variations.size(); ++i) {

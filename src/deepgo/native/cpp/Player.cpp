@@ -1,5 +1,7 @@
 #include "Player.h"
 
+#include <algorithm>
+#include <cassert>
 #include <iomanip>
 #include <sstream>
 
@@ -12,16 +14,17 @@ namespace deepgo {
  * @param maxVisits Maximum number of visits
  * @param width Board width
  * @param height Board height
- * @param komi Komi points
+ * @param komi Komi value
  * @param rule Win/loss determination rule
- * @param superko true to apply the superko rule
- * @param pucbConstantInit Initial value of the constant multiplied by the PUCB confidence upper bound
- * @param pucbConstantBase Change value of the constant multiplied by the PUCB confidence upper bound
+ * @param superko True if the superko rule is applied
+ * @param pucbConstantInit Initial value of the constant multiplied by the PUCB confidence bound
+ * @param pucbConstantBase Incremental value of the constant multiplied by the PUCB confidence bound
+ * @param pucbMinVisitsRate Minimum child visit ratio prioritized by PUCB
  */
 Player::Player(
     InferenceProcessor* processor, int32_t threads, int32_t maxVisits,
     int32_t width, int32_t height, float komi, int32_t rule, bool superko,
-    float pucbConstantInit, float pucbConstantBase)
+    float pucbConstantInit, float pucbConstantBase, float pucbMinVisitsRate)
     : _mutex(),
       _searchCondition(),
       _updateCondition(),
@@ -32,9 +35,11 @@ Player::Player(
       _searchThread(),
       _updateThread(),
       _nodeManager(MctsParameter(
-          width, height, komi, rule, superko, pucbConstantInit, pucbConstantBase)),
+          width, height, komi, rule, superko, pucbConstantInit, pucbConstantBase,
+          pucbMinVisitsRate)),
       _root(_nodeManager.createNode()),
-      _maxVisits(maxVisits),
+      _captureds({0, 0}),
+      _searchMaxVisits(maxVisits),
       _searchEqually(false),
       _searchCandidateWidth(0),
       _searchTemperature(1.0f),
@@ -44,7 +49,8 @@ Player::Player(
       _stopped(true),
       _terminated(false),
       _canceled(false),
-      _evaluatingNodes() {
+      _evaluatingNodes(),
+      _updatingNodes(0) {
   _root->initialize();
   _searchThread = std::thread(&Player::_runSearch, this);
   _updateThread = std::thread(&Player::_runUpdate, this);
@@ -76,7 +82,7 @@ void Player::initialize() {
   _paused = true;
   _canceled.store(true, std::memory_order_release);
   _stopCondition.wait(lock, [this]() {
-    return _runnings == 0 && _evaluatingNodes.empty();
+    return _isSearchIdle();
   });
 
   // Save the current search tree and create a new root for the initial position
@@ -88,6 +94,9 @@ void Player::initialize() {
   // Return the old search tree to the node pool so it can be reused
   _nodeManager.releaseTree(old_root);
 
+  // Reset the captured stone counts
+  _captureds = {0, 0};
+
   // Resume the search thread
   _paused = false;
   _canceled.store(false, std::memory_order_release);
@@ -96,30 +105,31 @@ void Player::initialize() {
 
 /**
  * Places a stone on the board.
- * @param move Move to play
- * @return Number of captured stones
+ * @param move Move
  */
-int32_t Player::play(Move move) {
+void Player::play(Move move) {
   std::unique_lock<std::mutex> lock(_mutex);
 
   // Pause the search thread
   _paused = true;
   _canceled.store(true, std::memory_order_release);
   _stopCondition.wait(lock, [this]() {
-    return _runnings == 0 && _evaluatingNodes.empty();
+    return _isSearchIdle();
   });
 
-  // Set the child node at the played move as the new root
-  // Create a new node if no child node exists at the played move
+  // Make the node corresponding to the played move the new root
   MctsNode* old_root = _root;
 
   _root = old_root->getChild(move);
-
-  if (_root == nullptr) {
-    _root = old_root->createNode(move);
-  }
-
+  _root->copyAppearedBoardHashes(old_root);
   _root->setAsRootNode();
+
+  // Accumulate the opponent's stones captured by this move
+  if (move.getColor() == COLOR_BLACK) {
+    _captureds[1] += _root->getCaptured();
+  } else if (move.getColor() == COLOR_WHITE) {
+    _captureds[0] += _root->getCaptured();
+  }
 
   // Detach the new root from the old search tree and release the rest
   old_root->removeChild(move);
@@ -129,15 +139,30 @@ int32_t Player::play(Move move) {
   _paused = false;
   _canceled.store(false, std::memory_order_release);
   _searchCondition.notify_one();
-
-  return _root->getCaptured();
 }
 
 /**
- * Gets the pass candidate move.
+ * Get the number of captured stones of the specified color.
+ * @param color Stone color
+ * @return Number of captured stones
+ */
+int32_t Player::getCaptured(int32_t color) {
+  std::lock_guard<std::mutex> lock(_mutex);
+
+  if (color == COLOR_BLACK) {
+    return _captureds[0];
+  } else if (color == COLOR_WHITE) {
+    return _captureds[1];
+  } else {
+    return 0;
+  }
+}
+
+/**
+ * Get the pass candidate move.
  * @return Pass candidate move
  */
-Candidate Player::getPass() {
+Candidate Player::getPassCandidate() {
   // Create a pass node
   // Create an unevaluated node that is not associated with the root node
   // No need to pause the search thread as it does not affect other searches
@@ -148,28 +173,77 @@ Candidate Player::getPass() {
     std::unique_lock<std::mutex> lock(_mutex);
 
     pass_move = Move::createPassMove(_root->getNextColor());
-    pass_node = _root->createNode(pass_move);
+    pass_node = _root->getChild(pass_move);
   }
 
-  // Create synchronization object and condition variable
-  // for waiting node evaluation completion
-  std::mutex mutex;
-  std::condition_variable cv;
-
-  // Execute node evaluation and wait for the node value to be updated
-  {
-    std::unique_lock<std::mutex> lock(mutex);
-
-    _processor->submit(pass_node, [&cv](MctsNode*) { cv.notify_one(); });
-    cv.wait(lock, [pass_node] { return pass_node->isEvaluated(); });
-  }
+  // Evaluate the pass node synchronously if it has not been evaluated
+  _evaluateNode(pass_node);
 
   // Get the node value and create a candidate move object
   Candidate candidate(
-      pass_move, 1, 1, 0.0, pass_node->getNodeValue(),
+      pass_move, 1, 0.0, pass_node->getNodeValue(), pass_node->getNodeScore(),
       std::vector<Move>(), pass_node->getTerritories());
 
   return candidate;
+}
+
+/**
+ * Get the root node's predicted territories.
+ * @param territories Array receiving predicted territories
+ */
+void Player::getPredictedTerritories(float* territories) {
+  std::unique_lock<std::mutex> lock(_mutex);
+
+  // To avoid races with root replacement and evaluation,
+  // pause the search
+  _paused = true;
+  _canceled.store(true, std::memory_order_release);
+  _stopCondition.wait(lock, [this]() {
+    return _isSearchIdle();
+  });
+
+  // Evaluate the root synchronously if it has not been evaluated
+  _evaluateNode(_root);
+
+  // Copy the root's predicted territories with settled territories applied
+  const std::array<float, MODEL_TERRITORY_SIZE> predicted_territories =
+      _root->getTerritories();
+  std::copy(
+      predicted_territories.begin(), predicted_territories.end(), territories);
+
+  // Resume the search thread
+  _paused = false;
+  _canceled.store(false, std::memory_order_release);
+  _searchCondition.notify_one();
+}
+
+/**
+ * Get the root node's predicted score difference.
+ * @return Predicted score difference from Black's perspective
+ */
+float Player::getPredictedScore() {
+  std::unique_lock<std::mutex> lock(_mutex);
+
+  // To avoid races with root replacement and evaluation,
+  // pause the search
+  _paused = true;
+  _canceled.store(true, std::memory_order_release);
+  _stopCondition.wait(lock, [this]() {
+    return _isSearchIdle();
+  });
+
+  // Evaluate the root synchronously if it has not been evaluated
+  _evaluateNode(_root);
+
+  // Get the root node's predicted score difference
+  float score = _root->getNodeScore();
+
+  // Resume the search thread
+  _paused = false;
+  _canceled.store(false, std::memory_order_release);
+  _searchCondition.notify_one();
+
+  return score;
 }
 
 /**
@@ -187,7 +261,7 @@ void Player::startEvaluation(
   _paused = true;
   _canceled.store(true, std::memory_order_release);
   _stopCondition.wait(lock, [this]() {
-    return _runnings == 0 && _evaluatingNodes.empty();
+    return _isSearchIdle();
   });
 
   // Update the conditions to be used in subsequent searches
@@ -206,29 +280,38 @@ void Player::startEvaluation(
 }
 
 /**
- * Waits until the specified visit count and playout count are reached.
+ * Wait until the specified search conditions are satisfied.
  * @param visits Number of visits
- * @param playouts Number of playouts
  * @param timelimit Time limit
  * @param stop true to stop the search
  */
-void Player::waitEvaluation(int32_t visits, int32_t playouts, float timelimit, bool stop) {
+void Player::waitEvaluation(int32_t visits, float timelimit, bool stop) {
   std::unique_lock<std::mutex> lock(_mutex);
 
   // Wait for the first evaluation
-  if (visits > 0 || playouts > 0) {
+  if (visits > 0) {
     _waitCondition.wait(lock, [this]() {
       return _root->getVisits() > 0;
     });
   }
 
   // Wait until one of the following conditions is satisfied
-  // [Condition 1] Both the visit and playout count of the root node reach the specified values
-  // [Condition 2] The specified time has elapsed
+  // [Condition 1] The requested number of visits is reached
+  // [Condition 2] A candidate exceeds 60% of the requested visits
+  // [Condition 3] The specified time has elapsed
+  // [Condition 4] The maximum visit count is reached
   std::chrono::milliseconds timeout(static_cast<int32_t>(timelimit * 1000.0f));
 
-  _waitCondition.wait_for(lock, timeout, [this, visits, playouts]() {
-    return _root->getVisits() >= visits && _root->getPlayouts() >= playouts;
+  _waitCondition.wait_for(lock, timeout, [this, visits]() {
+    if (_root->getVisits() >= _searchMaxVisits) {
+      return true;
+    } else if (_root->getVisits() >= visits) {
+      return true;
+    } else if (_root->getPvVisits() > static_cast<float>(visits) * 0.6f) {
+      return true;
+    } else {
+      return false;
+    }
   });
 
   // Set the stop flag if a stop state has been requested
@@ -236,7 +319,7 @@ void Player::waitEvaluation(int32_t visits, int32_t playouts, float timelimit, b
 }
 
 /**
- * Gets the list of candidate moves.
+ * Get the list of candidate moves.
  * @return List of candidate moves
  */
 std::vector<Candidate> Player::getCandidates() {
@@ -246,10 +329,10 @@ std::vector<Candidate> Player::getCandidates() {
   _paused = true;
   _canceled.store(true, std::memory_order_release);
   _stopCondition.wait(lock, [this]() {
-    return _runnings == 0 && _evaluatingNodes.empty();
+    return _isSearchIdle();
   });
 
-  // Create the list of candidate moves
+  // Create a list of candidate moves
   std::vector<Candidate> candidates;
 
   for (MctsNode* node : _root->getChildren()) {
@@ -262,11 +345,12 @@ std::vector<Candidate> Player::getCandidates() {
 
     if (!move.isPass()) {
       candidates.emplace_back(
-          move, 0, 0, 1.0f, _root->getMctsValue(),
+          move, 0, 1.0f, _root->getMctsValue(), _root->getMctsScore(),
           std::vector<Move>(), _root->getTerritories());
     }
   }
 
+  // Resume the search thread
   _paused = false;
   _canceled.store(false, std::memory_order_release);
   _searchCondition.notify_one();
@@ -284,11 +368,14 @@ int32_t Player::getColor() {
 }
 
 /**
- * Gets the board state.
- * @return Board state
+ * Copy the board state to the specified board object.
+ * @param board Destination board object
  */
-std::vector<int32_t> Player::getBoardState() {
-  return _root->getBoardState();
+void Player::copyBoardTo(Board* board) {
+  std::lock_guard<std::mutex> lock(_mutex);
+
+  // Copy the board without racing with root replacement
+  board->copyFrom(&_root->getBoard());
 }
 
 /**
@@ -303,7 +390,7 @@ std::string Player::toString() {
   _paused = true;
   _canceled.store(true, std::memory_order_release);
   _stopCondition.wait(lock, [this]() {
-    return _runnings == 0 && _evaluatingNodes.empty();
+    return _isSearchIdle();
   });
 
   // Convert the board state to a string
@@ -318,13 +405,21 @@ std::string Player::toString() {
     std::string prefix = stack.back().second;
     stack.pop_back();
 
+    // Get the parent's child count for PUCB minimum-visit checks
+    MctsNode* parent = current->getParent();
+    int32_t children_size = (parent == nullptr)
+                                ? 1
+                                : static_cast<int32_t>(parent->getChildren().size());
+    std::pair<bool, float> pucb_priority = current->getPriorityByPUCB(
+        _root->getVisits(), children_size);
+
     ss << prefix
        << "Move=(" << current->getMove() << ")"
        << ", Visits=" << current->getVisits()
-       << ", Playouts=" << current->getPlayouts()
        << ", Value=" << std::setprecision(4) << current->getMctsValue()
+       << ", Score=" << std::setprecision(4) << current->getMctsScore()
        << ", Policy=" << std::setprecision(4) << current->getProbability()
-       << ", PUCB=" << std::setprecision(4) << current->getPriorityByPUCB(_root->getVisits())
+       << ", PUCB=" << std::setprecision(4) << pucb_priority.second
        << std::endl;
 
     std::vector<MctsNode*> children = current->getChildren();
@@ -341,6 +436,40 @@ std::string Player::toString() {
   _searchCondition.notify_one();
 
   return ss.str();
+}
+
+/**
+ * Return true when both searching and node updates are idle.
+ * The caller must hold _mutex.
+ * @return True when both searching and node updates are idle
+ */
+bool Player::_isSearchIdle() const {
+  return _runnings == 0 && _evaluatingNodes.empty() && _updatingNodes == 0;
+}
+
+/**
+ * Evaluate the specified node synchronously if it has not been evaluated.
+ * @param node Node to evaluate
+ */
+void Player::_evaluateNode(MctsNode* node) {
+  // Skip inference if the node has already been evaluated
+  if (node->isEvaluated()) {
+    return;
+  }
+
+  // To wait for node evaluation to finish,
+  // create a synchronization object and a condition variable
+  std::mutex mutex;
+  std::condition_variable cv;
+  std::unique_lock<std::mutex> lock(mutex);
+
+  // Evaluate the node and wait for the inference result to be applied
+  _processor->submit(node, [&cv](MctsNode*) {
+    cv.notify_one();
+  });
+  cv.wait(lock, [node] {
+    return node->isEvaluated();
+  });
 }
 
 /**
@@ -362,13 +491,13 @@ void Player::_runSearch() {
       //   the number of running threads is less than the thread pool size,
       //   the number of evaluating nodes is less than the maximum, and visits are below the maximum
       _searchCondition.wait(lock, [this, max_evaluating_size]() {
-        if (_terminated && _runnings == 0 && _evaluatingNodes.empty()) {
+        if (_terminated && _isSearchIdle()) {
           return true;
         } else if (
             !_terminated && !_stopped && !_paused &&
             _runnings < _threadPool.getSize() &&
             _evaluatingNodes.size() < static_cast<size_t>(max_evaluating_size) &&
-            _root->getVisits() < _maxVisits) {
+            _root->getVisits() < _searchMaxVisits) {
           return true;
         } else {
           return false;
@@ -376,7 +505,7 @@ void Player::_runSearch() {
       });
 
       // If the stop condition is met, exit the loop
-      if (_terminated && _runnings == 0 && _evaluatingNodes.empty()) {
+      if (_terminated && _isSearchIdle()) {
         break;
       }
 
@@ -439,8 +568,8 @@ void Player::_runExpand() {
     search_noise = 0.0f;
   }
 
-  // The visit and playout count have been updated by the last executed `node->pickupNextNode()`
-  // Notify the waiting thread that the visit and playout counts have been updated
+  // The last call to `node->pickupNextNode()` has updated the visit count
+  // Notify the waiting thread that the visit count has changed
   _waitCondition.notify_all();
 
   // If not yet evaluated
@@ -473,9 +602,10 @@ void Player::_runUpdate() {
       // Wait until the update process becomes executable
       // Conditions for the update process to become executable are one of the following:
       // - [Stop] Termination is requested, no running threads, and no nodes being evaluated.
-      // - [Evaluate] There are nodes being evaluated and the evaluation of the front node is complete
+      // - [Evaluate] There are nodes being evaluated and the evaluation of the front node is
+      // complete
       _updateCondition.wait(lock, [this]() {
-        if (_terminated && _runnings == 0 && _evaluatingNodes.empty()) {
+        if (_terminated && _isSearchIdle()) {
           return true;
         } else if (!_evaluatingNodes.empty() && _evaluatingNodes.front()->isEvaluated()) {
           return true;
@@ -485,7 +615,7 @@ void Player::_runUpdate() {
       });
 
       // If the stop condition is met, exit the loop
-      if (_terminated && _runnings == 0 && _evaluatingNodes.empty()) {
+      if (_terminated && _isSearchIdle()) {
         break;
       }
 
@@ -494,18 +624,31 @@ void Player::_runUpdate() {
         finished_nodes.push_back(_evaluatingNodes.front());
         _evaluatingNodes.pop();
       }
+
+      // Allow shutdown to observe ongoing updates even when the queue is empty
+      _updatingNodes += static_cast<int32_t>(finished_nodes.size());
     }
 
-    // Update the statistics of evaluated nodes
-    // For nodes where a tsume-go sequence has been found, set the value to NodeValue
+    // Propagate evaluated nodes' values and predicted scores to their ancestors
     for (MctsNode* node : finished_nodes) {
       float mcts_value = node->getNodeValue();
+      float mcts_score = node->getNodeScore();
       MctsNode* current_node = node;
 
       while (current_node != nullptr) {
-        current_node->updateMctsValue(mcts_value);
+        current_node->updateMctsValue(mcts_value, mcts_score);
         current_node = current_node->getParent();
       }
+    }
+
+    {
+      std::unique_lock<std::mutex> lock(_mutex);
+
+      // Check that the update count is at least the amount to subtract
+      assert(_updatingNodes >= static_cast<int32_t>(finished_nodes.size()));
+
+      // Record completion of all statistics updates for the retrieved nodes
+      _updatingNodes -= static_cast<int32_t>(finished_nodes.size());
     }
 
     // Notify the search process

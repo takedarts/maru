@@ -5,6 +5,7 @@
 #endif
 
 #include <fstream>
+#include <iostream>
 
 #include "Config.h"
 
@@ -52,7 +53,7 @@ static bool isTensorRTModelFile(const std::string& filename) {
 }
 
 /**
- * Returns the list of available GPU indices.
+ * Get the IDs of available GPUs.
  * @return List of GPU indices
  */
 std::vector<std::int32_t> InferenceModel::getAvailableGPUs() {
@@ -175,7 +176,7 @@ InferenceModel::InferenceModel(
 }
 
 /**
- * Executes inference.
+ * Execute inference.
  * @param inputs Input data
  * @param outputs Output data
  * @param size Number of data samples to evaluate
@@ -201,8 +202,9 @@ void InferenceModel::forward(int32_t* inputs, float* outputs, int32_t size) {
   {
     std::lock_guard<std::mutex> compute_lock(_computeMutex);
 
-    // Each input value in the input data is stored as a bit representation (except the last 3 values)
-    // Bit-shifts all values except the last 3 to convert them to 0 or 1
+    // Input values are stored as packed bits
+    // The final two packed values represent real numbers
+    // Unpack binary values with bit shifts, excluding the final two scalar values
     in_data = torch::bitwise_right_shift(
         in_values.narrow(1, 0, MODEL_INPUT_PACK_SIZE - 1).unsqueeze(2), _bitShift);
     in_data = torch::bitwise_and(in_data, 1);
@@ -210,13 +212,13 @@ void InferenceModel::forward(int32_t* inputs, float* outputs, int32_t size) {
     in_data = in_data.narrow(1, 0, MODEL_INPUT_SIZE);
     in_data = in_data.to(_dtype);
 
-    // The 5th-to-last value is stored scaled from the range 0 to 1 into the range 0 to 0xfffff
-    // Normalizes the 5th-to-last value to the range 0 to 1 and stores it as the 5th-to-last value of the input data
-    // 5th-to-last value: a value representing the komi in board points
-    in_values = in_values.narrow(1, MODEL_INPUT_PACK_SIZE - 1, 1);
-    in_values = in_values.to(torch::kFloat32) / 0xfffff;
+    // Board size and komi are stored as values
+    // scaled by MODEL_VALUE_SCALE
+    // Normalize board size and komi and store them at the designated offsets
+    in_values = in_values.narrow(1, MODEL_INPUT_PACK_SIZE - 2, 2);
+    in_values = in_values.to(torch::kFloat32) / MODEL_VALUE_SCALE;
     in_values = in_values.to(_dtype);
-    in_data.slice(1, MODEL_INPUT_SIZE - 5, MODEL_INPUT_SIZE - 4).copy_(in_values);
+    in_data.slice(1, MODEL_INFO_OFFSET + 4, MODEL_INFO_OFFSET + 6).copy_(in_values);
 
     // Executes the model and obtains the output data
     out_data = _model.forward({in_data}).toTensor();

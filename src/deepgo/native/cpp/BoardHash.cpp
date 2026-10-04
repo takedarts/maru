@@ -5,19 +5,14 @@ namespace deepgo {
 /**
  * Creates an object that manages the hash value of a board object.
  * @param board Board object
- * @param color Current turn
  */
-BoardHash::BoardHash(const Board* board, int32_t color) {
+BoardHash::BoardHash(const Board* board) {
   _hash = board->_hash;
   _size = board->_width << 16 | board->_height;
 
-  for (int i = 0; i < BITBOARD_SIZE; i++) {
-    _bitBoard[i] = board->_bitBoard[i];
-  }
-
-  _koIndex = board->_koIndex;
-  _koColor = board->_koColor;
-  _color = color;
+  // Copy the board's bitboards for each color
+  _blackBitBoard = board->_blackBitBoard;
+  _whiteBitBoard = board->_whiteBitBoard;
 }
 
 }  // namespace deepgo

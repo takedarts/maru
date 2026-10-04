@@ -1,6 +1,6 @@
 from typing import List, Tuple
 
-from libc.stdint cimport int32_t
+from libc.stdint cimport int32_t, uint32_t
 from libcpp.pair cimport pair
 from libcpp.vector cimport vector
 
@@ -9,17 +9,18 @@ cimport numpy
 
 from deepgo.config import MODEL_INPUT_PACK_SIZE
 from pyx.board cimport Board
-from pyx.move cimport Move
+from pyx.move cimport Move, MoveResult
 
 
 cdef class NativeBoard:
+    '''Expose native board rules to Python.'''
     cdef Board *board
 
     def __cinit__(self, width: int, height: int) -> None:
-        '''Create a board object.
+        '''Create board object.
         Args:
-            width (int): Width of the board
-            height (int): Height of the board
+            width (int): Board width
+            height (int): Board height
         '''
         self.board = new Board(width, height)
 
@@ -30,53 +31,98 @@ cdef class NativeBoard:
     def get_width(self) -> int:
         '''Get the width of the board.
         Returns:
-            int: Width of the board
+            int: Board width
         '''
         return self.board.getWidth()
 
     def get_height(self) -> int:
         '''Get the height of the board.
         Returns:
-            int: Height of the board
+            int: Board height
         '''
         return self.board.getHeight()
 
-    def play(self, pos: Tuple[int, int], color: int) -> int:
+    def play(
+        self,
+        pos: Tuple[int, int],
+        color: int,
+    ) -> Tuple[
+        Tuple[int, int],
+        int,
+        int,
+        Tuple[bool, bool, bool, bool],
+        Tuple[int, int],
+    ]:
         '''Place a stone at the specified position.
         Args:
             pos (Tuple[int, int]): Position to place the stone
-            color (int): Color of the stone
+            color (int): Stone color
         Returns:
-            int: Number of captured stones (-1 if the move is invalid)
+            Tuple[Tuple[int, int], int, int, Tuple[bool, bool, bool, bool],
+                  Tuple[int, int]]: Move result
         '''
-        return self.board.play(Move(pos[0], pos[1], color))
+        cdef MoveResult result = self.board.play(Move(pos[0], pos[1], color))
+        cdef pair[int32_t, int32_t] previous_ko = result.getPreviousKo()
+
+        return (
+            (result.getX(), result.getY()),
+            result.getColor(),
+            result.getCaptured(),
+            (
+                result.getCapturedDirection(0),
+                result.getCapturedDirection(1),
+                result.getCapturedDirection(2),
+                result.getCapturedDirection(3),
+            ),
+            (previous_ko.first, previous_ko.second),
+        )
+
+    def undo(
+        self,
+        result: Tuple[
+            Tuple[int, int],
+            int,
+            int,
+            Tuple[bool, bool, bool, bool],
+            Tuple[int, int],
+        ],
+    ) -> None:
+        '''Undo the specified move.
+        Args:
+            result (Tuple[Tuple[int, int], int, int, Tuple[bool, bool, bool, bool],
+                    Tuple[int, int]]): Result of the move to undo
+        '''
+        cdef Move move = Move(result[0][0], result[0][1], result[1])
+        cdef pair[int32_t, int32_t] previous_ko = pair[int32_t, int32_t](
+            result[4][0], result[4][1])
+        cdef MoveResult native_result = MoveResult(
+            move,
+            result[2],
+            result[3][0],
+            result[3][1],
+            result[3][2],
+            result[3][3],
+            previous_ko,
+        )
+
+        self.board.undo(native_result)
 
     def get_ko(self, color: int) -> Tuple[int, int]:
         '''Get the ko position.
         Args:
-            color (int): Color of the stone subject to ko
+            color (int): Stone color for ko
         Returns:
             Tuple[int, int]: Ko position
         '''
         cdef pair[int32_t, int32_t] ko = self.board.getKo(color)
         return (ko.first, ko.second)
 
-    def get_histories(self, color: int) -> List[Tuple[int, int]]:
-        '''Get the move history for the specified color.
-        Args:
-            color (int): Color of the stone
-        Returns:
-            List[Tuple[int, int]]: Move history
-        '''
-        cdef vector[Move] moves = self.board.getHistories(color)
-        return [(move.getX(), move.getY()) for move in moves]
-
     def get_color(self, pos: Tuple[int, int]) -> int:
         '''Get the color of the stone at the specified position.
         Args:
             pos (Tuple[int, int]): Position to get the stone color from
         Returns:
-            int: Color of the stone
+            int: Stone color
         '''
         return self.board.getColor(pos[0], pos[1])
 
@@ -95,6 +141,16 @@ cdef class NativeBoard:
         self.board.getColors(<int32_t*> &data[0], color)
 
         return data.reshape((height, width))
+
+    def get_pattern(self) -> Tuple[int, ...]:
+        '''Get values representing the stone arrangement.
+        Returns:
+            Tuple[int, ...]: Black and white bitboards split into 32-bit words
+        '''
+        cdef vector[uint32_t] pattern = self.board.getPattern()
+
+        # Convert the C++ array to a Python tuple
+        return tuple(pattern)
 
     def get_ren_size(self, pos: Tuple[int, int]) -> int:
         '''Get the size of the group at the specified position.
@@ -132,7 +188,7 @@ cdef class NativeBoard:
         '''Check whether a stone can be placed at the specified position.
         Args:
             pos (Tuple[int, int]): Position to place the stone
-            color (int): Color of the stone
+            color (int): Stone color
             check_seki (bool): Whether to check for seki
         Returns:
             bool: True if a stone can be placed
@@ -142,7 +198,7 @@ cdef class NativeBoard:
     def get_enableds(self, color: int, check_seki: bool) -> numpy.ndarray:
         '''Get whether a stone can be placed at each position on the board.
         Args:
-            color (int): Color of the stone
+            color (int): Stone color
             check_seki (bool): Whether to check for seki
         Returns:
             numpy.ndarray: Placement validity for each position
@@ -156,10 +212,8 @@ cdef class NativeBoard:
 
         return data.reshape((height, width))
 
-    def get_territories(self, color: int) -> numpy.ndarray:
-        '''Get the list of secured territories.
-        Args:
-            color (int): Reference stone color (specifying WHITE inverts the colors)
+    def get_fixed_territories(self) -> numpy.ndarray:
+        '''Get the list of confirmed territories.
         Returns:
             numpy.ndarray: List of secured territories
         '''
@@ -168,14 +222,18 @@ cdef class NativeBoard:
         cdef numpy.ndarray[numpy.int32_t, ndim=1, mode='c'] data = numpy.zeros(
             (height * width,), dtype=numpy.int32)
 
-        self.board.getTerritories(<int32_t*> &data[0], color)
+        self.board.getFixedTerritories(<int32_t*> &data[0])
 
         return data.reshape((height, width))
 
-    def get_owners(self, color: int, rule: int) -> numpy.ndarray:
-        '''Get the list of owners for each coordinate.
+    def get_owners(
+        self,
+        numpy.ndarray[numpy.int32_t, ndim=2, mode='c'] territories,
+        rule: int,
+    ) -> numpy.ndarray:
+        '''Get the list of owners for each position.
         Args:
-            color (int): Reference stone color (specifying WHITE inverts the colors)
+            territories (numpy.ndarray): Territory data from Black's perspective
             rule (int): Scoring rule
         Returns:
             numpy.ndarray: List of owners for each coordinate
@@ -185,24 +243,18 @@ cdef class NativeBoard:
         cdef numpy.ndarray[numpy.int32_t, ndim=1, mode='c'] data = numpy.zeros(
             (height * width,), dtype=numpy.int32)
 
-        self.board.getOwners(<int32_t*> &data[0], color, rule)
+        self.board.getOwners(
+            <int32_t*> &data[0], <const int32_t*> &territories[0, 0], rule)
 
         return data.reshape((height, width))
-
-    def get_patterns(self) -> List[int]:
-        '''Get values representing the stone arrangement pattern.
-        Returns:
-            List[int]: Values representing the stone arrangement pattern
-        '''
-        return self.board.getPatterns()
 
     def get_inputs(self, color: int, komi: float, rule: int, superko: bool) -> numpy.ndarray:
         '''Get the board data to be fed into the inference model.
         Args:
-            color (int): Color of the stone to play
-            komi (float): Komi value
-            rule (int): Scoring rule
-            superko (bool): True to apply the superko rule
+            color (int): Stone color to play
+            komi (float): Komi points
+            rule (int): Rule for determining the winner
+            superko (bool): True to apply superko rule
         Returns:
             numpy.ndarray: Board input data
         '''
@@ -213,22 +265,9 @@ cdef class NativeBoard:
 
         return inputs
 
-    def get_state(self) -> List[int]:
-        '''Get the board state.
-        Returns:
-            List[int]: Board state
-        '''
-        return self.board.getState()
-
-    def load_state(self, state: List[int]) -> None:
-        '''Load the board state.
-        Args:
-            state (List[int]): Board state
-        '''
-        self.board.loadState(state)
-
     def copy_from(self, board: NativeBoard) -> None:
-        '''Copy the board from another board.
+        '''
+        Copy the board.
         Args:
             board (NativeBoard): Source board to copy from
         '''

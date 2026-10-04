@@ -1,10 +1,10 @@
 #pragma once
 
 // Values assigned to board coordinates
-#define BLACK (${BLACK})
-#define WHITE (${WHITE})
-#define EMPTY (${EMPTY})
-#define EDGE (${EDGE})
+#define COLOR_BLACK (${COLOR_BLACK})
+#define COLOR_WHITE (${COLOR_WHITE})
+#define COLOR_EMPTY (${COLOR_EMPTY})
+#define COLOR_EDGE (${COLOR_EDGE})
 
 // Calculation rules
 #define RULE_CH (${RULE_CH})
@@ -14,22 +14,26 @@
 // Macro to get the color of the opponent's stone
 #define OPPOSITE(c)  (-c)
 
-// Size of board features input to the model (board size)
-#define MODEL_SIZE (${MODEL_SIZE})
-// Number of board features input to the model
-#define MODEL_FEATURES (${MODEL_FEATURES})
-// Number of game features input to the model
-#define MODEL_INFOS (${MODEL_INFOS})
-// Number of board predictions output by the model
-#define MODEL_PREDICTIONS (${MODEL_PREDICTIONS})
-// Number of game predictions output by the model
-#define MODEL_VALUES (${MODEL_VALUES})
+// Board feature size for model input (board size)
+#define MODEL_BOARD_SIZE (${MODEL_BOARD_SIZE})
+// Scale for converting board size and komi to fixed-point values
+#define MODEL_VALUE_SCALE (${MODEL_VALUE_SCALE})
 
+// Size of the model territory output
+#define MODEL_TERRITORY_SIZE (${MODEL_TERRITORY_SIZE})
+
+// Offset of the mask in model inputs
+#define MODEL_MASK_OFFSET (${MODEL_MASK_OFFSET})
+// Offset of game information in model inputs
+#define MODEL_INFO_OFFSET (${MODEL_INFO_OFFSET})
 // Size of data input to the inference model
 #define MODEL_INPUT_SIZE (${MODEL_INPUT_SIZE})
 // Size of model input data when packed into int32
 #define MODEL_INPUT_PACK_SIZE (${MODEL_INPUT_PACK_SIZE})
+
+// Offset of predicted territories in model outputs
+#define MODEL_TERRITORY_OFFSET (${MODEL_TERRITORY_OFFSET})
+// Offset of predicted game values in model outputs
+#define MODEL_VALUE_OFFSET (${MODEL_VALUE_OFFSET})
 // Size of data output by the inference model
 #define MODEL_OUTPUT_SIZE (${MODEL_OUTPUT_SIZE})
-// Size of model output mask when packed into int32
-#define MODEL_OUTPUT_PACK_SIZE (${MODEL_OUTPUT_PACK_SIZE})

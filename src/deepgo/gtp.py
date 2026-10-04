@@ -13,9 +13,11 @@ from deepgo.record import Record
 
 from .board import (Board, get_array_string, get_color_name,
                     get_handicap_positions, get_opposite_color, is_valid_position)
-from .config import (BLACK, DEFAULT_KOMI, DEFAULT_PUCB_CONSTANT_BASE,
-                     DEFAULT_PUCB_CONSTANT_INIT, DEFAULT_SIZE, EMPTY,
-                     MODEL_SIZE, NAME, PASS, RULE_CH, RULE_COM, RULE_JP, VERSION, WHITE)
+from .config import (COLOR_BLACK, COLOR_EMPTY, COLOR_WHITE, DEFAULT_KOMI,
+                     DEFAULT_MAX_VISITS, DEFAULT_PUCB_CONSTANT_BASE,
+                     DEFAULT_PUCB_CONSTANT_INIT, DEFAULT_PUCB_MIN_VISITS_RATE,
+                     DEFAULT_SIZE, MODEL_BOARD_SIZE, MOVE_PASS, NAME, RULE_CH,
+                     RULE_COM, VERSION)
 from .exception import GoException
 from .player import Candidate, Player
 from .processor import Processor
@@ -34,7 +36,7 @@ def gtp_string_to_position(s: str, width: int, height: int) -> Tuple[int, int] |
         Tuple[int, int]: Coordinate values
     '''
     if s.lower() == 'pass':
-        return PASS
+        return MOVE_PASS
     elif s.lower() == 'resign':
         return None
 
@@ -61,9 +63,9 @@ def gtp_string_to_color(s: str) -> int | None:
     s = s.lower().strip()
 
     if s[0] == 'b':
-        return BLACK
+        return COLOR_BLACK
     elif s[0] == 'w':
-        return WHITE
+        return COLOR_WHITE
     else:
         return None
 
@@ -99,9 +101,9 @@ def gtp_color_to_string(c: int) -> str:
     Returns:
         str: String representation
     '''
-    if c == BLACK:
+    if c == COLOR_BLACK:
         return 'black'
-    elif c == WHITE:
+    elif c == COLOR_WHITE:
         return 'white'
     else:
         raise GoException(f'{c} is not color')
@@ -244,15 +246,21 @@ def kata_candidates_to_string(
     if rootinfo:
         win_chance = candidates[0].win_chance
         visits = sum(c.visits for c in candidates)
-        score = score if candidates[0].color == BLACK else -score
+        score = score if candidates[0].color == COLOR_BLACK else -score
         root_text = (f'rootInfo winrate {win_chance:.4f} visits {visits} scoreLead {score:.1f}')
         output_texts.append(root_text)
 
     # Create territory string
     if ownership:
         def territory_to_string(t: np.ndarray) -> str:
+            '''Encode territory probabilities for protocol output.
+            Args:
+                t (np.ndarray): Territory probabilities
+            Returns:
+                str: Result of the operation.
+            '''
             v = max(float(t[2] - t[1]), 0) - max(float(t[0] - t[1]), 0)
-            return f'{v:.2f}' if candidates[0].color == BLACK else f'{-v:.2f}'
+            return f'{v:.2f}' if candidates[0].color == COLOR_BLACK else f'{-v:.2f}'
 
         ownership_values = ' '.join(
             territory_to_string(territories[:, y, x]) for y, x in np.ndindex(height, width))
@@ -288,7 +296,7 @@ def cgos_candidates_to_string(
 
     # Set rootInfo values
     root_values['winrate'] = candidates[0].win_chance
-    root_values['score'] = score if candidates[0].color == BLACK else -score
+    root_values['score'] = score if candidates[0].color == COLOR_BLACK else -score
     root_values['visits'] = sum(c.visits for c in candidates)
 
     # Create candidate move string
@@ -310,9 +318,15 @@ def cgos_candidates_to_string(
 
     # Set territory values
     def territory_to_string(t: np.ndarray) -> str:
+        '''Encode territory probabilities for protocol output.
+        Args:
+            t (np.ndarray): Territory probabilities
+        Returns:
+            str: Result of the operation.
+        '''
         c = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+'
         v = max(float(t[2] - t[1]), 0) - max(float(t[0] - t[1]), 0)
-        v = v if candidates[0].color == BLACK else -v
+        v = v if candidates[0].color == COLOR_BLACK else -v
         return c[round(max(0, min((v + 1) / 2, 1)) * 62)]
 
     root_values['ownership'] = ''.join(
@@ -328,27 +342,37 @@ class Display(object):
         '''Initialize board display object.
         Args:
             cmd (str): Command to run board display application
+        Returns:
+            None: No return value.
         '''
         self._pipe = subprocess.Popen(
             cmd.split(), stdin=subprocess.PIPE, stdout=subprocess.PIPE)
         self.send('clear_board')
 
     def wait(self) -> None:
-        '''Wait until display process finishes.'''
+        '''Wait until display process finishes.
+        Returns:
+            None: No return value.
+        '''
         self._pipe.wait()
 
     def close(self) -> None:
-        '''Terminate display process.'''
+        '''Terminate display process.
+        Returns:
+            None: No return value.
+        '''
         self._pipe.terminate()
 
     def play(self, pos: Tuple[int, int], color: int) -> None:
         '''Display a stone on the board.
         Args:
-            pos (Tuple[int, int]): Coordinates to place the stone
+            pos (Tuple[int, int]): Coordinates to place stone
             color (int): Color of the stone to place
+        Returns:
+            None: No return value.
         '''
         pos_str = gtp_position_to_string(pos, 19, 19)
-        color_str = 'b' if color == BLACK else 'w'
+        color_str = 'b' if color == COLOR_BLACK else 'w'
 
         self.send(f'play {color_str} {pos_str}')
 
@@ -356,6 +380,8 @@ class Display(object):
         '''Send display command.
         Args:
             message (str): Display command
+        Returns:
+            None: No return value.
         '''
         assert self._pipe.stdin is not None
         assert self._pipe.stdout is not None
@@ -391,7 +417,7 @@ class GTPEngine(object):
         processor: Processor,
         threads: int,
         visits: int,
-        playouts: int = 0,
+        max_visits: int = DEFAULT_MAX_VISITS,
         criterion: str = 'value',
         temperature: float = 1.0,
         randomness: float = 0.0,
@@ -401,6 +427,7 @@ class GTPEngine(object):
         superko: bool = False,
         pucb_constant_init: float = DEFAULT_PUCB_CONSTANT_INIT,
         pucb_constant_base: float = DEFAULT_PUCB_CONSTANT_BASE,
+        pucb_min_visits_rate: float = DEFAULT_PUCB_MIN_VISITS_RATE,
         timelimit: float = 10,
         ponder: bool = False,
         resign_threshold: float = 0.0,
@@ -418,15 +445,16 @@ class GTPEngine(object):
             processor (Processor): Inference execution object
             threads (int): Number of threads to use
             visits (int): Target number of visits
-            playouts (int): Target number of playouts
-            criterion (str): Candidate move priority criterion ('value' or 'visits')
-            temperature (float): Search temperature parameter
+            max_visits (int): Maximum number of visits
+            criterion (str): Candidate priority criterion ('value' or 'visits')
+            temperature (float): Temperature parameter for search
             randomness (float): Randomness of search visits
             rule (int): Game rule
             komi: float: Komi value
             superko (bool): True to apply superko rule
             pucb_constant_init (float): Initial value applied to PUCB upper confidence bound
             pucb_constant_base (float): Base value applied to PUCB upper confidence bound
+            pucb_min_visits_rate (float): Minimum child visit ratio prioritized by PUCB
             timelimit (float): Maximum thinking time
             ponder (bool): True to continue analysis during opponent's turn
             resign_threshold (float): Win rate for resignation
@@ -438,6 +466,9 @@ class GTPEngine(object):
             reader (TextIO): Stream to input commands
             writer (TextIO): Stream to output results
             display (str | None): Display command
+            boardsize (int): Boardsize.
+        Returns:
+            None: No return value.
         '''
         self.processor = processor
         self.threads = threads
@@ -445,7 +476,7 @@ class GTPEngine(object):
         self.moves: List[Tuple[Tuple[int, int], int]] = []
 
         self.visits = visits
-        self.playouts = playouts
+        self.max_visits = max_visits
         self.criterion = criterion
         self.temperature = temperature
         self.randomness = randomness
@@ -456,6 +487,7 @@ class GTPEngine(object):
         self.superko = superko
         self.pucb_constant_init = pucb_constant_init
         self.pucb_constant_base = pucb_constant_base
+        self.pucb_min_visits_rate = pucb_min_visits_rate
         self.timelimit = timelimit
         self.ponder = ponder
         self.remain_times = [-1, -1]
@@ -481,6 +513,9 @@ class GTPEngine(object):
         '''Load SGF file.
         Args:
             sgf (str | Path): Path to SGF file
+            path (str | Path): Path.
+        Returns:
+            None: No return value.
         '''
         record = Record(path)
         board_size = int(record.properties.get('sz', str(DEFAULT_SIZE)))
@@ -500,7 +535,10 @@ class GTPEngine(object):
             self._perform_command_play([gto_color, gtp_pos])
 
     def run(self) -> None:
-        '''Run the engine in GTP mode.'''
+        '''Run the engine in GTP mode.
+        Returns:
+            None: No return value.
+        '''
         regex = re.compile(r'^(\d+)\s+(.*)$')
 
         while not self.reader.closed and not self.writer.closed:
@@ -549,7 +587,13 @@ class GTPEngine(object):
                 break
 
     def _get_timelimit(self, color: int) -> float:
-        if color == BLACK:
+        '''Calculate the thinking time available to the given color.
+        Args:
+            color (int): Stone color
+        Returns:
+            float: Result of the operation.
+        '''
+        if color == COLOR_BLACK:
             remain_time = self.remain_times[0]
         else:
             remain_time = self.remain_times[1]
@@ -579,6 +623,8 @@ class GTPEngine(object):
             superko=self.superko,
             pucb_constant_init=self.pucb_constant_init,
             pucb_constant_base=self.pucb_constant_base,
+            pucb_min_visits_rate=self.pucb_min_visits_rate,
+            max_visits=self.max_visits,
         )
 
     def _random_move(self, color: int) -> Candidate:
@@ -594,11 +640,11 @@ class GTPEngine(object):
 
         # Match the color to play
         if self.player.get_color() != color:
-            self.player.play(PASS)
+            self.player.play(MOVE_PASS)
 
         # Get candidate move
         LOGGER.debug('Random: color=%s', gtp_color_to_string(color))
-        candidate = self.player.get_random()
+        candidate = self.player.get_random_candidate()
 
         # Return candidate move
         return candidate
@@ -607,14 +653,12 @@ class GTPEngine(object):
         self,
         color: int,
         visits: int | None = None,
-        playouts: int | None = None,
         timelimit: float | None = None,
     ) -> List[Candidate]:
         '''Evaluate the board.
         Args:
             color (int): Color to play
             visits (int | None): Target number of visits
-            playouts (int | None): Target number of playouts
             timelimit (float | None): Maximum thinking time
         Returns:
             List[Candidate]: List of candidate moves
@@ -625,36 +669,30 @@ class GTPEngine(object):
 
         # Match the color to play
         if self.player.get_color() != color:
-            self.player.play(PASS)
+            self.player.play(MOVE_PASS)
 
         # Set number of visits
         if visits is None:
             rand = (1 - self.randomness / 2) + (np.random.rand() * self.randomness)
             visits = max(int(self.visits * rand), 1)
 
-        # Set number of playouts
-        if playouts is None:
-            rand = (1 - self.randomness / 2) + (np.random.rand() * self.randomness)
-            playouts = max(int(self.playouts * rand), 0)
-
-        # Set thinking time
+        # Set the thinking time limit
         if timelimit is None:
             timelimit = self._get_timelimit(color)
 
         # Evaluate the board
         LOGGER.debug(
-            'Evaluate: color=%s, visits=%d, playouts=%d, timelimit=%.1f',
-            gtp_color_to_string(color), visits, playouts, timelimit)
+            'Evaluate: color=%s, visits=%d, timelimit=%.1f',
+            gtp_color_to_string(color), visits, timelimit)
 
         candidates = self.player.evaluate(
             visits=visits,
-            playouts=playouts,
             criterion=self.criterion,
             timelimit=timelimit,
             temperature=self.temperature,
             ponder=self.ponder)
 
-        # Return list of candidate moves
+        # Return the list of candidates
         return candidates
 
     def _get_move(
@@ -677,38 +715,20 @@ class GTPEngine(object):
         if len(candidates) == 0:
             raise GoException('No candidates')
 
-        # Get move under Japanese rules
-        if self.rule == RULE_JP:
-            pos = self._get_move_in_jp_rule(candidates)
-        # Get move under COM rules
-        elif self.rule == RULE_COM:
-            pos = self._get_move_in_com_rule(candidates)
-        # Get move under Chinese rules
-        else:
-            pos = self._get_move_in_ch_rule(candidates)
+        # Get the candidate with the highest MCTS priority
+        candidate = candidates[0]
+        pos = candidate.pos
 
-        # If the move is included in the candidate moves,
-        #  use the score and territory of that candidate.
-        # If the move is not included in the candidate moves,
-        # use the score and territory of the first candidate.
-        selected_candidates = [c for c in candidates if c.pos == pos]
+        # Under COM rules, capture remaining dead stones when pass is selected
+        if self.rule == RULE_COM and pos == MOVE_PASS:
+            pos = self.player.get_cleanup_position(candidate.color)
 
-        if len(selected_candidates) > 0:
-            candidate = selected_candidates[0]
-        else:
-            candidate = candidates[0]
-
-        score = candidate.get_score(self.player.get_board()) - self.komi
+        score = candidate.score
         territories = candidate.territories
         win_chance = candidate.win_chance
 
-        # If pass, calculate score with all territories confirmed
-        if pos == PASS:
-            board = self.player.get_board()
-            fixed_territories = territories.argmax(axis=0) - 1
-            fixed_territories += (fixed_territories == EMPTY) * board.get_owners()
-            score = fixed_territories.sum() - self.komi
-
+        # For a pass, return the score already calculated from predicted territories
+        if pos == MOVE_PASS:
             return pos, score, territories
 
         # Do not resign if turn is less than specified
@@ -727,206 +747,13 @@ class GTPEngine(object):
         # If not resigning, return move coordinates
         return pos, score, territories
 
-    def _get_move_in_ch_rule(self, candidates: List[Candidate]) -> Tuple[int, int]:
-        '''Get the move according to Chinese rules.
-        Returns the first candidate as the move.
-        Args:
-            candidates (List[Candidate]): List of candidate moves
-        Returns:
-            Tuple[int, int]: Move coordinates
-        '''
-        return candidates[0].pos
-
-    def _get_move_in_com_rule(self, candidates: List[Candidate]) -> Tuple[int, int]:
-        '''Get the move according to COM rules.
-        Returns the candidate move if there is a non-pass candidate.
-        Otherwise, returns a move that captures the opponent's stones.
-        If there is no move to capture opponent's stones, returns a pass.
-        Args:
-            candidates (List[Candidate]): List of candidate moves
-        Returns:
-            Tuple[int, int]: Move coordinates
-        '''
-        # If there is a non-pass candidate move, return that candidate
-        for candidate in candidates:
-            if candidate.pos != PASS:
-                return candidate.pos
-
-        # Search for a move to capture opponent's stones
-        my_color = candidates[0].color
-        op_color = get_opposite_color(my_color)
-
-        assert self.player is not None
-        board = self.player.get_board()
-        board_enableds = board.get_enableds(my_color)
-        board_targets = (
-            (board.get_territories() == my_color)
-            & (board.get_colors() == op_color))
-
-        for y, x in np.argwhere(board_targets):
-            for ny, nx in [(y - 1, x), (y + 1, x), (y, x - 1), (y, x + 1)]:
-                if not board.is_valid_position((nx, ny)):
-                    continue
-                elif board_enableds[ny, nx]:
-                    return (nx, ny)
-
-        # If there is no move to capture opponent's stones, return a pass
-        return PASS
-
-    def _get_move_in_jp_rule(self, candidates: List[Candidate]) -> Tuple[int, int]:
-        '''Get a move in Japanese rules.
-        Args:
-            candidates (List[Candidate]): List of candidate moves
-        Returns:
-            Tuple[int, int]: Move coordinates
-        '''
-        assert self.player is not None
-
-        # Search for a pass candidate
-        pass_candidate = None
-
-        for candidate in candidates:
-            if candidate.pos == PASS:
-                pass_candidate = candidate
-                break
-
-        # If no pass candidate exists, create a new pass candidate
-        if pass_candidate is None:
-            pass_candidate = self.player.get_pass()
-
-        # Get non-pass candidates
-        candidates = [c for c in candidates if c.pos != PASS]
-
-        # If no non-pass candidates exist, return pass
-        if len(candidates) == 0:
-            return PASS
-
-        # Examine candidates
-        board = self.player.get_board()
-        colors = board.get_colors()
-        pass_value = pass_candidate.value
-        pass_score = pass_candidate.get_score(board) - self.komi
-        pass_territories = pass_candidate.territories.argmax(axis=0) - 1
-
-        # Calculate boundaries of predicted territory
-        vertical_borders = np.abs(pass_territories[:-1, :] - pass_territories[1:, :]) == 2
-        horizontal_borders = np.abs(pass_territories[:, :-1] - pass_territories[:, 1:]) == 2
-        borders = np.zeros_like(pass_territories)
-
-        borders[:-1, :] |= vertical_borders
-        borders[1:, :] |= vertical_borders
-        borders[:, :-1] |= horizontal_borders
-        borders[:, 1:] |= horizontal_borders
-
-        # Select a move if it meets the following conditions:
-        #  [Condition 1] Move value is 0.1 or higher than pass value
-        #  [Condition 2] Move territory is larger than pass territory
-        #  [Condition 3] Move position is in an area predicted as seki
-        #  [Condition 4] Own chain with size 1 and 1 liberty in border area exists near move position
-        # Exclude moves if they meet the following conditions:
-        #  [Condition 1] Move value is 0.05 or lower than pass value
-        #  [Condition 2] Move territory is smaller than pass territory
-        #  [Condition 3] Move score is 0.5 or worse than pass score
-        excludes = []
-
-        if LOGGER.isEnabledFor(logging.DEBUG):
-            LOGGER.debug(
-                'JP rule: pass candidate=%s, value=%.4f, score=%.1f',
-                pass_candidate.pos, pass_value, pass_score)
-
-        def is_near_atari_ren_in_border(pos: Tuple[int, int], color: int) -> bool:
-            for dy, dx in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
-                ny, nx = pos[1] + dy, pos[0] + dx
-
-                if (board.is_valid_position((nx, ny))
-                        and board.get_ren_size((nx, ny)) == 1
-                        and board.get_ren_space((nx, ny)) == 1
-                        and colors[ny, nx] == color
-                        and borders[ny, nx]):
-                    return True
-
-            return False
-
-        for candidate in candidates:
-            value = candidate.value
-            score = candidate.get_score(board) - self.komi
-            territories = candidate.territories.argmax(axis=0) - 1
-
-            if LOGGER.isEnabledFor(logging.DEBUG):
-                LOGGER.debug(
-                    'JP rule: candidate=%s, value=%.4f, score=%.1f',
-                    candidate.pos, value, score)
-
-            # Move value is 0.1 or higher than pass value
-            if (value - pass_value) * candidate.color >= 0.1:
-                if LOGGER.isEnabledFor(logging.DEBUG):
-                    LOGGER.debug(
-                        'JP rule: select move=%s, value=%.4f',
-                        candidate.pos, value - pass_value)
-                return candidate.pos
-            # Move territory is larger than pass territory
-            elif np.any((territories - pass_territories) == (2 * candidate.color)):
-                if LOGGER.isEnabledFor(logging.DEBUG):
-                    LOGGER.debug(
-                        'JP rule: select move=%s, territory=%d', candidate.pos,
-                        ((territories - pass_territories) == (2 * candidate.color)).sum())
-                return candidate.pos
-            # Move position is in an area predicted as seki
-            elif pass_territories[candidate.pos[1], candidate.pos[0]] == EMPTY:
-                LOGGER.debug('JP rule: select move=%s, in seki territory', candidate.pos)
-                return candidate.pos
-            # Own chain with size 1 and 1 liberty in border area exists near move position
-            elif is_near_atari_ren_in_border(candidate.pos, candidate.color):
-                LOGGER.debug('JP rule: select move=%s, near atari ren', candidate.pos)
-                return candidate.pos
-            # Move value is 0.05 or lower than pass value
-            elif (value - pass_value) * candidate.color <= -0.05:
-                if LOGGER.isEnabledFor(logging.DEBUG):
-                    LOGGER.debug(
-                        'JP rule: exclude move=%s, value=%.4f',
-                        candidate.pos, value - pass_value)
-                excludes.append(True)
-            # Move territory is smaller than pass territory
-            elif np.any((territories - pass_territories) == (-2 * candidate.color)):
-                if LOGGER.isEnabledFor(logging.DEBUG):
-                    LOGGER.debug(
-                        'JP rule: exclude move=%s, territory=%d', candidate.pos,
-                        ((territories - pass_territories) == (2 * candidate.color)).sum())
-                excludes.append(True)
-            # Move score is 0.5 or worse than pass score
-            elif (score - pass_score) * candidate.color <= -0.5:
-                if LOGGER.isEnabledFor(logging.DEBUG):
-                    LOGGER.debug(
-                        'JP rule: exclude move=%s, score=%.1f',
-                        candidate.pos, score - pass_score)
-                excludes.append(True)
-            # Otherwise, do not exclude
-            else:
-                LOGGER.debug('JP rule: not exclude move=%s', candidate.pos)
-                excludes.append(False)
-
-        # If all borders of the predicted territory are occupied when passing, select pass
-        if not np.any(borders & (colors == EMPTY)):
-            LOGGER.debug('JP rule: select move=PASS, all borders have stones')
-            return PASS
-
-        # Look for dame moves (moves to the border)
-        for candidate, exclude in zip(candidates, excludes):
-            if exclude:
-                continue
-
-            if borders[candidate.pos[1], candidate.pos[0]]:
-                LOGGER.debug('JP rule: select move=%s, in dame zone', candidate.pos)
-                return candidate.pos
-
-        # If no dame moves are available, select pass
-        return PASS
-
     def _perform(self, number: str, command: str) -> None:
         '''Execute command.
         Args:
             number (str): Command number
             command (str): Command
+        Returns:
+            None: No return value.
         '''
         first_response = True
 
@@ -979,15 +806,39 @@ class GTPEngine(object):
             return (False, 'unknown command', False)
 
     def _perform_command_protocol_version(self, args: List[str]) -> Tuple[bool, str, bool]:
+        '''Handle the protocol_version GTP command.
+        Args:
+            args (List[str]): Command arguments
+        Returns:
+            Tuple[bool, str, bool]: Result of the operation.
+        '''
         return (True, '2', False)
 
     def _perform_command_name(self, args: List[str]) -> Tuple[bool, str, bool]:
+        '''Handle the name GTP command.
+        Args:
+            args (List[str]): Command arguments
+        Returns:
+            Tuple[bool, str, bool]: Result of the operation.
+        '''
         return (True, self.client_name, False)
 
     def _perform_command_version(self, args: List[str]) -> Tuple[bool, str, bool]:
+        '''Handle the version GTP command.
+        Args:
+            args (List[str]): Command arguments
+        Returns:
+            Tuple[bool, str, bool]: Result of the operation.
+        '''
         return (True, self.client_version, False)
 
     def _perform_command_known_command(self, args: List[str]) -> Tuple[bool, str, bool]:
+        '''Handle the known_command GTP command.
+        Args:
+            args (List[str]): Command arguments
+        Returns:
+            Tuple[bool, str, bool]: Result of the operation.
+        '''
         if len(args) < 1:
             return (False, 'syntax error', False)
         elif hasattr(self, '_perform_command_{}'.format(args[0].lower())):
@@ -996,6 +847,12 @@ class GTPEngine(object):
             return (True, 'false', False)
 
     def _perform_command_list_commands(self, args: List[str]) -> Tuple[bool, str, bool]:
+        '''Handle the list_commands GTP command.
+        Args:
+            args (List[str]): Command arguments
+        Returns:
+            Tuple[bool, str, bool]: Result of the operation.
+        '''
         commands = [v[17:] for v in dir(self) if v.startswith('_perform_command_')]
         commands = [f'lz-{v[3:]}' if v.startswith('lz_') else v for v in commands]
         commands = [f'kata-{v[5:]}' if v.startswith('kata_') else v for v in commands]
@@ -1005,10 +862,16 @@ class GTPEngine(object):
         return (True, '\n'.join(sorted(commands)), False)
 
     def _perform_command_boardsize(self, args: List[str]) -> Tuple[bool, str, bool]:
+        '''Handle the boardsize GTP command.
+        Args:
+            args (List[str]): Command arguments
+        Returns:
+            Tuple[bool, str, bool]: Result of the operation.
+        '''
         if len(args) < 1 or not re.match(r'^\d+$', args[0]):
             return (False, 'syntax error', False)
 
-        if int(args[0]) > MODEL_SIZE:
+        if int(args[0]) > MODEL_BOARD_SIZE:
             return (False, 'boardsize is too large', False)
 
         if int(args[0]) != self.size and self.player is not None:
@@ -1018,6 +881,12 @@ class GTPEngine(object):
         return (True, '', False)
 
     def _perform_command_clear_board(self, args: List[str]) -> Tuple[bool, str, bool]:
+        '''Handle the clear_board GTP command.
+        Args:
+            args (List[str]): Command arguments
+        Returns:
+            Tuple[bool, str, bool]: Result of the operation.
+        '''
         if self.player is not None:
             self.player.stop_evaluation()
 
@@ -1027,6 +896,12 @@ class GTPEngine(object):
         return (True, '', False)
 
     def _perform_command_komi(self, args: List[str]) -> Tuple[bool, str, bool]:
+        '''Handle the komi GTP command.
+        Args:
+            args (List[str]): Command arguments
+        Returns:
+            Tuple[bool, str, bool]: Result of the operation.
+        '''
         if len(args) < 1 or not re.match(r'^\d+(\.\d+)?$', args[0]):
             return (False, 'syntax error', False)
 
@@ -1034,9 +909,6 @@ class GTPEngine(object):
 
         if new_komi == self.komi:
             return (True, '', False)
-
-        if self.player is not None:
-            self.player.komi = new_komi
 
         self.komi = new_komi
 
@@ -1124,6 +996,12 @@ class GTPEngine(object):
         return (True, '', False)
 
     def _perform_command_undo(self, args: List[str],) -> Tuple[bool, str, bool]:
+        '''Handle the undo GTP command.
+        Args:
+            args (List[str]): Command arguments
+        Returns:
+            Tuple[bool, str, bool]: Result of the operation.
+        '''
         if self.player is None:
             return (False, 'game has not started yet', False)
         elif self.moves == []:
@@ -1147,7 +1025,7 @@ class GTPEngine(object):
             args (List[str]): Argument list
             play (bool): True to execute move
         Returns:
-            Tuple[bool, str, bool]: (True if successful, message, True to continue)
+            Tuple[bool, str, bool]: (True if successful, message, True to continue execution)
         '''
         # Create player object if not present
         if self.player is None:
@@ -1189,6 +1067,12 @@ class GTPEngine(object):
         return (True, gtp_position_to_string(pos, self.size, self.size), False)
 
     def _perform_command_reg_genmove(self, args: List[str]) -> Tuple[bool, str, bool]:
+        '''Handle the reg_genmove GTP command.
+        Args:
+            args (List[str]): Command arguments
+        Returns:
+            Tuple[bool, str, bool]: Result of the operation.
+        '''
         return self._perform_command_genmove(args, play=False)
 
     def _perform_command_lz_genmove_analyze(
@@ -1205,7 +1089,7 @@ class GTPEngine(object):
             analyze_func (Callable): Analysis function
             play (bool): True to execute move
         Returns:
-            Tuple[bool, str, bool]: (True if successful, message, True to continue)
+            Tuple[bool, str, bool]: (True if successful, message, True to continue execution)
         '''
         # Create player object if not present
         if self.player is None:
@@ -1223,9 +1107,9 @@ class GTPEngine(object):
             arg_idx += 1
 
             if arg.lower()[0] == 'b':
-                color = BLACK
+                color = COLOR_BLACK
             elif arg.lower()[0] == 'w':
-                color = WHITE
+                color = COLOR_WHITE
             elif arg.isdigit():
                 interval = float(arg) / 100
             elif arg.lower() == 'rootinfo' and args[arg_idx].lower() == 'true':
@@ -1246,10 +1130,6 @@ class GTPEngine(object):
 
         # Create move coordinates
         pos, score, territories = self._get_move(candidates)
-
-        # If pass, set final predicted score
-        if pos == PASS:
-            score = self.player.get_final_score()
 
         # Create analysis result string
         analyze_line = analyze_func(
@@ -1273,30 +1153,74 @@ class GTPEngine(object):
         return (True, f'\n{analyze_line}\nplay {gtp_pos}', False)
 
     def _perform_command_lz_analyze(self, args: List[str]) -> Tuple[bool, str, bool]:
+        '''Handle the lz_analyze GTP command.
+        Args:
+            args (List[str]): Command arguments
+        Returns:
+            Tuple[bool, str, bool]: Result of the operation.
+        '''
         return self._perform_command_lz_genmove_analyze(args, play=False)
 
     def _perform_command_kata_genmove_analyze(
         self, args: List[str], play: bool = True
     ) -> Tuple[bool, str, bool]:
+        '''Handle the kata_genmove_analyze GTP command.
+        Args:
+            args (List[str]): Command arguments
+            play (bool): Whether to apply the generated move
+        Returns:
+            Tuple[bool, str, bool]: Result of the operation.
+        '''
         return self._perform_command_lz_genmove_analyze(
             args, kata_candidates_to_string, play=play)
 
     def _perform_command_kata_analyze(self, args: List[str]) -> Tuple[bool, str, bool]:
+        '''Handle the kata_analyze GTP command.
+        Args:
+            args (List[str]): Command arguments
+        Returns:
+            Tuple[bool, str, bool]: Result of the operation.
+        '''
         return self._perform_command_kata_genmove_analyze(args, play=False)
 
     def _perform_command_cgos_genmove_analyze(
         self, args: List[str], play: bool = True,
     ) -> Tuple[bool, str, bool]:
+        '''Handle the cgos_genmove_analyze GTP command.
+        Args:
+            args (List[str]): Command arguments
+            play (bool): Whether to apply the generated move
+        Returns:
+            Tuple[bool, str, bool]: Result of the operation.
+        '''
         return self._perform_command_lz_genmove_analyze(
             args, cgos_candidates_to_string, play=play)
 
     def _perform_command_cgos_analyze(self, args: List[str]) -> Tuple[bool, str, bool]:
+        '''Handle the cgos_analyze GTP command.
+        Args:
+            args (List[str]): Command arguments
+        Returns:
+            Tuple[bool, str, bool]: Result of the operation.
+        '''
         return self._perform_command_cgos_genmove_analyze(args, play=False)
 
     def _perform_command_showboard(self, args: List[str]) -> Tuple[bool, str, bool]:
+        '''Handle the showboard GTP command.
+        Args:
+            args (List[str]): Command arguments
+        Returns:
+            Tuple[bool, str, bool]: Result of the operation.
+        '''
         return (True, '\n' + str(self), False)
 
     def _perform_command_time_settings(self, args: List[str]) -> Tuple[bool, str, bool]:
+        '''Handle the time_settings GTP command.
+        Args:
+            args (List[str]): Command arguments
+        Returns:
+            Tuple[bool, str, bool]: Result of the operation.
+        '''
         if len(args) < 3:
             return (False, 'syntax error', False)
 
@@ -1306,13 +1230,19 @@ class GTPEngine(object):
         return (True, '', False)
 
     def _perform_command_time_left(self, args: List[str]) -> Tuple[bool, str, bool]:
+        '''Handle the time_left GTP command.
+        Args:
+            args (List[str]): Command arguments
+        Returns:
+            Tuple[bool, str, bool]: Result of the operation.
+        '''
         if len(args) < 3:
             return (False, 'syntax error', False)
 
         color = gtp_string_to_color(args[0])
         remain_time = int(args[1])
 
-        if color == BLACK:
+        if color == COLOR_BLACK:
             self.remain_times[0] = remain_time
         else:
             self.remain_times[1] = remain_time
@@ -1320,6 +1250,12 @@ class GTPEngine(object):
         return (True, '', False)
 
     def _perform_command_final_status_list(self, args: List[str]) -> Tuple[bool, str, bool]:
+        '''Handle the final_status_list GTP command.
+        Args:
+            args (List[str]): Command arguments
+        Returns:
+            Tuple[bool, str, bool]: Result of the operation.
+        '''
         if len(args) < 1:
             return (False, 'syntax error', False)
 
@@ -1327,7 +1263,7 @@ class GTPEngine(object):
             return (False, 'game has not started yet', False)
 
         board = self.player.get_board()
-        territory = self.player.get_territories()
+        territory = self.player.get_predicted_territories()
         colors = board.get_colors()
 
         if args[0] == 'alive':
@@ -1335,7 +1271,7 @@ class GTPEngine(object):
         elif args[0] == 'dead':
             values = (territory * colors) == -1
         elif args[0] == 'seki':
-            values = ((territory == EMPTY) * colors) != 0
+            values = ((territory == COLOR_EMPTY) * colors) != 0
         else:
             return (False, 'invalid status string', False)
 
@@ -1347,10 +1283,16 @@ class GTPEngine(object):
         return (True, '\n'.join(texts), False)
 
     def _perform_command_final_score(self, args: List[str]) -> Tuple[bool, str, bool]:
+        '''Handle the final_score GTP command.
+        Args:
+            args (List[str]): Command arguments
+        Returns:
+            Tuple[bool, str, bool]: Result of the operation.
+        '''
         if self.player is None:
             return (False, 'game has not started yet', False)
 
-        score = self.player.get_final_score()
+        score = self.player.get_predicted_score()
 
         if score >= 0:
             message = f'B+{score:.1f}'
@@ -1360,9 +1302,14 @@ class GTPEngine(object):
         return (True, message, False)
 
     def _perform_command_gogui_analyze_commands(self, args: List[str]) -> Tuple[bool, str, bool]:
+        '''Handle the gogui_analyze_commands GTP command.
+        Args:
+            args (List[str]): Command arguments
+        Returns:
+            Tuple[bool, str, bool]: Result of the operation.
+        '''
         commands = [
             'bwboard/Analyze Territories/gogui_analyze_territory',
-            'cboard/Analyze Values/gogui_analyze_values',
             'string/Analyze Value/gogui_analyze_value',
             'string/Name/name',
             'string/Version/version',
@@ -1374,41 +1321,44 @@ class GTPEngine(object):
         return (True, '\n'.join(sorted(commands)), False)
 
     def _perform_command_gogui_analyze_territory(self, args: List[str]) -> Tuple[bool, str, bool]:
+        '''Handle the gogui_analyze_territory GTP command.
+        Args:
+            args (List[str]): Command arguments
+        Returns:
+            Tuple[bool, str, bool]: Result of the operation.
+        '''
         if self.player is None:
             return (False, 'game has not started yet', False)
 
         lines = [
             ' '.join(('N', 'B', 'W')[w] for w in v)
-            for v in self.player.get_territories()]
+            for v in self.player.get_predicted_territories()]
 
         return (True, '\n' + '\n'.join(lines), False)
 
-    def _perform_command_gogui_analyze_values(self, args: List[str]) -> Tuple[bool, str, bool]:
-        if self.player is None:
-            return (False, 'game has not started yet', False)
-
-        values = self.player.get_values()
-        text = ['']
-
-        for vs in values:
-            vs = [(int(max(v, 0) * 255), int(max(-v, 0) * 255)) for v in vs]
-            text.append(' '.join('#{:02x}00{:02x}'.format(r, b) for r, b in vs))
-
-        return (True, '\n'.join(text), False)
-
     def _perform_command_gogui_analyze_value(self, args: List[str]) -> Tuple[bool, str, bool]:
+        '''Handle the gogui_analyze_value GTP command.
+        Args:
+            args (List[str]): Command arguments
+        Returns:
+            Tuple[bool, str, bool]: Result of the operation.
+        '''
         if self.player is None:
             return (False, 'game has not started yet', False)
 
-        value = self.player.get_pass().value
+        value = self.player.get_pass_candidate().value
 
         return (True, '{:.4f}'.format(value), False)
 
     def __str__(self) -> str:
+        '''Return a readable string representation.
+        Returns:
+            str: Result of the operation.
+        '''
         if self.player is not None:
             board = self.player.get_board()
-            captured_black = self.player.get_captured(BLACK)
-            captured_white = self.player.get_captured(WHITE)
+            captured_black = self.player.get_captured(COLOR_BLACK)
+            captured_white = self.player.get_captured(COLOR_WHITE)
         else:
             board = Board(self.size, self.size)
             captured_black = 0
@@ -1419,9 +1369,17 @@ class GTPEngine(object):
             gtp_position_to_string((i, i), self.size, self.size) for i in range(self.size)]
 
         def mark(x: int, y: int, c: int) -> str:
-            if c == BLACK:
+            '''Format a stone and its captured count for board display.
+            Args:
+                x (int): X coordinate
+                y (int): Y coordinate
+                c (int): Stone color
+            Returns:
+                str: Result of the operation.
+            '''
+            if c == COLOR_BLACK:
                 return 'X'
-            elif c == WHITE:
+            elif c == COLOR_WHITE:
                 return 'O'
             elif (x - 3) % 6 == 0 and (y - 3) % 6 == 0:
                 return '+'
