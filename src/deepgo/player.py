@@ -1,6 +1,7 @@
 import logging
 import math
 import random
+import time
 from typing import List, Tuple
 
 import numpy as np
@@ -278,50 +279,85 @@ class Player(object):
         temperature: float = 1.0,
         noise: float = 0.0,
         ponder: bool = False,
+        extends: int = 0,
     ) -> List[Candidate]:
         '''Evaluate the board.
         Args:
             visits (int): Target number of visits
-            timelimit (float): Time limit in seconds
-            equally (bool): True to make the number of searches equal, False to use UCB or PUCB
+            timelimit (float): Time limit in seconds, including search extensions
+            equally (bool): True to equalize search visits, False to use UCB or PUCB
             criterion (str): Candidate priority criterion ('value' or 'visits')
-            width (int): Search width (number of candidate moves to search; 0 for auto adjustment)
+            width (int | None): Search width; None or 0 selects automatic adjustment
             temperature (float): Temperature parameter for search
             noise (float): Strength of Gumbel noise for search
             ponder (bool): True to continue searching
+            extends (int): Maximum number of search extensions
         Returns:
             List[Candidate]: List of candidate moves
         '''
+        # Set a shared deadline and a fixed visit increment for search extensions
+        deadline = time.monotonic() + timelimit
+        additional_visits = max(visits // 2, 1)
+        candidates: List[Candidate] = []
+        repeats = 0
+
+        # Set the search width and extension limit
         width = width if width is not None else 0
+        extends = max(extends, 0)
 
-        # Evaluate the board
-        self.native.start_evaluation(equally, width, temperature, noise)
-        self.native.wait_evaluation(visits, timelimit, not ponder)
+        # Run the initial search and at most the requested number of extensions
+        while repeats <= extends:
+            # Skip extensions when less than one second remains
+            remaining_time = max(deadline - time.monotonic(), 0.0)
+            if repeats > 0 and remaining_time < 1.0:
+                break
 
-        # Create a list of candidate moves
-        candidates = [Candidate(*c) for c in self.native.get_candidates()]
+            # Increase the cumulative visit target from the initial requested count
+            target_visits = visits + repeats * additional_visits
 
-        # Add a pass candidate when no candidates are available
-        if len(candidates) == 0:
-            candidates.append(self.get_pass_candidate())
+            # Evaluate the board
+            LOGGER.debug('Evaluation: %d visits, %.1f seconds', target_visits, remaining_time)
+            self.native.start_evaluation(equally, width, temperature, noise)
 
-        # Sort candidates
-        if criterion == 'visits':
-            candidates.sort(key=lambda cand: cand.visits, reverse=True)
-        else:
-            candidates.sort(key=lambda cand: cand.win_chance_lcb, reverse=True)
+            # Include time spent starting the search in the shared time limit
+            remaining_time = max(deadline - time.monotonic(), 0.0)
+            self.native.wait_evaluation(target_visits, remaining_time, not ponder)
 
-        # Output log
-        if LOGGER.isEnabledFor(logging.DEBUG):
-            LOGGER.debug(
-                'Evaluation: %d visits (batch fill rate=%.2f, cache hit rate=%.2f)',
-                sum(c.visits for c in candidates),
-                self.processor.get_batch_fill_rate(),
-                self.processor.get_cache_hit_rate())
-            for candidate in candidates:
-                LOGGER.debug(candidate)
+            # Create a list of candidate moves
+            candidates = [Candidate(*c) for c in self.native.get_candidates()]
 
-        # Return the list of candidates
+            # Add a pass candidate when no candidates are available
+            if not candidates:
+                candidates.append(self.get_pass_candidate())
+
+            # Sort candidates
+            if criterion == 'visits':
+                candidates.sort(key=lambda cand: cand.visits, reverse=True)
+            else:
+                candidates.sort(key=lambda cand: cand.win_chance_lcb, reverse=True)
+
+            # Output search statistics and candidates
+            if LOGGER.isEnabledFor(logging.DEBUG):
+                LOGGER.debug(
+                    'Evaluation: %d visits (batch fill rate=%.2f, cache hit rate=%.2f)',
+                    sum(c.visits for c in candidates),
+                    self.processor.get_batch_fill_rate(),
+                    self.processor.get_cache_hit_rate())
+                for candidate in candidates:
+                    LOGGER.debug(candidate)
+
+            # Stop if the selected move has a win chance outside the extension range
+            if not (0.05 < candidates[0].win_chance < 0.95):
+                break
+
+            # Stop unless another candidate has at least two thirds of the selected visits
+            if not any(c.visits * 3 >= candidates[0].visits * 2 for c in candidates[1:]):
+                break
+
+            # Advance the extension count
+            repeats += 1
+
+        # Return the latest list of candidates
         return candidates
 
     def stop_evaluation(self) -> None:

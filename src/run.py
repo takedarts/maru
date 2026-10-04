@@ -28,6 +28,9 @@ def parse_args() -> argparse.Namespace:
         '--visits', type=int, default=50,
         help='Number of visits (default: 50)')
     parser.add_argument(
+        '--extends', type=int, default=0,
+        help='Maximum number of search extensions (default: 0)')
+    parser.add_argument(
         '--max-visits', type=int, default=DEFAULT_MAX_VISITS,
         help=f'Maximum number of visits (default: {DEFAULT_MAX_VISITS})')
     parser.add_argument(
@@ -172,6 +175,7 @@ def main() -> None:
         processor=processor,
         threads=args.threads,
         visits=args.visits,
+        extends=args.extends,
         max_visits=args.max_visits,
         temperature=args.temperature,
         randomness=args.randomness,

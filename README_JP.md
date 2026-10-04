@@ -14,6 +14,8 @@ Maruを実行するためにはモデルファイルが必要です。
 TorchScriptモデルは[こちら](https://github.com/takedarts/maru/releases/tag/v8.3)からダウンロードできます。
 TensorRTモデルは`src/compile.py`を使ってTorchScriptモデルから作成してください。
 
+**注意** Maru version 8.3で、出力の形式を含めたモデルの仕様が変更されたため、Maru version 8.2以前のモデルは使用できません。
+
 ## 実行方法
 
 - [ソースファイルからの実行](#ソースファイルからの実行)
@@ -176,6 +178,7 @@ docker run -iq --rm -v .:/workspace takedarts/maru:v8.3-arm /opt/run.sh <model_f
 |---|---|---|
 | `--help` | 利用可能なオプション一覧を表示 |  |
 | `--visits <N>` | 探索の目標訪問数 | 50 |
+| `--extends <N>` | 再探索回数の上限 | 0 |
 | `--max-visits <N>` | 探索の最大訪問数 | 1,000,000 |
 | `--criterion <S>` | 候補手の優先基準：`value`または`visits` | `value` |
 | `--temperature <R>` | 探索の温度パラメータ | 1.0 |
@@ -210,9 +213,9 @@ docker run -iq --rm -v .:/workspace takedarts/maru:v8.3-arm /opt/run.sh <model_f
   - 訪問数が`--visits`で指定された目標に達した場合
   - 訪問数が`--max-visits`で指定された最大訪問数に達した場合
   - `--timelimit`で指定された制限時間に達した場合
-  - 最も多く訪問された子ノードの訪問数が`--visits`で指定された目標の60%を超えた場合は、探索を早期に終了します。
+- 最も多く訪問された子ノードの訪問数が`--visits`で指定された目標の60%を超えた場合は、探索を早期に終了します。
+- `--extends N`を指定すると、選択手の勝率が5%より大きく95%未満で、別候補の訪問数が選択手の2/3以上の場合に、最大N回再探索します。再探索ごとに目標訪問数を最初の指定値の半分ずつ増やします。制限時間が残り1秒未満となった場合は再探索を行いません。
 - 探索木は着手後も再利用されます。
-
 
 ### ルールと温度パラメータ
 - ルールに`ch`を指定すると、中国ルールで計算を行います。
@@ -231,9 +234,6 @@ python src/run.py b16c256-645.model
 ```
 python src/run.py b16c256-645.model --visits 1000 --timelimit 5
 ```
-
-## 以前のバージョンとの互換性
-Maru version 8.3で、出力の形式を含めたモデルの仕様が変更されたため、Maru version 8.2以前のモデルは使用できません。
 
 ## テスト
 ビルド後にCPUの盤面・推論・探索・GTP・SGFテストと型チェックを実行します。

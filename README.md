@@ -16,6 +16,9 @@ A model file is required to run Maru.
 TorchScript models can be downloaded from [here](https://github.com/takedarts/maru/releases/tag/v8.3).
 Use `src/compile.py` to create TensorRT models from TorchScript models.
 
+**Note:** Maru version 8.3 changes the model specification, including the output format,
+so models from Maru version 8.2 or earlier cannot be used.
+
 ## How to Run
 
 - [Running from Source Files](#running-from-source-files)
@@ -211,6 +214,7 @@ docker run -iq --rm -v .:/workspace takedarts/maru:v8.3-arm /opt/run.sh <model_f
 |---|---|---|
 | `--help` | Display available options |  |
 | `--visits <N>` | Target search visits | 50 |
+| `--extends <N>` | Maximum number of search extensions | 0 |
 | `--max-visits <N>` | Maximum search visits | 1,000,000 |
 | `--criterion <S>` | Candidate priority criterion: `value` or `visits` | `value` |
 | `--temperature <R>` | Search temperature | 1.0 |
@@ -246,8 +250,12 @@ docker run -iq --rm -v .:/workspace takedarts/maru:v8.3-arm /opt/run.sh <model_f
   - The visit count reaches the target specified by `--visits`.
   - The visit count reaches the maximum specified by `--max-visits`.
   - The time limit specified by `--timelimit` is reached.
-  - Search ends early if the most visited child's visit count exceeds 60% of the target
-    specified by `--visits`.
+- Search ends early if the most visited child's visit count exceeds 60% of the target
+  specified by `--visits`.
+- With `--extends N`, search is extended up to N times when the selected move's win probability
+  is greater than 5% and less than 95%, and another candidate has at least two thirds of the
+  selected move's visit count. Each extension increases the target visit count by half of the
+  initially specified value. No extension is performed when less than one second remains.
 - The search tree is reused after moves.
 
 ### Rules and Temperature
@@ -272,11 +280,6 @@ following command.
 ```
 python src/run.py b16c256-645.model --visits 1000 --timelimit 5
 ```
-
-## Compatibility with Earlier Versions
-
-Maru version 8.3 changes the model specification, including the output format, so models
-from Maru version 8.2 or earlier cannot be used.
 
 ## Tests
 

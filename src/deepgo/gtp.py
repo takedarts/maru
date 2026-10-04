@@ -417,6 +417,7 @@ class GTPEngine(object):
         processor: Processor,
         threads: int,
         visits: int,
+        extends: int = 0,
         max_visits: int = DEFAULT_MAX_VISITS,
         criterion: str = 'value',
         temperature: float = 1.0,
@@ -445,6 +446,7 @@ class GTPEngine(object):
             processor (Processor): Inference execution object
             threads (int): Number of threads to use
             visits (int): Target number of visits
+            extends (int): Maximum number of search extensions
             max_visits (int): Maximum number of visits
             criterion (str): Candidate priority criterion ('value' or 'visits')
             temperature (float): Temperature parameter for search
@@ -476,6 +478,7 @@ class GTPEngine(object):
         self.moves: List[Tuple[Tuple[int, int], int]] = []
 
         self.visits = visits
+        self.extends = extends
         self.max_visits = max_visits
         self.criterion = criterion
         self.temperature = temperature
@@ -653,12 +656,14 @@ class GTPEngine(object):
         self,
         color: int,
         visits: int | None = None,
+        extends: int | None = None,
         timelimit: float | None = None,
     ) -> List[Candidate]:
         '''Evaluate the board.
         Args:
             color (int): Color to play
             visits (int | None): Target number of visits
+            extends (int | None): Maximum extensions; use the engine setting if omitted
             timelimit (float | None): Maximum thinking time
         Returns:
             List[Candidate]: List of candidate moves
@@ -676,6 +681,10 @@ class GTPEngine(object):
             rand = (1 - self.randomness / 2) + (np.random.rand() * self.randomness)
             visits = max(int(self.visits * rand), 1)
 
+        # Use the configured extension limit unless explicitly overridden
+        if extends is None:
+            extends = self.extends
+
         # Set the thinking time limit
         if timelimit is None:
             timelimit = self._get_timelimit(color)
@@ -687,6 +696,7 @@ class GTPEngine(object):
 
         candidates = self.player.evaluate(
             visits=visits,
+            extends=extends,
             criterion=self.criterion,
             timelimit=timelimit,
             temperature=self.temperature,
@@ -1126,7 +1136,8 @@ class GTPEngine(object):
             else:
                 candidates = self._evaluate(color)
         else:
-            candidates = self._evaluate(color, visits=100_000, timelimit=interval)
+            # Disable search extensions for analysis-only commands
+            candidates = self._evaluate(color, visits=100_000, extends=0, timelimit=interval)
 
         # Create move coordinates
         pos, score, territories = self._get_move(candidates)
