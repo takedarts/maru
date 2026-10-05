@@ -258,13 +258,24 @@ docker run -iq --rm -v .:/workspace takedarts/maru:v8.3-arm /opt/run.sh <model_f
   initially specified value. No extension is performed when less than one second remains.
 - The search tree is reused after moves.
 
-### Rules and Temperature
+### Temperature Parameter
 
-- Specify `ch` to use Chinese rules for calculations.
-- Specify `jp` to use Japanese rules for calculations.
-- Specify `com` to use Chinese rules with dead-stone cleanup at the end of the game.
-- Increasing the search temperature widens exploration; decreasing it narrows exploration.
-- GTP `play` commands are sent to the display command specified by `--display`.
+The `--temperature` option specifies the temperature parameter used to adjust the probability
+distribution output by the policy network.
+Increasing the temperature widens exploration; decreasing it narrows exploration.
+
+### Game Rules
+
+The `--rule` option accepts `ch`, `jp`, or `com`.
+With `ch`, Maru selects moves for Chinese rules; with `jp`, it selects moves for Japanese rules.
+With `com`, Maru selects moves based on Chinese rules but continues playing until dead stones
+are captured. This setting is intended for games between computer programs, such as those on CGOS.
+
+### Board Display Command
+
+To display the board, specify a board display program such as `gogui-display` with the
+`--display` option.
+GTP `play` commands are sent to the display program.
 
 ## Execution Examples
 
@@ -279,6 +290,27 @@ following command.
 
 ```
 python src/run.py b16c256-645.model --visits 1000 --timelimit 5
+```
+
+To start Maru for a game under Japanese rules, run the following command.
+
+```
+python src/run.py b16c256-645.model --rule jp
+```
+
+To play on the [CGOS server](http://yss-aya.com/cgos/), configure a client such as
+[CGOS-Client](https://github.com/zakki/cgos) to use the following command.
+
+```
+python src/run.py b16c256-645.model --rule com
+```
+
+To use Maru with [Lizzie](https://github.com/featurecat/lizzie), configure the following command
+as the GTP engine launched by Lizzie.
+Setting the client name to `KataGo` enables Lizzie's evaluation display features.
+
+```
+python src/run.py b16c256-645.model --client-name KataGo
 ```
 
 ## Tests
